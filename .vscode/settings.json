@@ -1,4 +1,3 @@
 {
-  "terminal.integrated.shell.windows": "C:\\WINDOWS\\System32\\bash.exe",
-  "reason.path.ocamlmerlin": ""
+  "terminal.integrated.shell.windows": "C:\\WINDOWS\\System32\\bash.exe"
 }
