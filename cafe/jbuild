@@ -1,5 +1,0 @@
-(jbuild_version 1)
-
-(executable
- ((name cafe)
-  (public_name cafe)))

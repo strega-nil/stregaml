@@ -1,0 +1,10 @@
+(jbuild_version 1)
+
+(executables
+ ((names (main))
+  (libraries (pred))))
+
+(install
+ ((section bin)
+  (package cafec)
+  (files ((main.exe as cafec)))))
