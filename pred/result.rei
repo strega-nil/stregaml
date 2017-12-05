@@ -1,3 +1,3 @@
-open Prelude;
-
-type t('t, 'e) = result('t, 'e);
+type t('t, 'e) =
+  | Ok('t)
+  | Err('e);
