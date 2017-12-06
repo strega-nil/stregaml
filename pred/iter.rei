@@ -1,6 +1,10 @@
-type t('a);
+type t('a, 'b);
 
-let for_each: ('a => unit) => t('a) => unit;
-let for_each_break: ('a => option('b)) => t('a) => option('b);
+let for_each: ('a => unit) => t('a, 'b) => 'b;
 
-let from_next: 'a => ('a => option(('a, 'b))) => t('b);
+/**
+  for each left value, calls the function passed to for_each with the inner
+  value.
+  for_each returns the first right value
+*/
+let from_next: (unit => Result.t('a, 'b)) => t('a, 'b);

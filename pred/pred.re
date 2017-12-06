@@ -4,9 +4,9 @@ module String_buffer = String_buffer;
 
 module Result = Result;
 
-type result('t, 'e) = Result.t('t, 'e);
+type result('o, 'e) = Result.t('o, 'e) = | Ok('o) | Err('e);
 
-type iter('a) = Iter.t('a);
+type iter('a, 'b) = Iter.t('a, 'b);
 
 type string_buffer = String_buffer.t;
 
