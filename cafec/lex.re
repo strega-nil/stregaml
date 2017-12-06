@@ -1,4 +1,4 @@
-open Pred.Prelude;
+open Pred;
 
 type t = unit;
 
@@ -8,8 +8,8 @@ type error = unit;
 
 let lexer = (_s) => unimplemented();
 
-let iter = (self, f) => unimplemented();
+let iter = (self) => unimplemented();
 
-let print_tok = (tok) => unimplemented();
+let print_token = (tok) => unimplemented();
 
 let print_error = (err) => unimplemented();
