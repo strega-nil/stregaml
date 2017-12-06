@@ -1,5 +1,5 @@
-type t('o, 'e) =
-  | Ok('o)
+type t('t, 'e) =
+  | Ok('t)
   | Err('e);
 
 let map = (f, self) =>

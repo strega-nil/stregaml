@@ -6,7 +6,7 @@ module Result = Result;
 
 type result('o, 'e) = Result.t('o, 'e) = | Ok('o) | Err('e);
 
-type iter('a, 'b) = Iter.t('a, 'b);
+type iter('a) = Iter.t('a);
 
 type string_buffer = String_buffer.t;
 

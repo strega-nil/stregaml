@@ -1,14 +1,30 @@
 open Pred;
 
 let main = () => {
-  let lexer = Lex.lexer("func main() { }");
-  let err = Lex.iter(lexer) |> Iter.for_each((tok) => Lex.print_token(tok) |> print_newline);
+  open Spanned.Prelude;
+  let lexer = Lex.lexer({|
+func main() {
+
+}
+|});
+  let err =
+    Lex.iter(lexer)
+    |> Iter.for_each_break(
+         (res) =>
+           switch res {
+           | SOk(tok, sp) =>
+             Lex.print_spanned_token(tok, sp);
+             print_newline();
+             None;
+           | SErr(e, sp) => Some((e, sp))
+           }
+       );
   switch err {
-  | Lex.Error_end_of_file => ()
-  | e =>
+  | Some((e, sp)) =>
     print_string("error: ");
-    Lex.print_error(e);
+    Lex.print_spanned_error(e, sp);
     print_newline();
+  | None => ()
   };
 };
 

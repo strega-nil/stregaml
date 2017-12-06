@@ -7,5 +7,4 @@ type token =
 
 type error =
   | Error_unrecognized_character(char)
-  | Error_unclosed_comment
-  | Error_end_of_file;
+  | Error_unclosed_comment;
