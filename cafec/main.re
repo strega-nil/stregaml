@@ -4,7 +4,7 @@ let main = () => {
   open Spanned.Prelude;
   let lexer = Lex.lexer({|
 func main() {
-
+  0xF F F F
 }
 |});
   let err =

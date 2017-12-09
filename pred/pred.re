@@ -10,4 +10,4 @@ type iter('a) = Iter.t('a);
 
 type string_buffer = String_buffer.t;
 
-let unimplemented = Unimplemented.unimplemented;
+let unimplemented = Errors.unimplemented;

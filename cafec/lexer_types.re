@@ -21,5 +21,6 @@ type token =
 
 type error =
   | Error_unclosed_comment
+  | Error_malformed_number_literal(string)
   | Error_reserved_token(string)
   | Error_unrecognized_character(char);

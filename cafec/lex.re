@@ -63,6 +63,7 @@ let print_spanned_token = (tok, sp) => {
 
 let print_error = (err) =>
   switch err {
+  | Error_malformed_number_literal(n) => Printf.printf("malformed number literal: %s", n)
   | Error_reserved_token(tok) => Printf.printf("reserved token: %s", tok)
   | Error_unrecognized_character(ch) =>
     Printf.printf("unrecognized character: `%c` (%d)", ch, Char.code(ch))
@@ -174,21 +175,19 @@ let rec next_token: t => option(spanned(token, error)) =
           helper(idx + 1, Spanned.union(sp, sp'));
         | Some(_)
         | None =>
-          {
-            let kw = (k) => SOk(Token_keyword(k), sp);
-            switch (to_string(buff)) {
-            | "true" => kw(Keyword_true)
-            | "false" => kw(Keyword_false)
-            | "if" => kw(Keyword_if)
-            | "else" => kw(Keyword_else)
-            | "func" => kw(Keyword_func)
-            | "let" as res => SErr(Error_reserved_token(res), sp)
-            | "type" as res => SErr(Error_reserved_token(res), sp)
-            | "struct" as res => SErr(Error_reserved_token(res), sp)
-            | "variant" as res => SErr(Error_reserved_token(res), sp)
-            | id => SOk(Token_identifier(id), sp)
-            }
-          }
+          let kw = (k) => SOk(Token_keyword(k), sp);
+          switch (to_string(buff)) {
+          | "true" => kw(Keyword_true)
+          | "false" => kw(Keyword_false)
+          | "if" => kw(Keyword_if)
+          | "else" => kw(Keyword_else)
+          | "func" => kw(Keyword_func)
+          | "let" as res => SErr(Error_reserved_token(res), sp)
+          | "type" as res => SErr(Error_reserved_token(res), sp)
+          | "struct" as res => SErr(Error_reserved_token(res), sp)
+          | "variant" as res => SErr(Error_reserved_token(res), sp)
+          | id => SOk(Token_identifier(id), sp)
+          };
         };
       push(buff, fst);
       helper(1, sp);
@@ -213,7 +212,73 @@ let rec next_token: t => option(spanned(token, error)) =
       push(buff, fst);
       helper(1, sp);
     };
-    let lex_number = (fst, sp) => unimplemented();
+    let lex_number = (fst, sp) => {
+      open String_buffer;
+      let buff = with_capacity(22);
+      let (base, idx, sp) =
+        if (fst == '0') {
+          switch (peek_ch()) {
+          | Some(('x', sp')) =>
+            eat_ch();
+            (16, 0, Spanned.union(sp, sp'));
+          | Some(('o', sp')) =>
+            eat_ch();
+            (8, 0, Spanned.union(sp, sp'));
+          | Some(('b', sp')) =>
+            eat_ch();
+            (2, 0, Spanned.union(sp, sp'));
+          | Some(_)
+          | None =>
+            push(buff, '0');
+            (10, 1, sp);
+          };
+        } else {
+          push(buff, fst);
+          (10, 1, sp);
+        };
+      let rec helper = (idx, sp, space_allowed) =>
+        switch (peek_ch()) {
+        | Some((ch, sp')) when is_number_continue(ch, base) =>
+          eat_ch();
+          push(buff, ch);
+          helper(idx + 1, Spanned.union(sp, sp'), true);
+        | Some((' ', sp')) =>
+          eat_ch();
+          push(buff, ' ');
+          helper(idx, Spanned.union(sp, sp'), false);
+        | Some((ch, sp'))
+            when space_allowed && (is_number_continue(ch, 10) || is_ident_continue(ch)) =>
+          eat_ch();
+          push(buff, ch);
+          SErr(Error_malformed_number_literal(to_string(buff)), Spanned.union(sp, sp'));
+        | Some(_)
+        | None =>
+          let char_to_int = (ch) =>
+            if (ch >= '0' && ch <= '9') {
+              Char.code(ch) - Char.code('0');
+            } else if (ch >= 'a' && ch <= 'f') {
+              Char.code(ch) - Char.code('a') + 10;
+            } else if (ch >= 'A' && ch <= 'F') {
+              Char.code(ch) - Char.code('A') + 10;
+            } else {
+              assert false;
+            };
+          /* TODO(ubsan): fix overflow */
+          let rec to_int = (idx, acc) =>
+            if (idx < length(buff)) {
+              let ch = get(buff, idx);
+              if (ch == ' ') {
+                to_int(idx + 1, acc);
+              } else {
+                to_int(idx + 1, acc * base + char_to_int(ch));
+              };
+            } else {
+              acc;
+            };
+          SOk(Token_int_literal(to_int(0, 0)), sp);
+        };
+      helper(idx, sp, true);
+    };
     let rec block_comment: span => spanned(unit, error) =
       (sp) => {
         let rec eat_the_things = () =>
@@ -269,7 +334,7 @@ let rec next_token: t => option(spanned(token, error)) =
     | Some((ch, sp)) when is_ident_start(ch) => Some(lex_ident(ch, sp) >>= ((id) => pure(id)))
     | Some((ch, sp)) when is_operator_start(ch) =>
       Some(lex_operator(ch, sp) >>= ((op) => pure(op)))
-    | Some((ch, sp)) when is_ident_start(ch) => Some(lex_number(ch, sp) >>= ((n) => pure(n)))
+    | Some((ch, sp)) when is_number_start(ch) => Some(lex_number(ch, sp) >>= ((n) => pure(n)))
     | Some((ch, sp)) => Some(SErr(Error_unrecognized_character(ch), sp))
     | None => None
     };
