@@ -4,7 +4,7 @@ open Spanned.Prelude;
 
 open Spanned.Monad;
 
-include Lexer_types;
+module Error = Parser_error;
 
 exception Bug_lexer(string);
 
@@ -16,70 +16,6 @@ type t = {
 };
 
 let lexer = (s) => {buffer: s, index: 0, line: 1, column: 1};
-
-let print_keyword = (kw) =>
-  switch kw {
-  | Keyword_true => print_string("true")
-  | Keyword_false => print_string("false")
-  | Keyword_if => print_string("if")
-  | Keyword_else => print_string("else")
-  | Keyword_func => print_string("func")
-  };
-
-let print_token = (tok) =>
-  switch tok {
-  | Token_open_paren => print_string("open paren")
-  | Token_close_paren => print_string("close paren")
-  | Token_open_brace => print_string("open brace")
-  | Token_close_brace => print_string("close brace")
-  | Token_keyword(kw) =>
-    print_string("keyword: ");
-    print_keyword(kw);
-  | Token_operator(op) =>
-    print_string("operator: ");
-    print_string(op);
-  | Token_identifier(id) =>
-    print_string("identifier: ");
-    print_string(id);
-  | Token_int_literal(i) =>
-    print_string("int literal: ");
-    print_int(i);
-  | Token_colon => print_string("colon")
-  | Token_equals => print_string("equals")
-  | Token_semicolon => print_string("semicolon")
-  | Token_comma => print_string("comma")
-  };
-
-let print_spanned_token = (tok, sp) => {
-  print_token(tok);
-  Printf.printf(
-    " from (%d, %d) to (%d, %d)",
-    sp.start_line,
-    sp.start_column,
-    sp.end_line,
-    sp.end_column
-  );
-};
-
-let print_error = (err) =>
-  switch err {
-  | Error_malformed_number_literal(n) => Printf.printf("malformed number literal: %s", n)
-  | Error_reserved_token(tok) => Printf.printf("reserved token: %s", tok)
-  | Error_unrecognized_character(ch) =>
-    Printf.printf("unrecognized character: `%c` (%d)", ch, Char.code(ch))
-  | Error_unclosed_comment => print_string("unclosed comment")
-  };
-
-let print_spanned_error = (err, sp) => {
-  print_error(err);
-  Printf.printf(
-    " from (%d, %d) to (%d, %d)",
-    sp.start_line,
-    sp.start_column,
-    sp.end_line,
-    sp.end_column
-  );
-};
 
 /* the actual lexer functions */
 let is_whitespace = (ch) => ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
@@ -128,7 +64,7 @@ let is_number_continue = (ch, base) =>
 
 let is_number_start = (ch) => ch >= '0' && ch <= '9';
 
-let rec next_token: t => option(spanned(token, error)) =
+let rec next_token: t => option(spanned(Token.t, Error.t)) =
   (lex) => {
     let current_span = () => {
       start_line: lex.line,
@@ -175,18 +111,18 @@ let rec next_token: t => option(spanned(token, error)) =
           helper(idx + 1, Spanned.union(sp, sp'));
         | Some(_)
         | None =>
-          let kw = (k) => SOk(Token_keyword(k), sp);
+          let kw = (k) => SOk(Token.Keyword(k), sp);
           switch (to_string(buff)) {
           | "true" => kw(Keyword_true)
           | "false" => kw(Keyword_false)
           | "if" => kw(Keyword_if)
           | "else" => kw(Keyword_else)
           | "func" => kw(Keyword_func)
-          | "let" as res => SErr(Error_reserved_token(res), sp)
-          | "type" as res => SErr(Error_reserved_token(res), sp)
-          | "struct" as res => SErr(Error_reserved_token(res), sp)
-          | "variant" as res => SErr(Error_reserved_token(res), sp)
-          | id => SOk(Token_identifier(id), sp)
+          | "let" as res => SErr(Error.Reserved_token(res), sp)
+          | "type" as res => SErr(Error.Reserved_token(res), sp)
+          | "struct" as res => SErr(Error.Reserved_token(res), sp)
+          | "variant" as res => SErr(Error.Reserved_token(res), sp)
+          | id => SOk(Token.Identifier(id), sp)
           };
         };
       push(buff, fst);
@@ -204,9 +140,9 @@ let rec next_token: t => option(spanned(token, error)) =
         | Some(_)
         | None =>
           switch (to_string(buff)) {
-          | "|" as res => SErr(Error_reserved_token(res), sp)
-          | "." as res => SErr(Error_reserved_token(res), sp)
-          | op => SOk(Token_operator(op), sp)
+          | "|" as res => SErr(Error.Reserved_token(res), sp)
+          | "." as res => SErr(Error.Reserved_token(res), sp)
+          | op => SOk(Token.Operator(op), sp)
           }
         };
       push(buff, fst);
@@ -250,7 +186,7 @@ let rec next_token: t => option(spanned(token, error)) =
             when space_allowed && (is_number_continue(ch, 10) || is_ident_continue(ch)) =>
           eat_ch();
           push(buff, ch);
-          SErr(Error_malformed_number_literal(to_string(buff)), Spanned.union(sp, sp'));
+          SErr(Error.Malformed_number_literal(to_string(buff)), Spanned.union(sp, sp'));
         | Some(_)
         | None =>
           let char_to_int = (ch) =>
@@ -275,11 +211,11 @@ let rec next_token: t => option(spanned(token, error)) =
             } else {
               acc;
             };
-          SOk(Token_int_literal(to_int(0, 0)), sp);
+          SOk(Token.Int_literal(to_int(0, 0)), sp);
         };
       helper(idx, sp, true);
     };
-    let rec block_comment: span => spanned(unit, error) =
+    let rec block_comment: span => spanned(unit, Error.t) =
       (sp) => {
         let rec eat_the_things = () =>
           switch (next_ch()) {
@@ -294,7 +230,7 @@ let rec next_token: t => option(spanned(token, error)) =
             | _ => eat_the_things()
             }
           | Some(_) => eat_the_things()
-          | None => SErr(Error_unclosed_comment, Spanned.union(sp, current_span()))
+          | None => SErr(Error.Unclosed_comment, Spanned.union(sp, current_span()))
           };
         eat_the_things();
       };
@@ -321,21 +257,21 @@ let rec next_token: t => option(spanned(token, error)) =
         eat_ch();
         line_comment();
         next_token(lex);
-      | _ => Some(SErr(Error_unrecognized_character('/'), sp))
+      | _ => Some(SErr(Error.Unrecognized_character('/'), sp))
       }
-    | Some(('(', sp)) => Some(SOk(Token_open_paren, sp))
-    | Some((')', sp)) => Some(SOk(Token_close_paren, sp))
-    | Some(('{', sp)) => Some(SOk(Token_open_brace, sp))
-    | Some(('}', sp)) => Some(SOk(Token_close_brace, sp))
-    | Some(('[', sp)) => Some(SErr(Error_reserved_token("["), sp))
-    | Some((']', sp)) => Some(SErr(Error_reserved_token("]"), sp))
-    | Some((';', sp)) => Some(SOk(Token_semicolon, sp))
-    | Some((',', sp)) => Some(SOk(Token_comma, sp))
+    | Some(('(', sp)) => Some(SOk(Token.Open_paren, sp))
+    | Some((')', sp)) => Some(SOk(Token.Close_paren, sp))
+    | Some(('{', sp)) => Some(SOk(Token.Open_brace, sp))
+    | Some(('}', sp)) => Some(SOk(Token.Close_brace, sp))
+    | Some(('[', sp)) => Some(SErr(Error.Reserved_token("["), sp))
+    | Some((']', sp)) => Some(SErr(Error.Reserved_token("]"), sp))
+    | Some((';', sp)) => Some(SOk(Token.Semicolon, sp))
+    | Some((',', sp)) => Some(SOk(Token.Comma, sp))
     | Some((ch, sp)) when is_ident_start(ch) => Some(lex_ident(ch, sp) >>= ((id) => pure(id)))
     | Some((ch, sp)) when is_operator_start(ch) =>
       Some(lex_operator(ch, sp) >>= ((op) => pure(op)))
     | Some((ch, sp)) when is_number_start(ch) => Some(lex_number(ch, sp) >>= ((n) => pure(n)))
-    | Some((ch, sp)) => Some(SErr(Error_unrecognized_character(ch), sp))
+    | Some((ch, sp)) => Some(SErr(Error.Unrecognized_character(ch), sp))
     | None => None
     };
   };
