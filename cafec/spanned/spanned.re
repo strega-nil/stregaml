@@ -40,7 +40,7 @@ module Monad = {
       | SOk(o, sp) =>
         switch (f(o)) {
         | SOk(o', sp') => SOk(o', union(sp, sp'))
-        | SErr(e', sp') => SErr(e', sp')
+        | SErr(e', sp') => SErr(e', if (is_made_up(sp')) { sp } else { sp' })
         }
       | SErr(e, sp) => SErr(e, sp)
       };

@@ -1,6 +1,7 @@
 open Spanned.Prelude;
 
 type expected_token =
+  | Expected_specific(Token.t)
   | Expected_item_declarator
   | Expected_identifier_or_under
   | Expected_identifier;
@@ -14,6 +15,7 @@ type t =
 
 let print_expected = (exp) =>
   switch exp {
+  | Expected_specific(tok) => Token.print(tok)
   | Expected_item_declarator => print_string("either `func` or `type`")
   | Expected_identifier => print_string("an identifier")
   | Expected_identifier_or_under => print_string("an identifier or `_`")

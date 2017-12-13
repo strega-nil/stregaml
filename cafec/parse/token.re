@@ -1,27 +1,31 @@
 open Spanned.Prelude;
 
-type keyword =
-  | Keyword_true
-  | Keyword_false
-  | Keyword_if
-  | Keyword_else
-  | Keyword_func
-  | Keyword_underscore;
+module Prelude {
+  type keyword =
+    | Keyword_true
+    | Keyword_false
+    | Keyword_if
+    | Keyword_else
+    | Keyword_func
+    | Keyword_underscore;
 
-type t =
-  | Open_paren
-  | Close_paren
-  | Open_brace
-  | Close_brace
-  | Keyword(keyword)
-  | Identifier(string)
-  | Operator(string)
-  | Int_literal(int)
-  | Colon
-  | Equals
-  | Semicolon
-  | Comma
-  | End_of_file;
+  type t =
+    | Open_paren
+    | Close_paren
+    | Open_brace
+    | Close_brace
+    | Keyword(keyword)
+    | Identifier(string)
+    | Operator(string)
+    | Int_literal(int)
+    | Colon
+    | Equals
+    | Semicolon
+    | Comma
+    | End_of_file;
+};
+
+include Prelude;
 
 let print_keyword = (kw) =>
   switch kw {

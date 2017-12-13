@@ -26,4 +26,4 @@ type t;
 
 let make: (list(Function.t), list(Type_definition.t)) => t;
 
-let print_ast: t => unit;
+let print: t => unit;

@@ -2,13 +2,15 @@ open Pred;
 
 let program = {|
 func main() {
-  0xF F F F
 }
 |};
 
 let main = () => {
   open Spanned.Prelude;
-  Parse.parse(program);
+  switch (Parse.parse(program)) {
+  | SOk(ast, _) => Untyped_ast.print(ast)
+  | SErr(e, sp) => Parse.Error.print_spanned(e, sp)
+  };
 };
 
 main();

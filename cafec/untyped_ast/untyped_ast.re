@@ -2,7 +2,7 @@ open Pred;
 
 module Expr = {
   type t = unit;
-  let unit_literal = () => unimplemented();
+  let unit_literal = () => ();
 };
 
 module Type = {
@@ -28,6 +28,15 @@ type t = {
   tys: list(Type_definition.t)
 };
 
-let make = (funcs, tys) => unimplemented();
+let make = (funcs, tys) => {funcs, tys};
 
-let print_ast = (self) => unimplemented();
+let print = (self) => {
+  let rec helper = (funcs) =>
+    switch funcs {
+    | [x, ...xs] =>
+      Printf.printf("func %s;\n", x.Function.name);
+      helper(xs);
+    | [] => ()
+    };
+  helper(self.funcs);
+};
