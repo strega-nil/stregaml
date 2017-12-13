@@ -5,7 +5,8 @@ type keyword =
   | Keyword_false
   | Keyword_if
   | Keyword_else
-  | Keyword_func;
+  | Keyword_func
+  | Keyword_underscore;
 
 type t =
   | Open_paren
@@ -19,7 +20,8 @@ type t =
   | Colon
   | Equals
   | Semicolon
-  | Comma;
+  | Comma
+  | End_of_file;
 
 let print_keyword = (kw) =>
   switch kw {
@@ -28,6 +30,7 @@ let print_keyword = (kw) =>
   | Keyword_if => print_string("if")
   | Keyword_else => print_string("else")
   | Keyword_func => print_string("func")
+  | Keyword_underscore => print_string("_")
   };
 
 
@@ -53,6 +56,7 @@ let print = (tok) =>
   | Equals => print_string("equals")
   | Semicolon => print_string("semicolon")
   | Comma => print_string("comma")
+  | End_of_file => print_string("end of file")
   };
 
 let print_spanned = (tok, sp) => {

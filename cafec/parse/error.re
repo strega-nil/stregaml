@@ -1,10 +1,23 @@
 open Spanned.Prelude;
 
+type expected_token =
+  | Expected_item_declarator
+  | Expected_identifier_or_under
+  | Expected_identifier;
+
 type t =
   | Unclosed_comment
   | Malformed_number_literal(string)
   | Reserved_token(string)
-  | Unrecognized_character(char);
+  | Unrecognized_character(char)
+  | Unexpected_token(expected_token, Token.t);
+
+let print_expected = (exp) =>
+  switch exp {
+  | Expected_item_declarator => print_string("either `func` or `type`")
+  | Expected_identifier => print_string("an identifier")
+  | Expected_identifier_or_under => print_string("an identifier or `_`")
+  };
 
 let print = (err) =>
   switch err {
@@ -13,6 +26,11 @@ let print = (err) =>
   | Unrecognized_character(ch) =>
     Printf.printf("unrecognized character: `%c` (%d)", ch, Char.code(ch))
   | Unclosed_comment => print_string("unclosed comment")
+  | Unexpected_token(exp, tok) =>
+    print_string("expected: ");
+    print_expected(exp);
+    print_string(", found: ");
+    Token.print(tok);
   };
 
 let print_spanned = (err, sp) => {

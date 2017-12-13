@@ -2,7 +2,7 @@
 
 (executables
  ((names (main))
-  (libraries (pred))))
+  (libraries (pred parse spanned untyped_ast))))
 
 (install
  ((section bin)

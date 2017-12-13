@@ -4,4 +4,4 @@ open Spanned.Prelude;
 type t;
 
 let lexer: string => t;
-let iter: t => iter(spanned(Token.t, Parser_error.t));
+let next_token: t => spanned(Token.t, Error.t);

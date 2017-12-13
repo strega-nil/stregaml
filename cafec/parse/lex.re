@@ -4,7 +4,7 @@ open Spanned.Prelude;
 
 open Spanned.Monad;
 
-module Error = Parser_error;
+module Error = Error;
 
 exception Bug_lexer(string);
 
@@ -22,9 +22,22 @@ let is_whitespace = (ch) => ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
 
 let is_alpha = (ch) => ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z';
 
+let is_number_start = (ch) => ch >= '0' && ch <= '9';
+
+let is_number_continue = (ch, base) =>
+  switch base {
+  | 2 => ch == '0' || ch == '1'
+  | 8 => ch >= '0' && ch <= '7'
+  | 10 => ch >= '0' && ch <= '9'
+  | 16 => ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f' || ch >= 'A' && ch <= 'F'
+  | _ => raise(Bug_lexer("Invalid base: " ++ string_of_int(base)))
+  };
+
 let is_ident_start = (ch) => is_alpha(ch) || ch == '_';
 
-let is_ident_continue = (ch) => is_ident_start(ch) || ch == '\'';
+let is_ident_continue_no_prime = (ch) => is_ident_start(ch) || is_number_start(ch);
+
+let is_ident_continue = (ch) => is_ident_continue_no_prime(ch) || ch == '\'';
 
 let is_operator_start = (ch) =>
   switch ch {
@@ -53,18 +66,7 @@ let is_operator_start = (ch) =>
 
 let is_operator_continue = (ch) => is_operator_start(ch);
 
-let is_number_continue = (ch, base) =>
-  switch base {
-  | 2 => ch == '0' || ch == '1'
-  | 8 => ch >= '0' && ch <= '7'
-  | 10 => ch >= '0' && ch <= '9'
-  | 16 => ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f' || ch >= 'A' && ch <= 'F'
-  | _ => raise(Bug_lexer("Invalid base: " ++ string_of_int(base)))
-  };
-
-let is_number_start = (ch) => ch >= '0' && ch <= '9';
-
-let rec next_token: t => option(spanned(Token.t, Error.t)) =
+let rec next_token =
   (lex) => {
     let current_span = () => {
       start_line: lex.line,
@@ -118,6 +120,7 @@ let rec next_token: t => option(spanned(Token.t, Error.t)) =
           | "if" => kw(Keyword_if)
           | "else" => kw(Keyword_else)
           | "func" => kw(Keyword_func)
+          | "_" => kw(Keyword_underscore)
           | "let" as res => SErr(Error.Reserved_token(res), sp)
           | "type" as res => SErr(Error.Reserved_token(res), sp)
           | "struct" as res => SErr(Error.Reserved_token(res), sp)
@@ -129,24 +132,65 @@ let rec next_token: t => option(spanned(Token.t, Error.t)) =
       helper(1, sp);
     };
     let lex_operator = (fst, sp) => {
-      open String_buffer;
-      let buff = with_capacity(8);
-      let rec helper = (idx, sp) =>
-        switch (peek_ch()) {
-        | Some((ch, sp')) when is_operator_continue(ch) =>
-          eat_ch();
-          push(buff, ch);
-          helper(idx + 1, Spanned.union(sp, sp'));
-        | Some(_)
-        | None =>
-          switch (to_string(buff)) {
-          | "|" as res => SErr(Error.Reserved_token(res), sp)
-          | "." as res => SErr(Error.Reserved_token(res), sp)
-          | op => SOk(Token.Operator(op), sp)
-          }
+      let rec block_comment: span => spanned(unit, Error.t) =
+        (sp) => {
+          let rec eat_the_things = () =>
+            switch (next_ch()) {
+            | Some(('*', _)) =>
+              switch (next_ch()) {
+              | Some(('/', _)) => pure()
+              | _ => eat_the_things()
+              }
+            | Some(('/', sp')) =>
+              switch (next_ch()) {
+              | Some(('*', _)) => block_comment(sp')
+              | _ => eat_the_things()
+              }
+            | Some(_) => eat_the_things()
+            | None => SErr(Error.Unclosed_comment, Spanned.union(sp, current_span()))
+            };
+          eat_the_things();
         };
-      push(buff, fst);
-      helper(1, sp);
+      let line_comment = () => {
+        let rec eat_the_things = () =>
+          switch (next_ch()) {
+          | Some(('\n', _))
+          | None => ()
+          | Some(_) => eat_the_things()
+          };
+        eat_the_things();
+      };
+      switch (peek_ch()) {
+      | Some(('*', _)) when fst == '/' =>
+        eat_ch();
+        switch (block_comment(sp)) {
+        | SOk((), _) => next_token(lex)
+        | SErr(e, sp) => SErr(e, sp)
+        };
+      | Some(('/', _)) when fst == '/' =>
+        eat_ch();
+        line_comment();
+        next_token(lex);
+      | _ =>
+        open String_buffer;
+        let buff = with_capacity(8);
+        let rec helper = (idx, sp) =>
+          switch (peek_ch()) {
+          | Some((ch, sp')) when is_operator_continue(ch) =>
+            eat_ch();
+            push(buff, ch);
+            helper(idx + 1, Spanned.union(sp, sp'));
+          | Some(_)
+          | None =>
+            switch (to_string(buff)) {
+            | "|" as res => SErr(Error.Reserved_token(res), sp)
+            | "." as res => SErr(Error.Reserved_token(res), sp)
+            | op => SOk(Token.Operator(op), sp)
+            }
+          };
+        push(buff, fst);
+        helper(1, sp)
+      }
     };
     let lex_number = (fst, sp) => {
       open String_buffer;
@@ -215,65 +259,21 @@ let rec next_token: t => option(spanned(Token.t, Error.t)) =
         };
       helper(idx, sp, true);
     };
-    let rec block_comment: span => spanned(unit, Error.t) =
-      (sp) => {
-        let rec eat_the_things = () =>
-          switch (next_ch()) {
-          | Some(('*', _)) =>
-            switch (next_ch()) {
-            | Some(('/', _)) => pure()
-            | _ => eat_the_things()
-            }
-          | Some(('/', sp')) =>
-            switch (next_ch()) {
-            | Some(('*', _)) => block_comment(sp')
-            | _ => eat_the_things()
-            }
-          | Some(_) => eat_the_things()
-          | None => SErr(Error.Unclosed_comment, Spanned.union(sp, current_span()))
-          };
-        eat_the_things();
-      };
-    let line_comment = () => {
-      let rec eat_the_things = () =>
-        switch (next_ch()) {
-        | Some(('\n', _))
-        | None => ()
-        | Some(_) => eat_the_things()
-        };
-      eat_the_things();
-    };
     eat_whitespace();
     switch (next_ch()) {
-    | Some(('/', sp)) =>
-      switch (peek_ch()) {
-      | Some(('*', _)) =>
-        eat_ch();
-        switch (block_comment(sp)) {
-        | SOk((), _) => next_token(lex)
-        | SErr(e, sp) => Some(SErr(e, sp))
-        };
-      | Some(('/', _)) =>
-        eat_ch();
-        line_comment();
-        next_token(lex);
-      | _ => Some(SErr(Error.Unrecognized_character('/'), sp))
-      }
-    | Some(('(', sp)) => Some(SOk(Token.Open_paren, sp))
-    | Some((')', sp)) => Some(SOk(Token.Close_paren, sp))
-    | Some(('{', sp)) => Some(SOk(Token.Open_brace, sp))
-    | Some(('}', sp)) => Some(SOk(Token.Close_brace, sp))
-    | Some(('[', sp)) => Some(SErr(Error.Reserved_token("["), sp))
-    | Some((']', sp)) => Some(SErr(Error.Reserved_token("]"), sp))
-    | Some((';', sp)) => Some(SOk(Token.Semicolon, sp))
-    | Some((',', sp)) => Some(SOk(Token.Comma, sp))
-    | Some((ch, sp)) when is_ident_start(ch) => Some(lex_ident(ch, sp) >>= ((id) => pure(id)))
-    | Some((ch, sp)) when is_operator_start(ch) =>
-      Some(lex_operator(ch, sp) >>= ((op) => pure(op)))
-    | Some((ch, sp)) when is_number_start(ch) => Some(lex_number(ch, sp) >>= ((n) => pure(n)))
-    | Some((ch, sp)) => Some(SErr(Error.Unrecognized_character(ch), sp))
-    | None => None
+    | Some(('(', sp)) => SOk(Token.Open_paren, sp)
+    | Some((')', sp)) => SOk(Token.Close_paren, sp)
+    | Some(('{', sp)) => SOk(Token.Open_brace, sp)
+    | Some(('}', sp)) => SOk(Token.Close_brace, sp)
+    | Some(('[', sp)) => SErr(Error.Reserved_token("["), sp)
+    | Some((']', sp)) => SErr(Error.Reserved_token("]"), sp)
+    | Some((';', sp)) => SOk(Token.Semicolon, sp)
+    | Some((',', sp)) => SOk(Token.Comma, sp)
+    | Some(('\'', sp)) => SErr(Error.Reserved_token("'"), sp)
+    | Some((ch, sp)) when is_ident_start(ch) => lex_ident(ch, sp) >>= ((id) => pure(id))
+    | Some((ch, sp)) when is_operator_start(ch) => lex_operator(ch, sp)
+    | Some((ch, sp)) when is_number_start(ch) => lex_number(ch, sp) >>= ((n) => pure(n))
+    | Some((ch, sp)) => SErr(Error.Unrecognized_character(ch), sp)
+    | None => SOk(Token.End_of_file, current_span())
     };
   };
-
-let iter = (lex) => Iter.from_next(() => next_token(lex));
