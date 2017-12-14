@@ -2,4 +2,5 @@
 
 (library
  ((name pred)
-  (public_name pred)))
+  (public_name pred)
+  (flags (:standard -w @a))))

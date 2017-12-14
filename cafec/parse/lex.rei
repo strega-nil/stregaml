@@ -1,5 +1,3 @@
-open Pred;
-
 open Spanned.Prelude;
 
 type t;

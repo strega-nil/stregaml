@@ -21,7 +21,7 @@ module Prelude = {
     | Equals
     | Semicolon
     | Comma
-    | End_of_file;
+    | Eof;
 };
 
 include Prelude;
@@ -58,7 +58,7 @@ let print = (tok) =>
   | Equals => print_string("equals")
   | Semicolon => print_string("semicolon")
   | Comma => print_string("comma")
-  | End_of_file => print_string("end of file")
+  | Eof => print_string("end of file")
   };
 
 let print_spanned = (tok, sp) => {

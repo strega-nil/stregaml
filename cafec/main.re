@@ -1,5 +1,3 @@
-open Pred;
-
 let program = {|
 func foo() {
   ()

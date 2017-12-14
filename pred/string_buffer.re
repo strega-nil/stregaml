@@ -9,9 +9,9 @@ let with_capacity = (cap) => {buff: Bytes.create(cap), length: 0};
 
 let clone = ({buff, length}) => {buff: Bytes.copy(buff), length};
 
-let length = ({length}) => length;
+let length = ({length, _}) => length;
 
-let capacity = ({buff}) => Bytes.length(buff);
+let capacity = ({buff, _}) => Bytes.length(buff);
 
 let resize = (self, new_size) => {
   assert (self.length <= new_size);

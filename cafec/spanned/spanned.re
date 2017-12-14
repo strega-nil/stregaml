@@ -1,5 +1,3 @@
-open Pred;
-
 module Prelude = {
   type span = {
     start_line: int,

@@ -114,12 +114,12 @@ let rec next_token = (lex) => {
       | None =>
         let kw = (k) => SOk(Token.Keyword(k), sp);
         switch (to_string(buff)) {
-        | "true" => kw(Keyword_true)
-        | "false" => kw(Keyword_false)
-        | "if" => kw(Keyword_if)
-        | "else" => kw(Keyword_else)
-        | "func" => kw(Keyword_func)
-        | "_" => kw(Keyword_underscore)
+        | "true" => kw(Token.Keyword_true)
+        | "false" => kw(Token.Keyword_false)
+        | "if" => kw(Token.Keyword_if)
+        | "else" => kw(Token.Keyword_else)
+        | "func" => kw(Token.Keyword_func)
+        | "_" => kw(Token.Keyword_underscore)
         | "let" as res => SErr(Error.Reserved_token(res), sp)
         | "type" as res => SErr(Error.Reserved_token(res), sp)
         | "struct" as res => SErr(Error.Reserved_token(res), sp)
@@ -272,6 +272,6 @@ let rec next_token = (lex) => {
   | Some((ch, sp)) when is_operator_start(ch) => lex_operator(ch, sp)
   | Some((ch, sp)) when is_number_start(ch) => lex_number(ch, sp) >>= ((n) => pure(n))
   | Some((ch, sp)) => SErr(Error.Unrecognized_character(ch), sp)
-  | None => SOk(Token.End_of_file, current_span())
+  | None => SOk(Token.Eof, current_span())
   };
 };

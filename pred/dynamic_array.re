@@ -13,9 +13,9 @@ let with_capacity = (cap) => {buff: Array.make(cap, None), length: 0};
 
 let clone = ({buff, length}) => {buff: Array.copy(buff), length};
 
-let length = ({length}) => length;
+let length = ({length, _}) => length;
 
-let capacity = ({buff}) => Array.length(buff);
+let capacity = ({buff, _}) => Array.length(buff);
 
 let unwrap =
   fun

@@ -1,5 +1,3 @@
-open Pred;
-
 let rec print_indent = (indent) =>
   switch indent {
   | n when n <= 0 => ()

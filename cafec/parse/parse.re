@@ -34,7 +34,7 @@ let next_token = (parser) => {
 let eat_token = (parser) =>
   switch (next_token(parser)) {
   | SOk(_, _) => ()
-  | SErr(e, sp) => assert false
+  | SErr(_, _) => assert false
   };
 
 type item =
@@ -52,7 +52,7 @@ let maybe_get_specific = (parser, token) =>
   | SOk(tok, sp) when tok == token =>
     eat_token(parser);
     SOk(Some(), sp);
-  | SOk(tok, sp) => SOk(None, sp)
+  | SOk(_, sp) => SOk(None, sp)
   | SErr(e, sp) => SErr(e, sp)
   };
 
@@ -68,21 +68,20 @@ let get_specific = (parser, token) =>
   };
 
 let maybe_parse_expression = (parser) =>
-  Token.Prelude.(
-    switch (peek_token(parser)) {
-    | SOk(Open_paren, sp) =>
-      eat_token(parser);
-      with_span(sp)
-      >>= (() => get_specific(parser, Close_paren) >>= (() => pure(Some(Ast.Expr.unit_literal()))));
-    | SOk(_, sp) => SOk(None, sp)
-    | SErr(e, sp) => SErr(e, sp)
-    }
-  );
+  switch (peek_token(parser)) {
+  | SOk(Token.Open_paren, sp) =>
+    eat_token(parser);
+    with_span(sp)
+    >>= () => get_specific(parser, Token.Close_paren)
+    >>= () => pure(Some(Ast.Expr.unit_literal()));
+  | SOk(_, sp) => SOk(None, sp)
+  | SErr(e, sp) => SErr(e, sp)
+  };
 
-let parse_expression = (parser) =>
+let _parse_expression = (parser) =>
   switch (maybe_parse_expression(parser)) {
   | SOk(Some(expr), sp) => SOk(expr, sp)
-  | SOk(None, sp) =>
+  | SOk(None, _) =>
     next_token(parser)
     >>= ((tok) => SErr(Error.Unexpected_token(Error.Expected_expression, tok), Spanned.made_up))
   | SErr(e, sp) => SErr(e, sp)
@@ -90,18 +89,17 @@ let parse_expression = (parser) =>
 
 let parse_item: t => spanned(option(item), Error.t) =
   (parser) => {
-    open Token.Prelude;
     next_token(parser)
     >>= (tok) =>
       switch tok {
-      | Keyword(Keyword_func) =>
+      | Token.Keyword(Token.Keyword_func) =>
         get_ident(parser)
-        >>= (name) => get_specific(parser, Open_paren)
-        >>= () => get_specific(parser, Close_paren)
-        >>= () => get_specific(parser, Open_brace)
+        >>= (name) => get_specific(parser, Token.Open_paren)
+        >>= () => get_specific(parser, Token.Close_paren)
+        >>= () => get_specific(parser, Token.Open_brace)
         >>= () => maybe_parse_expression(parser)
-        >>= (opt_expr) => get_specific(parser, Close_brace)
-        >>= () => get_specific(parser, Semicolon)
+        >>= (opt_expr) => get_specific(parser, Token.Close_brace)
+        >>= () => get_specific(parser, Token.Semicolon)
         >>= () => {
           let expr =
             switch opt_expr {
@@ -110,7 +108,7 @@ let parse_item: t => spanned(option(item), Error.t) =
             };
           pure(Some(Item_func(name, expr)));
         }
-      | End_of_file => pure(None)
+      | Token.Eof => pure(None)
       | tok =>
         SErr(Error.Unexpected_token(Error.Expected_item_declarator, tok), Spanned.made_up)
       }

@@ -2,7 +2,8 @@
 
 (executables
  ((names (main))
-  (libraries (pred parse spanned untyped_ast))))
+  (libraries (pred parse spanned untyped_ast))
+  (flags (:standard -w @a))))
 
 (install
  ((section bin)

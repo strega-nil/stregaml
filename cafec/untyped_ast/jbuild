@@ -2,4 +2,5 @@
 
 (library
   ((name untyped_ast)
-  (libraries (pred spanned))))
+  (libraries (pred spanned))
+  (flags (:standard -w @a))))

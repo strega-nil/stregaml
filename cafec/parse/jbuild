@@ -2,4 +2,5 @@
 
 (library
   ((name parse)
-  (libraries (pred untyped_ast spanned))))
+  (libraries (pred untyped_ast spanned))
+  (flags (:standard -w @a-4))))
