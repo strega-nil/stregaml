@@ -56,6 +56,8 @@ let get_specific = (parser, token) => {
   }
 };
 
+let parse_expression = (parser) => unimplemented();
+
 let parse_item: t => spanned(option(item), Error.t) =
   (parser) =>
     Token.Prelude.(
@@ -66,9 +68,8 @@ let parse_item: t => spanned(option(item), Error.t) =
           get_ident(parser)
           >>= (name) => get_specific(parser, Open_paren)
           >>= () => get_specific(parser, Close_paren)
-          >>= () => get_specific(parser, Open_brace)
-          >>= () => get_specific(parser, Close_brace)
-          >>= () => pure(Some(Item_func(name, Ast.Expr.unit_literal())))
+          >>= () => parse_expression(parser)
+          >>= (expr) => pure(Some(Item_func(name, expr)))
         | End_of_file => pure(None)
         | tok => SErr(Error.Unexpected_token(Error.Expected_item_declarator, tok), Spanned.made_up)
         }

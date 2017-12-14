@@ -3,6 +3,7 @@ open Pred;
 module Expr = {
   type t = unit;
   let unit_literal = () => ();
+  let print = () => print_string("()");
 };
 
 module Type = {
@@ -34,7 +35,9 @@ let print = (self) => {
   let rec helper = (funcs) =>
     switch funcs {
     | [x, ...xs] =>
-      Printf.printf("func %s;\n", x.Function.name);
+      Printf.printf("func %s = ", x.Function.name);
+      Expr.print(x.Function.expr);
+      print_string(";\n");
       helper(xs);
     | [] => ()
     };
