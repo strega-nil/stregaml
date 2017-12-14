@@ -9,3 +9,6 @@ test: build
 
 clean:
 	jbuilder clean
+
+reformat:
+	refmt --in-place */*.re */*/*.re */*.rei */*/*.rei

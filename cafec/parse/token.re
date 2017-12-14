@@ -1,6 +1,6 @@
 open Spanned.Prelude;
 
-module Prelude {
+module Prelude = {
   type keyword =
     | Keyword_true
     | Keyword_false
@@ -8,7 +8,6 @@ module Prelude {
     | Keyword_else
     | Keyword_func
     | Keyword_underscore;
-
   type t =
     | Open_paren
     | Close_paren
@@ -36,7 +35,6 @@ let print_keyword = (kw) =>
   | Keyword_func => print_string("func")
   | Keyword_underscore => print_string("_")
   };
-
 
 let print = (tok) =>
   switch tok {

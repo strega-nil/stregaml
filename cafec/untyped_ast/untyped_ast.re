@@ -1,9 +1,20 @@
 open Pred;
 
+let rec print_indent = (indent) =>
+  switch indent {
+  | n when n <= 0 => ()
+  | n =>
+    print_string("  ");
+    print_indent(n - 1);
+  };
+
 module Expr = {
   type t = unit;
   let unit_literal = () => ();
-  let print = () => print_string("()");
+  let print = ((), indent) => {
+    print_indent(indent);
+    print_string("()");
+  };
 };
 
 module Type = {
@@ -25,21 +36,18 @@ module Function = {
 };
 
 type t = {
-  funcs: list(Function.t),
-  tys: list(Type_definition.t)
+  funcs: array(Function.t),
+  tys: array(Type_definition.t)
 };
 
 let make = (funcs, tys) => {funcs, tys};
 
-let print = (self) => {
-  let rec helper = (funcs) =>
-    switch funcs {
-    | [x, ...xs] =>
-      Printf.printf("func %s = ", x.Function.name);
-      Expr.print(x.Function.expr);
-      print_string(";\n");
-      helper(xs);
-    | [] => ()
-    };
-  helper(self.funcs);
-};
+let print = (self) =>
+  self.funcs
+  |> Array.iter(
+       (func) => {
+         Printf.printf("func %s() {\n", func.Function.name);
+         Expr.print(func.Function.expr, 1);
+         print_string("\n};\n");
+       }
+     );

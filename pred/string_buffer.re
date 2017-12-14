@@ -21,7 +21,7 @@ let resize = (self, new_size) => {
 };
 
 let pop = (self) => {
-  assert(self.length > 0);
+  assert (self.length > 0);
   self.length = self.length - 1;
   Bytes.get(self.buff, self.length);
 };

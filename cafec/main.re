@@ -3,11 +3,11 @@ open Pred;
 let program = {|
 func foo() {
   ()
-}
+};
 func main() {
   ()
   //foo()
-}
+};
 |};
 
 let main = () =>

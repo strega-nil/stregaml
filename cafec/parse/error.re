@@ -4,7 +4,8 @@ type expected_token =
   | Expected_specific(Token.t)
   | Expected_item_declarator
   | Expected_identifier_or_under
-  | Expected_identifier;
+  | Expected_identifier
+  | Expected_expression;
 
 type t =
   | Unclosed_comment
@@ -19,6 +20,7 @@ let print_expected = (exp) =>
   | Expected_item_declarator => print_string("either `func` or `type`")
   | Expected_identifier => print_string("an identifier")
   | Expected_identifier_or_under => print_string("an identifier or `_`")
+  | Expected_expression => print_string("the start of an expression")
   };
 
 let print = (err) =>
