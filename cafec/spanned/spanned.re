@@ -51,5 +51,6 @@ module Monad = {
       | SErr(e, sp) => SErr(e, sp)
       };
   let pure: 'o => spanned('o, 'e) = (o) => SOk(o, made_up);
+  let pure_err: 'e => spanned('o, 'e) = (e) => SErr(e, made_up);
   let with_span: span => spanned(unit, 'e) = (sp) => SOk((), sp);
 };
