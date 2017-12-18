@@ -7,11 +7,20 @@ let rec print_indent = (indent) =>
   };
 
 module Expr = {
-  type t = unit;
-  let unit_literal = () => ();
-  let print = ((), indent) => {
-    print_indent(indent);
-    print_string("()");
+  type t = 
+    | Unit_literal
+    | Variable(string)
+    | Call(t);
+  let unit_literal = () => Unit_literal;
+  let variable = (s) => Variable(s);
+  let call = (e) => Call(e);
+
+  let rec print = (e, indent) => {
+    switch (e) {
+    | Unit_literal => print_indent(indent); print_string("()")
+    | Variable(s) => print_indent(indent); print_string(s)
+    | Call(e) => print(e, indent); print_string("()")
+    }
   };
 };
 

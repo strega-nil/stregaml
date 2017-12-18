@@ -7,7 +7,7 @@ let array_of_rev_list = (lst) =>
     let rec helper = (lst, idx) =>
       switch lst {
       | [x, ...xs] =>
-        Array.unsafe_set(ret, idx, x);
+        ret[idx] = x;
         helper(xs, idx - 1);
       | [] => ()
       };

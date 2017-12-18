@@ -37,6 +37,14 @@ let eat_token = (parser) =>
   | SErr(_, _) => assert false
   };
 
+let is_expression_end = (tok) =>
+  switch tok {
+  | Token.Close_brace
+  | Token.Semicolon
+  | Token.Close_paren => true
+  | _ => false
+  };
+
 type item =
   | Item_func(string, Ast.Expr.t);
 
@@ -67,16 +75,26 @@ let get_specific = (parser, token) =>
   | SErr(e, sp) => SErr(e, sp)
   };
 
-let rec maybe_parse_expression = (parser) =>
+let rec maybe_parse_expression = (parser) => {
   switch (peek_token(parser)) {
   | SOk(Token.Open_paren, sp) =>
     eat_token(parser);
     with_span(sp)
     >>= () => get_specific(parser, Token.Close_paren)
     >>= () => pure(Some(Ast.Expr.unit_literal()));
+  | SOk(Token.Identifier(s), sp) =>
+    eat_token(parser);
+    with_span(sp)
+    >>= () => pure(Some(Ast.Expr.variable(s)))
   | SOk(_, sp) => SOk(None, sp)
   | SErr(e, sp) => SErr(e, sp)
   }
+  >>= (initial) =>
+    switch initial {
+    | Some(i) => parse_follow(parser, i) >>= (x) => pure(Some(x))
+    | None => pure(None)
+    }
+}
 and _parse_expression = (parser) =>
   switch (maybe_parse_expression(parser)) {
   | SOk(Some(expr), sp) => SOk(expr, sp)
@@ -85,6 +103,24 @@ and _parse_expression = (parser) =>
     >>= (tok) => pure_err(Error.Unexpected_token(Error.Expected_expression, tok))
   | SErr(e, sp) => SErr(e, sp)
   }
+and parse_follow = (parser, initial) => {
+  switch (peek_token(parser)) {
+  | SOk(Token.Open_paren, sp) =>
+    eat_token(parser);
+    with_span(sp)
+    >>= () => get_specific(parser, Token.Close_paren)
+    >>= () => pure((Ast.Expr.call(initial), true))
+  | SOk(tok, _) when is_expression_end(tok) => pure((initial, false))
+  | SOk(tok, sp) => SErr(Error.Unexpected_token(Error.Expected_expression_follow, tok), sp)
+  | SErr(e, sp) => SErr(e, sp)
+  }
+  >>= ((initial, should_continue)) =>
+    if (should_continue) {
+      parse_follow(parser, initial)
+    } else {
+      pure(initial)
+    }
+}
 and parse_block = (parser) => {
   get_specific(parser, Token.Open_brace)
   >>= () => maybe_parse_expression(parser)

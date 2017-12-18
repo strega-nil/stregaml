@@ -1,6 +1,14 @@
-module Expr: {type t; let unit_literal: unit => t;};
+module Expr: {
+  type t;
+  let unit_literal: unit => t;
+  let variable: string => t;
+  let call: t => t;
+};
 
-module Type: {type t; let named: string => t;};
+module Type: {
+  type t;
+  let named: string => t;
+};
 
 module Type_definition: {
   type t;

@@ -5,7 +5,8 @@ type expected_token =
   | Expected_item_declarator
   | Expected_identifier_or_under
   | Expected_identifier
-  | Expected_expression;
+  | Expected_expression
+  | Expected_expression_follow;
 
 type t =
   | Unclosed_comment
@@ -21,6 +22,7 @@ let print_expected = (exp) =>
   | Expected_identifier => print_string("an identifier")
   | Expected_identifier_or_under => print_string("an identifier or `_`")
   | Expected_expression => print_string("the start of an expression")
+  | Expected_expression_follow => print_string("an operator, semicolon, or closing brace (`}`, `)`)")
   };
 
 let print = (err) =>
