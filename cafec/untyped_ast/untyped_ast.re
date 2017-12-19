@@ -35,10 +35,13 @@ module Type_definition = {
 };
 
 module Function = {
-  type t = {
-    name: string,
-    expr: Expr.t
+  module Prelude = {
+    type t = {
+      name: string,
+      expr: Expr.t
+    };
   };
+  include Prelude;
   let make = (name, expr) => {name, expr};
 };
 
@@ -58,3 +61,37 @@ let print = (self) =>
          print_string("\n};\n");
        }
      );
+
+type value =
+  | Value_unit
+  | Value_function(Function.t);
+
+let run = (self) => {
+  open Function.Prelude;
+
+  let find = (arr, f) => {
+    let rec helper = (idx) => {
+      if (f(arr[idx])) { arr[idx] } else { helper(idx + 1) };
+    };
+    helper(0)
+  };
+  let rec call = (func) => {
+    Printf.printf("calling %s\n", func.name);
+    eval(func.expr)
+  }
+  and eval = (expr) => {
+    switch expr {
+    | Expr.Unit_literal => Value_unit
+    | Expr.Variable(s) => Value_function(find(self.funcs, (f) => f.name == s))
+    | Expr.Call(e) =>
+      switch (eval(e)) {
+      | Value_unit => assert false
+      | Value_function(f) => call(f)
+      }
+    }
+  };
+
+  let main = find(self.funcs, (f) => f.name == "main");
+  call(main) |> ignore;
+  ()
+};

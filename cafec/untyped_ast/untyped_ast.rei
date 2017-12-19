@@ -22,3 +22,5 @@ type t;
 let make: (array(Function.t), array(Type_definition.t)) => t;
 
 let print: t => unit;
+
+let run: t => unit;
