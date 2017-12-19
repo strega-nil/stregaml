@@ -39,8 +39,9 @@ let eat_token = (parser) =>
 
 let is_expression_end = (tok) =>
   switch tok {
-  | Token.Close_brace
   | Token.Semicolon
+  | Token.Comma
+  | Token.Close_brace
   | Token.Close_paren => true
   | _ => false
   };
@@ -95,7 +96,7 @@ let rec maybe_parse_expression = (parser) => {
     | None => pure(None)
     }
 }
-and _parse_expression = (parser) =>
+and parse_expression = (parser) =>
   switch (maybe_parse_expression(parser)) {
   | SOk(Some(expr), sp) => SOk(expr, sp)
   | SOk(None, _) =>
@@ -106,10 +107,9 @@ and _parse_expression = (parser) =>
 and parse_follow = (parser, initial) => {
   switch (peek_token(parser)) {
   | SOk(Token.Open_paren, sp) =>
-    eat_token(parser);
     with_span(sp)
-    >>= () => get_specific(parser, Token.Close_paren)
-    >>= () => pure((Ast.Expr.call(initial), true))
+    >>= () => parse_argument_list(parser)
+    >>= (_) => pure((Ast.Expr.call(initial), true))
   | SOk(tok, _) when is_expression_end(tok) => pure((initial, false))
   | SOk(tok, sp) => SErr(Error.Unexpected_token(Error.Expected_expression_follow, tok), sp)
   | SErr(e, sp) => SErr(e, sp)
@@ -120,6 +120,39 @@ and parse_follow = (parser, initial) => {
     } else {
       pure(initial)
     }
+}
+and _parse_parameter_list = (parser) => {
+  get_specific(parser, Token.Open_paren)
+  >>= () => get_specific(parser, Token.Close_paren)
+  >>= () => pure([||])
+}
+and parse_argument_list = (parser) => {
+  let rec get_args = (args, comma) =>
+    switch (peek_token(parser)) {
+    | SOk(Token.Close_paren, _) => pure(Dynamic_array.to_array(args))
+    | SOk(Token.Comma, sp) =>
+      if (comma) {
+        eat_token(parser);
+        get_args(args, false)
+      } else {
+        SErr(Error.Unexpected_token(Error.Expected_expression, Token.Comma), sp)
+      }
+    | SOk(tok, sp) =>
+      if (comma) {
+        SErr(Error.Unexpected_token(Error.Expected_specific(Token.Comma), tok), sp)
+      } else {
+        parse_expression(parser)
+        >>= (expr) => {
+          Dynamic_array.push(args, expr);
+          get_args(args, true)
+        }
+      }
+    | SErr(e, sp) => SErr(e, sp)
+    };
+  get_specific(parser, Token.Open_paren)
+  >>= () => get_args(Dynamic_array.make(), false)
+  >>= (arr) => get_specific(parser, Token.Close_paren)
+  >>= () => pure(arr)
 }
 and parse_block = (parser) => {
   get_specific(parser, Token.Open_brace)

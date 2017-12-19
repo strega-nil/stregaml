@@ -3,7 +3,7 @@ func foo() {
   ()
 };
 func main() {
-  foo()
+  foo((),)
 };
 |};
 

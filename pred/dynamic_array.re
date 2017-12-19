@@ -39,7 +39,11 @@ let pop = (self) => {
 
 let push = (self, el) => {
   if (self.length == capacity(self)) {
-    resize(self, self.length * 2);
+    if (self.length != 0) {
+      resize(self, self.length * 2);
+    } else {
+      resize(self, 4);
+    }
   };
   self.buff[self.length] = Some(el);
   self.length = self.length + 1;
