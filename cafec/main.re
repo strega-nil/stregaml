@@ -1,9 +1,13 @@
 let program = {|
-func foo(x: i32) {
-  true
+func fib(x: i32) {
+  if (LESS_EQ(x, 1)) {
+    x
+  } else {
+    ADD(fib(SUB(x, 1)), fib(SUB(x, 2)))
+  }
 };
 func main() {
-  foo(1)
+  fib(5)
 };
 |};
 

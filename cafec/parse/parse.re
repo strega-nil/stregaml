@@ -78,11 +78,6 @@ let get_specific = (parser, token) =>
 
 let rec maybe_parse_expression = (parser) => {
   switch (peek_token(parser)) {
-  | SOk(Token.Open_paren, sp) =>
-    eat_token(parser);
-    with_span(sp)
-    >>= () => get_specific(parser, Token.Close_paren)
-    >>= () => pure(Some(Ast.Expr.unit_literal()));
   | SOk(Token.Keyword(Token.Keyword_true), sp) =>
     eat_token(parser);
     SOk(Some(Ast.Expr.bool_literal(true)), sp)
@@ -92,6 +87,21 @@ let rec maybe_parse_expression = (parser) => {
   | SOk(Token.Integer_literal(n), sp) =>
     eat_token(parser);
     SOk(Some(Ast.Expr.integer_literal(n)), sp)
+  | SOk(Token.Open_paren, sp) =>
+    eat_token(parser);
+    with_span(sp)
+    >>= () => get_specific(parser, Token.Close_paren)
+    >>= () => pure(Some(Ast.Expr.unit_literal()));
+  | SOk(Token.Keyword(Token.Keyword_if), sp) =>
+    eat_token(parser);
+    with_span(sp)
+    >>= () => get_specific(parser, Token.Open_paren)
+    >>= () => parse_expression(parser)
+    >>= (cond) => get_specific(parser, Token.Close_paren)
+    >>= () => parse_block(parser)
+    >>= (thn) => get_specific(parser, Token.Keyword(Token.Keyword_else))
+    >>= () => parse_block(parser)
+    >>= (els) => pure(Some(Ast.Expr.if_else(cond, thn, els)))
   | SOk(Token.Identifier(s), sp) =>
     eat_token(parser);
     with_span(sp)

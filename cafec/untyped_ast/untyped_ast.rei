@@ -3,6 +3,7 @@ module Expr: {
   let unit_literal: unit => t;
   let integer_literal: int => t;
   let bool_literal: bool => t;
+  let if_else: (t, t, t) => t;
   let variable: string => t;
   let call: t => array(t) => t;
 };

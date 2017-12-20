@@ -13,17 +13,19 @@ module Expr = {
     | Unit_literal
     | Bool_literal(bool)
     | Integer_literal(int)
+    | If_else(t, t, t)
     | Variable(string)
     | Call(t, array(t));
   let unit_literal = () => Unit_literal;
   let bool_literal = (b) => Bool_literal(b);
   let integer_literal = (n) => Integer_literal(n);
+  let if_else = (cond, thn, els) => If_else(cond, thn, els);
   let variable = (s) => Variable(s);
   let call = (e, args) => Call(e, args);
 
   let rec print = (e, indent) => {
     let rec print_nonempty_args = (args, idx) => {
-      print(args[idx], indent);
+      print(args[idx], indent + 1);
       if (Array.length(args) < idx + 1) {
         print_string(", ");
         print_nonempty_args(args, idx + 1);
@@ -36,6 +38,20 @@ module Expr = {
     | Bool_literal(true) => print_string("true")
     | Bool_literal(false) => print_string("false")
     | Integer_literal(n) => print_int(n)
+    | If_else(cond, thn, els) =>
+      print_string("if (");
+      print(cond, indent + 1);
+      print_string(") {\n");
+      print_indent(indent + 1);
+      print(thn, indent + 1);
+      print_char('\n');
+      print_indent(indent);
+      print_string("} else {\n");
+      print_indent(indent + 1);
+      print(els, indent + 1);
+      print_char('\n');
+      print_indent(indent);
+      print_char('}');
     | Variable(s) => print_string(s)
     | Call(e, args) =>
       print(e, indent);
@@ -111,11 +127,17 @@ let make = (funcs, tys) => {funcs, tys};
 
 let print = (self) => Array.iter(self.funcs) |> Iter.for_each(Function.print);
 
+type builtin =
+  | Builtin_add
+  | Builtin_sub
+  | Builtin_less_eq;
+
 type value =
   | Value_unit
   | Value_bool(bool)
   | Value_integer(int)
-  | Value_function(Function.t);
+  | Value_function(Function.t)
+  | Value_builtin(builtin);
 
 let run = (self) => {
   open Function.Prelude;
@@ -126,20 +148,31 @@ let run = (self) => {
     | [_, ...xs] => find_in_ctxt(name, xs)
     | [] =>
       {
-        let funcs = self.funcs;
-        let rec helper = (idx) => {
-          if (funcs[idx].Function.name == name) {
-            funcs[idx]
-          } else {
-            helper(idx + 1)
+        if (name == "LESS_EQ") {
+          Value_builtin(Builtin_less_eq);
+        } else if (name == "ADD") {
+          Value_builtin(Builtin_add);
+        } else if (name == "SUB") {
+          Value_builtin(Builtin_sub);
+        } else {
+          let funcs = self.funcs;
+          let rec helper = (idx) => {
+            if (idx == Array.length(funcs)) {
+              print_string("\ncouldn't find " ++ name);
+              assert false;
+            };
+            if (funcs[idx].Function.name == name) {
+              funcs[idx]
+            } else {
+              helper(idx + 1)
+            };
           };
-        };
-        Value_function(helper(0))
+          Value_function(helper(0))
+        }
       }
     }
   };
   let rec call = (func, args, ctxt) => {
-    Printf.printf("calling %s\n", func.name);
     let callee_ctxt = ref([]);
     Iter.zip(Array.iter(func.params), Array.iter(args))
     |> Iter.for_each(
@@ -152,13 +185,28 @@ let run = (self) => {
     | Expr.Unit_literal => Value_unit
     | Expr.Bool_literal(b) => Value_bool(b)
     | Expr.Integer_literal(n) => Value_integer(n)
+    | Expr.If_else(cond, thn, els) =>
+      switch (eval(cond, ctxt)) {
+      | Value_bool(true) => eval(thn, ctxt)
+      | Value_bool(false) => eval(els, ctxt)
+      | _ => assert false
+      }
     | Expr.Variable(s) => find_in_ctxt(s, ctxt)
     | Expr.Call(e, args) =>
       switch (eval(e, ctxt)) {
-      | Value_unit => assert false
-      | Value_bool(_) => assert false
-      | Value_integer(_) => assert false
       | Value_function(f) => call(f, args, ctxt)
+      | Value_builtin(b) =>
+        assert(Array.length(args) == 2);
+        let (lhs, rhs) = switch (eval(args[0], ctxt), eval(args[1], ctxt)) {
+        | (Value_integer(lhs), Value_integer(rhs)) => (lhs, rhs)
+        | _ => assert false
+        };
+        switch b {
+        | Builtin_add => Value_integer(lhs + rhs)
+        | Builtin_sub => Value_integer(lhs - rhs)
+        | Builtin_less_eq => Value_bool(lhs <= rhs)
+        }
+      | _ => assert false
       }
     }
   };
