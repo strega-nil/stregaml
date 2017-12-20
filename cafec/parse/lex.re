@@ -182,6 +182,9 @@ let rec next_token = (lex) => {
         | Some(_)
         | None =>
           switch (to_string(buff)) {
+          | ":" => SOk(Token.Colon, sp)
+          | "=" => SOk(Token.Equals, sp)
+          | "->" as res => SErr(Error.Reserved_token(res), sp)
           | "|" as res => SErr(Error.Reserved_token(res), sp)
           | "." as res => SErr(Error.Reserved_token(res), sp)
           | op => SOk(Token.Operator(op), sp)
@@ -253,7 +256,7 @@ let rec next_token = (lex) => {
           } else {
             acc;
           };
-        SOk(Token.Int_literal(to_int(0, 0)), sp);
+        SOk(Token.Integer_literal(to_int(0, 0)), sp);
       };
     helper(idx, sp, true);
   };

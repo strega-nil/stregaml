@@ -1,8 +1,10 @@
 module Expr: {
   type t;
   let unit_literal: unit => t;
+  let integer_literal: int => t;
+  let bool_literal: bool => t;
   let variable: string => t;
-  let call: t => t;
+  let call: t => array(t) => t;
 };
 
 module Type: {
@@ -15,7 +17,10 @@ module Type_definition: {
   /*let alias: (string, Type.t) => t;*/
 };
 
-module Function: {type t; let make: (string, Expr.t) => t;};
+module Function: {
+  type t;
+  let make: (string, array((string, Type.t)), Expr.t) => t;
+};
 
 type t;
 

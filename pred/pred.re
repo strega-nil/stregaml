@@ -1,3 +1,7 @@
+module Array = Array_;
+
+module List = List_;
+
 module Iter = Iter;
 
 module String_buffer = String_buffer;

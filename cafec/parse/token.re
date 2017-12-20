@@ -16,7 +16,7 @@ module Prelude = {
     | Keyword(keyword)
     | Identifier(string)
     | Operator(string)
-    | Int_literal(int)
+    | Integer_literal(int)
     | Colon
     | Equals
     | Semicolon
@@ -51,7 +51,7 @@ let print = (tok) =>
   | Identifier(id) =>
     print_string("identifier: ");
     print_string(id);
-  | Int_literal(i) =>
+  | Integer_literal(i) =>
     print_string("int literal: ");
     print_int(i);
   | Colon => print_string("colon")

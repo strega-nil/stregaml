@@ -19,3 +19,12 @@ let rec for_each_break = (f, self) =>
   };
 
 let from_next = (func) => func;
+
+exception Iter_zipped_iterators_of_different_lengths;
+let zip = (fst, snd) => () => {
+  switch ((fst(), snd())) {
+  | (Some(f), Some(s)) => Some((f, s))
+  | (None, None) => None
+  | _ => raise(Iter_zipped_iterators_of_different_lengths)
+  }
+};

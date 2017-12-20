@@ -1,9 +1,9 @@
 let program = {|
-func foo() {
-  ()
+func foo(x: i32) {
+  true
 };
 func main() {
-  foo((),)
+  foo(1)
 };
 |};
 
