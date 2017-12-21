@@ -1,5 +1,7 @@
 open Pred;
 
+open Spanned.Prelude;
+
 let rec print_indent = (indent) =>
   switch indent {
   | n when n <= 0 => ()
@@ -9,13 +11,15 @@ let rec print_indent = (indent) =>
   };
 
 module Expr = {
-  type t = 
+  type builder = 
     | Unit_literal
     | Bool_literal(bool)
     | Integer_literal(int)
     | If_else(t, t, t)
     | Variable(string)
-    | Call(t, array(t));
+    | Call(t, array(t))
+  and t = spanned(builder);
+
   let unit_literal = () => Unit_literal;
   let bool_literal = (b) => Bool_literal(b);
   let integer_literal = (n) => Integer_literal(n);
@@ -23,7 +27,7 @@ module Expr = {
   let variable = (s) => Variable(s);
   let call = (e, args) => Call(e, args);
 
-  let rec print = (e, indent) => {
+  let rec print = ((e, _), indent) => {
     let rec print_nonempty_args = (args, idx) => {
       print(args[idx], indent + 1);
       if (Array.length(args) < idx + 1) {
@@ -65,10 +69,12 @@ module Expr = {
 };
 
 module Type = {
-  type t =
-    | Named(string);
+  type builder =
+    | Named(string)
+  and t = spanned(builder);
+
   let named = (name) => Named(name);
-  let print = (self) =>
+  let print = ((self, _)) =>
     switch self {
     | Named(s) => print_string(s)
     };
@@ -80,13 +86,15 @@ module Type_definition = {
 
 module Function = {
   module Prelude = {
-    type t = {
+    type builder = {
       name: string,
       params: array((string, Type.t)),
       expr: Expr.t
     };
   };
   include Prelude;
+  type t = spanned(builder);
+
   let make = (name, params, expr) => {name, params, expr};
   let print_parameter_list = (arr) => {
     let rec helper = (idx) => {
@@ -107,7 +115,7 @@ module Function = {
       print_char('('); helper(0); print_char(')');
     }
   };
-  let print = (self) => {
+  let print = ((self, _)) => {
     print_string("func ");
     print_string(self.name);
     print_parameter_list(self.params);
@@ -136,7 +144,7 @@ type value =
   | Value_unit
   | Value_bool(bool)
   | Value_integer(int)
-  | Value_function(Function.t)
+  | Value_function(Function.builder)
   | Value_builtin(builtin);
 
 let run = (self) => {
@@ -161,8 +169,9 @@ let run = (self) => {
               print_string("\ncouldn't find " ++ name);
               assert false;
             };
-            if (funcs[idx].Function.name == name) {
-              funcs[idx]
+            let (func, _) = funcs[idx];
+            if (func.Function.name == name) {
+              func
             } else {
               helper(idx + 1)
             };
@@ -180,7 +189,7 @@ let run = (self) => {
     );
     eval(func.expr, callee_ctxt^)
   }
-  and eval = (expr, ctxt) => {
+  and eval = ((expr, _), ctxt) => {
     switch expr {
     | Expr.Unit_literal => Value_unit
     | Expr.Bool_literal(b) => Value_bool(b)

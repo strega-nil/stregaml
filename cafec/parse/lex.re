@@ -1,8 +1,7 @@
 open Pred;
 
 open Spanned.Prelude;
-
-open Spanned.Monad;
+open Spanned.Result_monad;
 
 module Error = Error;
 
@@ -131,7 +130,7 @@ let rec next_token = (lex) => {
     helper(1, sp);
   };
   let lex_operator = (fst, sp) => {
-    let rec block_comment: span => spanned(unit, Error.t) =
+    let rec block_comment: span => spanned_result(unit, Error.t) =
       (sp) => {
         let rec eat_the_things = () =>
           switch (next_ch()) {
@@ -271,9 +270,9 @@ let rec next_token = (lex) => {
   | Some((';', sp)) => SOk(Token.Semicolon, sp)
   | Some((',', sp)) => SOk(Token.Comma, sp)
   | Some(('\'', sp)) => SErr(Error.Reserved_token("'"), sp)
-  | Some((ch, sp)) when is_ident_start(ch) => lex_ident(ch, sp) >>= ((id) => pure(id))
+  | Some((ch, sp)) when is_ident_start(ch) => lex_ident(ch, sp)
   | Some((ch, sp)) when is_operator_start(ch) => lex_operator(ch, sp)
-  | Some((ch, sp)) when is_number_start(ch) => lex_number(ch, sp) >>= ((n) => pure(n))
+  | Some((ch, sp)) when is_number_start(ch) => lex_number(ch, sp)
   | Some((ch, sp)) => SErr(Error.Unrecognized_character(ch), sp)
   | None => SOk(Token.Eof, current_span())
   };

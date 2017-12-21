@@ -1,16 +1,20 @@
+open Spanned.Prelude;
+
 module Expr: {
-  type t;
-  let unit_literal: unit => t;
-  let integer_literal: int => t;
-  let bool_literal: bool => t;
-  let if_else: (t, t, t) => t;
-  let variable: string => t;
-  let call: t => array(t) => t;
+  type builder;
+  type t = spanned(builder);
+  let unit_literal: unit => builder;
+  let integer_literal: int => builder;
+  let bool_literal: bool => builder;
+  let if_else: (t, t, t) => builder;
+  let variable: string => builder;
+  let call: (t, array(t)) => builder;
 };
 
 module Type: {
-  type t;
-  let named: string => t;
+  type builder;
+  type t = spanned(builder);
+  let named: string => builder;
 };
 
 module Type_definition: {
@@ -19,8 +23,9 @@ module Type_definition: {
 };
 
 module Function: {
-  type t;
-  let make: (string, array((string, Type.t)), Expr.t) => t;
+  type builder;
+  type t = spanned(builder);
+  let make: (string, array((string, Type.t)), Expr.t) => builder;
 };
 
 type t;

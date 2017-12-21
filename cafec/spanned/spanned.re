@@ -5,7 +5,8 @@ module Prelude = {
     end_line: int,
     end_column: int
   };
-  type spanned('o, 'e) =
+  type spanned('t) = ('t, span);
+  type spanned_result('o, 'e) =
     | SOk('o, span)
     | SErr('e, span);
 };
@@ -31,8 +32,8 @@ let union: (span, span) => span =
       };
     };
 
-module Monad = {
-  let (>>=): (spanned('o, 'e), 'o => spanned('o2, 'e)) => spanned('o2, 'e) =
+module Result_monad = {
+  let (>>=): (spanned_result('o, 'e), 'o => spanned_result('o2, 'e)) => spanned_result('o2, 'e) =
     (self, f) =>
       switch self {
       | SOk(o, sp) =>
@@ -50,7 +51,7 @@ module Monad = {
         }
       | SErr(e, sp) => SErr(e, sp)
       };
-  let pure: 'o => spanned('o, 'e) = (o) => SOk(o, made_up);
-  let pure_err: 'e => spanned('o, 'e) = (e) => SErr(e, made_up);
-  let with_span: span => spanned(unit, 'e) = (sp) => SOk((), sp);
+  let pure: 'o => spanned_result('o, 'e) = (o) => SOk(o, made_up);
+  let pure_err: 'e => spanned_result('o, 'e) = (e) => SErr(e, made_up);
+  let with_span: span => spanned_result(unit, 'e) = (sp) => SOk((), sp);
 };
