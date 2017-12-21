@@ -1,12 +1,12 @@
 let program = {|
-func fib(x: i32) -> i32 {
+func fib(x: int) -> int {
   if (LESS_EQ(x, 1)) {
     x
   } else {
     ADD(fib(SUB(x, 1)), fib(SUB(x, 2)))
   }
 };
-func main() -> i32 {
+func main() -> int {
   fib(5)
 };
 |};

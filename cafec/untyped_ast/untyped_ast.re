@@ -2,13 +2,7 @@ open Pred;
 
 open Spanned.Prelude;
 
-let rec print_indent = (indent) =>
-  switch indent {
-  | n when n <= 0 => ()
-  | n =>
-    print_string("  ");
-    print_indent(n - 1);
-  };
+open Impl_;
 
 module Expr = {
   type builder = 
@@ -19,13 +13,6 @@ module Expr = {
     | Variable(string)
     | Call(t, array(t))
   and t = spanned(builder);
-
-  let unit_literal = () => Unit_literal;
-  let bool_literal = (b) => Bool_literal(b);
-  let integer_literal = (n) => Integer_literal(n);
-  let if_else = (cond, thn, els) => If_else(cond, thn, els);
-  let variable = (s) => Variable(s);
-  let call = (e, args) => Call(e, args);
 
   let rec print = ((e, _), indent) => {
     let rec print_nonempty_args = (args, idx) => {
@@ -80,43 +67,40 @@ module Type = {
     };
 };
 
-module Type_definition = {
-  type t = unit;
+module Type_declaration = {
+  type t;
 };
 
 module Function = {
-  module Prelude = {
-    type builder = {
-      name: string,
-      params: array((string, Type.t)),
-      ret_ty: option(Type.t),
-      expr: Expr.t
-    };
+  type builder = {
+    name: string,
+    params: array((string, Type.t)),
+    ret_ty: option(Type.t),
+    expr: Expr.t
   };
-  include Prelude;
   type t = spanned(builder);
 
   let make = (name, params, ret_ty, expr) => {name, params, ret_ty, expr};
-  let print_parameter_list = (arr) => {
-    let rec helper = (idx) => {
-      let (name, ty) = arr[idx];
-      print_string(name);
-      print_string(": ");
-      Type.print(ty);
-      if (Array.length(arr) < idx + 1) {
-        print_string(", ");
-        helper(idx + 1);
+  let print = ((self, _)) => {
+    let print_parameter_list = (arr) => {
+      let rec helper = (idx) => {
+        let (name, ty) = arr[idx];
+        print_string(name);
+        print_string(": ");
+        Type.print(ty);
+        if (Array.length(arr) < idx + 1) {
+          print_string(", ");
+          helper(idx + 1);
+        } else {
+          ()
+        }
+      };
+      if (Array.length(arr) == 0) {
+        print_string("()");
       } else {
-        ()
+        print_char('('); helper(0); print_char(')');
       }
     };
-    if (Array.length(arr) == 0) {
-      print_string("()");
-    } else {
-      print_char('('); helper(0); print_char(')');
-    }
-  };
-  let print = ((self, _)) => {
     print_string("func ");
     print_string(self.name);
     print_parameter_list(self.params);
@@ -132,11 +116,10 @@ module Function = {
 };
 
 type t = {
-  funcs: array(Function.t),
-  tys: array(Type_definition.t)
+  funcs: array(Function.t)
 };
 
-let make = (funcs, tys) => {funcs, tys};
+let make = (funcs) => {funcs: funcs};
 
 let print = (self) => Array.iter(self.funcs) |> Iter.for_each(Function.print);
 
@@ -153,46 +136,43 @@ type value =
   | Value_builtin(builtin);
 
 let run = (self) => {
-  open Function.Prelude;
-
   let rec find_in_ctxt = (name, ctxt) => {
     switch ctxt {
-    | [(name', val'), ..._] when name' == name => val'
+    | [(name', v), ..._] when name' == name => v
     | [_, ...xs] => find_in_ctxt(name, xs)
     | [] =>
-      {
-        if (name == "LESS_EQ") {
-          Value_builtin(Builtin_less_eq);
-        } else if (name == "ADD") {
-          Value_builtin(Builtin_add);
-        } else if (name == "SUB") {
-          Value_builtin(Builtin_sub);
-        } else {
-          let funcs = self.funcs;
-          let rec helper = (idx) => {
-            if (idx == Array.length(funcs)) {
-              print_string("\ncouldn't find " ++ name);
-              assert false;
-            };
-            let (func, _) = funcs[idx];
-            if (func.Function.name == name) {
-              func
-            } else {
-              helper(idx + 1)
-            };
+      if (name == "LESS_EQ") {
+        Value_builtin(Builtin_less_eq);
+      } else if (name == "ADD") {
+        Value_builtin(Builtin_add);
+      } else if (name == "SUB") {
+        Value_builtin(Builtin_sub);
+      } else {
+        let funcs = self.funcs;
+        let rec helper = (idx) => {
+          if (idx == Array.length(funcs)) {
+            print_string("\ncouldn't find " ++ name);
+            assert false;
           };
-          Value_function(helper(0))
-        }
+          let (func, _) = funcs[idx];
+          if (func.Function.name == name) {
+            func
+          } else {
+            helper(idx + 1)
+          };
+        };
+        Value_function(helper(0))
       }
     }
   };
   let rec call = (func, args, ctxt) => {
     let callee_ctxt = ref([]);
-    Iter.zip(Array.iter(func.params), Array.iter(args))
+    Iter.zip(Array.iter(func.Function.params), Array.iter(args))
     |> Iter.for_each(
-      (((name, _), expr)) => callee_ctxt := [(name, eval(expr, ctxt)), ...callee_ctxt^]
+      (((name, _), expr)) =>
+        callee_ctxt := [(name, eval(expr, ctxt)), ...callee_ctxt^]
     );
-    eval(func.expr, callee_ctxt^)
+    eval(func.Function.expr, callee_ctxt^)
   }
   and eval = ((expr, _), ctxt) => {
     switch expr {

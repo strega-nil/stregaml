@@ -1,0 +1,6 @@
+(jbuild_version 1)
+
+(library
+  ((name typed_ast)
+  (libraries (pred spanned untyped_ast))
+  (flags (:standard -w @a-4-37-27-32))))
