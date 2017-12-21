@@ -17,6 +17,7 @@ module Prelude = {
     | Identifier(string)
     | Operator(string)
     | Integer_literal(int)
+    | Arrow
     | Colon
     | Equals
     | Semicolon
@@ -38,10 +39,10 @@ let print_keyword = (kw) =>
 
 let print = (tok) =>
   switch tok {
-  | Open_paren => print_string("open paren")
-  | Close_paren => print_string("close paren")
-  | Open_brace => print_string("open brace")
-  | Close_brace => print_string("close brace")
+  | Open_paren => print_string("open paren `(`")
+  | Close_paren => print_string("close paren `)`")
+  | Open_brace => print_string("open brace `{`")
+  | Close_brace => print_string("close brace `}`")
   | Keyword(kw) =>
     print_string("keyword: ");
     print_keyword(kw);
@@ -54,10 +55,11 @@ let print = (tok) =>
   | Integer_literal(i) =>
     print_string("int literal: ");
     print_int(i);
-  | Colon => print_string("colon")
-  | Equals => print_string("equals")
-  | Semicolon => print_string("semicolon")
-  | Comma => print_string("comma")
+  | Arrow => print_string("arrow `->`")
+  | Colon => print_string("colon `:`")
+  | Equals => print_string("equals `=`")
+  | Semicolon => print_string("semicolon `;`")
+  | Comma => print_string("comma `,`")
   | Eof => print_string("end of file")
   };
 

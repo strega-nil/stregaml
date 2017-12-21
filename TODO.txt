@@ -1,3 +1,2 @@
-* add return type parsing
 * actually start typeck
 * load from an actual file

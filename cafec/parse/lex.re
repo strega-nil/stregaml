@@ -183,7 +183,7 @@ let rec next_token = (lex) => {
           switch (to_string(buff)) {
           | ":" => SOk(Token.Colon, sp)
           | "=" => SOk(Token.Equals, sp)
-          | "->" as res => SErr(Error.Reserved_token(res), sp)
+          | "->" => SOk(Token.Arrow, sp)
           | "|" as res => SErr(Error.Reserved_token(res), sp)
           | "." as res => SErr(Error.Reserved_token(res), sp)
           | op => SOk(Token.Operator(op), sp)

@@ -89,13 +89,14 @@ module Function = {
     type builder = {
       name: string,
       params: array((string, Type.t)),
+      ret_ty: option(Type.t),
       expr: Expr.t
     };
   };
   include Prelude;
   type t = spanned(builder);
 
-  let make = (name, params, expr) => {name, params, expr};
+  let make = (name, params, ret_ty, expr) => {name, params, ret_ty, expr};
   let print_parameter_list = (arr) => {
     let rec helper = (idx) => {
       let (name, ty) = arr[idx];
@@ -119,6 +120,10 @@ module Function = {
     print_string("func ");
     print_string(self.name);
     print_parameter_list(self.params);
+    switch (self.ret_ty) {
+    | Some(ty) => print_string(" -> "); Type.print(ty)
+    | None => print_char(' ');
+    };
     print_string(" {\n");
     print_indent(1);
     Expr.print(self.expr, 1);

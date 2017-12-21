@@ -160,6 +160,16 @@ and parse_type = (parser) => {
     >>= (name) => pure(Ast.Type.named(name))
   } |> wrap_sok
 }
+and parse_return_type = (parser) => {
+  maybe_get_specific(parser, Token.Arrow)
+  >>= (opt) =>
+    switch opt {
+    | Some() =>
+      parse_type(parser)
+      >>= (ty) => pure(Some(ty))
+    | None => pure(None)
+    }
+}
 and parse_parameter_list = (parser) => {
   /* TODO(ubsan): maybe abstract out list parsing? */
   let rec get_parms = (parms, comma) =>
@@ -247,9 +257,11 @@ let parse_item: t => spanned_result(option(item), Error.t) =
       | Token.Keyword(Token.Keyword_func) =>
         get_ident(parser)
         >>= (name) => parse_parameter_list(parser)
-        >>= (parms) => parse_block(parser)
+        >>= (parms) => parse_return_type(parser)
+        >>= (ret_ty) => parse_block(parser)
         >>= (expr) => get_specific(parser, Token.Semicolon)
-        >>= () => pure(Some(Item_func(Ast.Function.make(name, parms, expr))));
+        >>= () => pure(Some(Item_func(
+          Ast.Function.make(name, parms, ret_ty, expr))));
       | Token.Eof => pure(None)
       | tok =>
         pure_err(Error.Unexpected_token(Error.Expected_item_declarator, tok))

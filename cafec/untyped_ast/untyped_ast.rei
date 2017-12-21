@@ -25,7 +25,7 @@ module Type_definition: {
 module Function: {
   type builder;
   type t = spanned(builder);
-  let make: (string, array((string, Type.t)), Expr.t) => builder;
+  let make: (string, array((string, Type.t)), option(Type.t), Expr.t) => builder;
 };
 
 type t;
