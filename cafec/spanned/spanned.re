@@ -32,6 +32,19 @@ let union: (span, span) => span =
       };
     };
 
+let print_span
+  : span => unit
+  = ({start_line, start_column, end_line, end_column})
+  => {
+    Printf.printf(
+      "(%d, %d) to (%d, %d)",
+      start_line,
+      start_column,
+      end_line,
+      end_column)
+  };
+
+
 module Result_monad = {
   let (>>=): (spanned_result('o, 'e), 'o => spanned_result('o2, 'e)) => spanned_result('o2, 'e) =
     (self, f) =>

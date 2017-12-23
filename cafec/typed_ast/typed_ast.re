@@ -38,7 +38,7 @@ module Type = {
   let make: (Untyped_ast.Type.t, context) => t = (unt_ty, _ctxt) => {
     module T = Untyped_ast.Type;
     switch unt_ty {
-    | T.Named(name) =>
+    | (T.Named(name), _) =>
       if (name == "unit") {
         unit_
       } else if (name == "bool") {
@@ -53,10 +53,10 @@ module Type = {
 };
 
 module Function = {
-  type decl = {
+  type decl_builder = {
     params: array(Type.t),
     ret_ty: Type.t
-  };
+  } and decl = spanned(decl_builder);
   type builder = {
     ty: decl,
     expr: Expr.t
@@ -64,17 +64,28 @@ module Function = {
 
   type context = array((string, decl));
 
-  /* TODO(ubsan): error handling */
   let create_context
-    : (Untyped_ast.t, Type.context) => context
+    : (Untyped_ast.t, Type.context) => result(context, spanned(Error.t))
     = (unt_ast, ty_ctxt) =>
   {
     let module U = Untyped_ast;
     let module F = U.Function;
-    Array.init(
+    let err = ref(None);
+    let ret = Array.init(
       Array.length(unt_ast.U.funcs),
       (i) => {
-        let ({F.name, F.params, F.ret_ty, _}, _) = unt_ast.U.funcs[i];
+        let ({F.name, F.params, F.ret_ty, _}, sp) = unt_ast.U.funcs[i];
+        for (j in 0 to i - 1) {
+          let (decl, old_sp) = unt_ast.U.funcs[j];
+          if (name == decl.F.name) {
+            switch err^ {
+              | None =>
+                err := Some(
+                  (Error.Multiple_function_definitions(name, old_sp), sp))
+              | Some(_) => ()
+            }
+          }
+        };
         let ret_ty = switch ret_ty {
         | Some(ty) => Type.make(ty, ty_ctxt)
         | None => Type.unit_
@@ -85,8 +96,12 @@ module Function = {
             let (_name, param) = params[i];
             Type.make(param, ty_ctxt)
           });
-        (name, {params, ret_ty})
-      })
+        (name, ({params, ret_ty}, sp))
+      });
+    switch err^ {
+    | Some((e, sp)) => Err((e, sp))
+    | None => Ok(ret)
+    }
   };
   let make = (_unt_func, _ctxt) => {
     assert false;
