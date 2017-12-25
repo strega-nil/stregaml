@@ -1,2 +1,3 @@
 * actually start typeck
 * load from an actual file
+* switch from arrays to lists, in order to stop with the crazy iterator stuff

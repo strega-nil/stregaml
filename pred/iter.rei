@@ -14,3 +14,5 @@ let from_next: (unit => option('a)) => t('a);
 
 exception Iter_zipped_iterators_of_different_lengths;
 let zip: (t('a), t('b)) => t(('a, 'b));
+let enumerate: t('a) => t((int, 'a));
+let range: (int, int) => t(int);

@@ -1,7 +1,8 @@
 open Spanned.Prelude;
 
-type t =
-  | Multiple_function_definitions(string, span);
+type builder =
+  | Multiple_function_definitions(string, span)
+and t = spanned(builder);
 
 let print = (self) =>
   switch self {

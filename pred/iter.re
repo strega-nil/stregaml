@@ -28,3 +28,28 @@ let zip = (fst, snd) => () => {
   | _ => raise(Iter_zipped_iterators_of_different_lengths)
   }
 };
+
+let enumerate = (iter) => {
+  let i = ref(0);
+  () => {
+    let old = i^;
+    i := old + 1;
+    switch (iter()) {
+    | Some(el) => Some((old, el))
+    | None => None
+    }
+  };
+};
+
+let range = (init, fin) => {
+  let i = ref(init);
+  () => {
+    let old = i^;
+    if (old >= fin) {
+      None
+    } else {
+      i := old + 1;
+      Some(old)
+    }
+  }
+};
