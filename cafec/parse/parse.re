@@ -1,5 +1,3 @@
-open Pred;
-
 open Spanned.Prelude;
 
 open Spanned.Result_monad;
@@ -176,13 +174,13 @@ and parse_return_type = (parser) => {
 }
 and parse_parameter_list = (parser) => {
   /* TODO(ubsan): maybe abstract out list parsing? */
-  let rec get_parms = (parms, comma) =>
+  let rec get_parms = (comma) =>
     switch (peek_token(parser)) {
-    | SOk(Token.Close_paren, _) => pure(Dynamic_array.to_array(parms))
+    | SOk(Token.Close_paren, _) => pure([])
     | SOk(Token.Comma, sp) =>
       if (comma) {
         eat_token(parser);
-        get_parms(parms, false)
+        get_parms(false)
       } else {
         SErr(Error.Unexpected_token(Error.Expected_expression, Token.Comma), sp)
       }
@@ -194,42 +192,44 @@ and parse_parameter_list = (parser) => {
         >>= (name) => get_specific(parser, Token.Colon)
         >>= () => parse_type(parser)
         >>= (ty) => {
-          Dynamic_array.push(parms, (name, ty));
-          get_parms(parms, true)
+          get_parms(true)
+          >>= (tl) => pure([(name, ty), ...tl])
         }
       }
     | SErr(e, sp) => SErr(e, sp)
     };
   get_specific(parser, Token.Open_paren)
-  >>= () => get_parms(Dynamic_array.make(), false)
+  >>= () => get_parms(false)
   >>= (parms) => get_specific(parser, Token.Close_paren)
   >>= () => pure(parms)
 }
 and parse_argument_list = (parser) => {
-  let rec get_args = (args, comma) =>
+  let rec get_args = (comma) =>
     switch (peek_token(parser)) {
-    | SOk(Token.Close_paren, _) => pure(Dynamic_array.to_array(args))
+    | SOk(Token.Close_paren, _) => pure([])
     | SOk(Token.Comma, sp) =>
       if (comma) {
         eat_token(parser);
-        get_args(args, false)
+        get_args(false)
       } else {
         SErr(Error.Unexpected_token(Error.Expected_expression, Token.Comma), sp)
       }
     | SOk(tok, sp) =>
       if (comma) {
-        SErr(Error.Unexpected_token(Error.Expected_specific(Token.Comma), tok), sp)
+        SErr(
+          Error.Unexpected_token(Error.Expected_specific(Token.Comma), tok),
+          sp)
       } else {
         parse_expression(parser)
         >>= (expr) => {
-          Dynamic_array.push(args, expr);
-          get_args(args, true)
+          get_args(true)
+          >>= (tl) => pure([expr, ...tl])
         }
       }
     | SErr(e, sp) => SErr(e, sp)
     };
   get_specific(parser, Token.Open_paren)
-  >>= () => get_args(Dynamic_array.make(), false)
+  >>= () => get_args(false)
   >>= (arr) => get_specific(parser, Token.Close_paren)
   >>= () => pure(arr)
 }
@@ -274,15 +274,16 @@ let parse_item: t => spanned_result(option(item), Error.t) =
 
 let parse_program: t => spanned_result(Ast.t, Error.t) =
   (parser) => {
-    let rec helper = (parser, funcs, sp) =>
+    let rec helper = (parser) =>
       switch (parse_item(parser)) {
-      | SOk(Some(Item_func(func)), sp') =>
-        helper(parser, [(func, sp'), ...funcs], Spanned.union(sp, sp'));
-      | SOk(None, sp') =>
-        SOk(Ast.make(array_of_rev_list(funcs)), Spanned.union(sp, sp'))
+      | SOk(Some(Item_func(func)), sp) =>
+        helper(parser)
+        >>= (tl) => SOk([(func, sp), ...tl], sp)
+      | SOk(None, sp) => SOk([], sp)
       | SErr(e, sp) => SErr(e, sp)
       };
-    helper(parser, [], Spanned.made_up);
+    helper(parser)
+    >>= (funcs) => pure(Ast.make(funcs))
   };
 
 let parse = (program) => {

@@ -5,25 +5,26 @@ open Spanned.Prelude;
 open Impl_;
 
 module Expr = {
-  type builder = 
+  type builder =
     | Unit_literal
     | Bool_literal(bool)
     | Integer_literal(int)
     | If_else(t, t, t)
     | Variable(string)
-    | Call(t, array(t))
+    | Call(t, list(t))
   and t = spanned(builder);
 
   let rec print = ((e, _), indent) => {
-    let rec print_nonempty_args = (args, idx) => {
-      print(args[idx], indent + 1);
-      if (Array.length(args) < idx + 1) {
-        print_string(", ");
-        print_nonempty_args(args, idx + 1);
-      } else {
-        ()
-      }
-    };
+    let rec print_args = (args, start) =>
+      switch args {
+      | [arg, ...args] =>
+        if (!start) {
+          print_string(", ");
+        };
+        print(arg, indent + 1);
+        print_args(args, false);
+      | [] => ()
+      };
     switch (e) {
     | Unit_literal => print_string("()")
     | Bool_literal(true) => print_string("true")
@@ -46,11 +47,7 @@ module Expr = {
     | Variable(s) => print_string(s)
     | Call(e, args) =>
       print(e, indent);
-      if (Array.length(args) == 0) {
-        print_string("()")
-      } else {
-        print_char('('); print_nonempty_args(args, 0); print_char(')');
-      }
+      print_char('('); print_args(args, true); print_char(')');
     }
   };
 };
@@ -74,7 +71,7 @@ module Type_declaration = {
 module Function = {
   type builder = {
     name: string,
-    params: array((string, Type.t)),
+    params: list((string, Type.t)),
     ret_ty: option(Type.t),
     expr: Expr.t
   };
@@ -82,24 +79,20 @@ module Function = {
 
   let make = (name, params, ret_ty, expr) => {name, params, ret_ty, expr};
   let print = ((self, _)) => {
-    let print_parameter_list = (arr) => {
-      let rec helper = (idx) => {
-        let (name, ty) = arr[idx];
-        print_string(name);
-        print_string(": ");
-        Type.print(ty);
-        if (Array.length(arr) < idx + 1) {
-          print_string(", ");
-          helper(idx + 1);
-        } else {
-          ()
-        }
-      };
-      if (Array.length(arr) == 0) {
-        print_string("()");
-      } else {
-        print_char('('); helper(0); print_char(')');
-      }
+    let print_parameter_list = (lst) => {
+      let rec helper = (lst, start) =>
+        switch lst {
+        | [(name, ty), ...xs] =>
+          if (!start) {
+            print_string(", ");
+          };
+          print_string(name);
+          print_string(": ");
+          Type.print(ty);
+          helper(xs, false);
+        | [] => ()
+        };
+      print_char('('); helper(lst, true); print_char(')');
     };
     print_string("func ");
     print_string(self.name);
@@ -116,12 +109,19 @@ module Function = {
 };
 
 type t = {
-  funcs: array(Function.t)
+  funcs: list(Function.t)
 };
 
 let make = (funcs) => {funcs: funcs};
 
-let print = (self) => Array.iter(self.funcs) |> Iter.for_each(Function.print);
+let print = (self) => {
+  let rec helper = (funcs) =>
+    switch funcs {
+    | [x, ...xs] => Function.print(x); helper(xs)
+    | [] => ()
+    };
+  helper(self.funcs);
+};
 
 type builtin =
   | Builtin_add
@@ -148,26 +148,26 @@ let run = (self) => {
       } else if (name == "SUB") {
         Value_builtin(Builtin_sub);
       } else {
-        let funcs = self.funcs;
-        let rec helper = (idx) => {
-          if (idx == Array.length(funcs)) {
+        let rec helper = (funcs) => {
+          switch funcs {
+          | [] =>
             print_string("\ncouldn't find " ++ name);
             assert false;
-          };
-          let (func, _) = funcs[idx];
-          if (func.Function.name == name) {
-            func
-          } else {
-            helper(idx + 1)
-          };
+          | [(func, _), ...xs] =>
+            if (func.Function.name == name) {
+              func
+            } else {
+              helper(xs)
+            };
+          }
         };
-        Value_function(helper(0))
+        Value_function(helper(self.funcs))
       }
     }
   };
   let rec call = (func, args, ctxt) => {
     let callee_ctxt = ref([]);
-    Iter.zip(Array.iter(func.Function.params), Array.iter(args))
+    Iter.zip(List.iter(func.Function.params), List.iter(args))
     |> Iter.for_each(
       (((name, _), expr)) =>
         callee_ctxt := [(name, eval(expr, ctxt)), ...callee_ctxt^]
@@ -190,8 +190,11 @@ let run = (self) => {
       switch (eval(e, ctxt)) {
       | Value_function(f) => call(f, args, ctxt)
       | Value_builtin(b) =>
-        assert(Array.length(args) == 2);
-        let (lhs, rhs) = switch (eval(args[0], ctxt), eval(args[1], ctxt)) {
+        let (a0, a1) = switch args {
+        | [a0, a1] => (a0, a1)
+        | _ => assert false
+        };
+        let (lhs, rhs) = switch (eval(a0, ctxt), eval(a1, ctxt)) {
         | (Value_integer(lhs), Value_integer(rhs)) => (lhs, rhs)
         | _ => assert false
         };
@@ -209,7 +212,7 @@ let run = (self) => {
   | Value_function(f) => f
   | _ => assert false
   };
-  switch (call(main, [||], [])) {
+  switch (call(main, [], [])) {
   | Value_integer(n) => Printf.printf("main returned %d\n", n)
   | Value_bool(true) => print_string("main returned true\n")
   | Value_bool(false) => print_string("main returned false\n")
