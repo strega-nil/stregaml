@@ -1,10 +1,9 @@
 include List;
 
 let iter = (init) => {
-  let curr = ref(init);
-  Iter.from_next(() => {
-    switch (curr^) {
-    | [x, ...xs] => curr := xs; Some(x)
+  Iter.from_next(init, (lst) => {
+    switch lst {
+    | [x, ...xs] => Some((xs, x))
     | [] => None
     }
   })

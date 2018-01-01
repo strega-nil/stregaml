@@ -1,12 +1,9 @@
 include Array;
 
 let iter = (arr) => {
-  let idx = ref(0);
-  Iter.from_next(() => {
-    if (idx^ < length(arr)) {
-      let ret = Some(arr[idx^]);
-      idx := idx^ + 1;
-      ret
+  Iter.from_next(0, (idx) => {
+    if (idx < length(arr)) {
+      Some((idx + 1, arr[idx]))
     } else {
       None
     }

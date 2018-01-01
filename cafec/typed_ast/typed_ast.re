@@ -70,7 +70,25 @@ module rec Expr: {
     | Parameter(int)
   and t = spanned(builder);
 
-  let make = (unt_expr, ctxt, ty_ctxt) => assert false;
+  let rec make = ((unt_expr, sp), ctxt, ty_ctxt) => {
+    let module E = Untyped_ast.Expr;
+    switch unt_expr {
+    | E.Unit_literal => SOk(Unit_literal, sp)
+    | E.Bool_literal(b) => SOk(Bool_literal(b), sp)
+    | E.Integer_literal(i) => SOk(Integer_literal(i), sp)
+    | E.If_else(cond, thn, els) =>
+      make(cond)
+      >>= (cond) => make(thn)
+      >>= (thn) => make(els)
+      >>= (els) => SOk(If_else(cond, thn, els), sp)
+    | _ => assert false
+    /*
+    | E.Call(t, list(t))
+    | E.Global_function(int)
+    | E.Parameter(int)
+    */
+    }
+  };
 } and Function : {
   type decl_builder = {
     params: list(Type.t),
@@ -114,10 +132,35 @@ module rec Expr: {
     helper(ctxt, 0)
   };
 
-  let make_context = (_funcs, _ty_ctxt) => {
+  let make_context = (funcs, ty_ctxt) => {
     let module F = Untyped_ast.Function;
 
-    assert false;
+    let rec helper = (funcs) =>
+      switch funcs {
+      | [] => pure([])
+      | [({F.name, F.params, F.ret_ty, _}, sp), ...funcs] =>
+        let rec get_params = (params) =>
+          switch params {
+          | [] => pure([])
+          | [(name, ty), ...params] =>
+            get_params(params)
+            >>= (params) => Type.make(ty, ty_ctxt)
+            >>= (ty) => pure([ty, ...params])
+          };
+        let ret_ty = switch ret_ty {
+        | None => pure(Type.unit_)
+        | Some(ty) => Type.make(ty, ty_ctxt)
+        };
+        ret_ty
+        >>= (ret_ty) => get_params(params)
+        >>= (params) => {
+          let dcl = ({params, ret_ty}, sp);
+          helper(funcs)
+          >>= (tl) => pure([(name, dcl), ...tl])
+        }
+      };
+    helper(funcs)
+    >>= (inner) => pure(Context(inner));
   };
 
   let make = ((unt_func, sp), ctxt, ty_ctxt) => {
@@ -141,6 +184,16 @@ let make = (unt_ast) => {
   let module U = Untyped_ast;
   Type.make_context([])
   >>= (ty_ctxt) => Function.make_context(unt_ast.U.funcs, ty_ctxt)
-  >>= (func_ctxt) =>
-  assert false;
+  >>= (func_ctxt) => {
+    let rec helper = (funcs) =>
+      switch funcs {
+      | [func, ...funcs] =>
+        Function.make(func, func_ctxt, ty_ctxt)
+        >>= (func) => helper(funcs)
+        >>= (funcs) => pure([func, ...funcs])
+      | [] => pure([])
+      };
+    helper(unt_ast.U.funcs)
+    >>= (funcs) => pure({funcs: funcs})
+  }
 };

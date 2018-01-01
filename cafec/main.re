@@ -7,7 +7,7 @@ func fib(x: int) -> int {
   }
 };
 func main() -> int {
-  fib(5)
+  fib(7)
 };
 |};
 
@@ -19,7 +19,9 @@ let main = () => {
     }
   );
   switch ast {
-  | Some(ast) => Untyped_ast.run(ast)
+  | Some(ast) =>
+    Typed_ast.make(ast) |> ignore;
+    Untyped_ast.run(ast);
   | None => ()
   }
 };

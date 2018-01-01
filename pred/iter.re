@@ -1,35 +1,48 @@
-type t('a) = unit => option('a);
+type t('a) =
+  | Iter('state, 'state => option(('state, 'a))): t('a);
 
-let rec for_each = (f, self) =>
-  switch (self()) {
-  | Some(el) =>
-    f(el);
-    for_each(f, self);
-  | None => ()
-  };
-
-let rec for_each_break = (f, self) =>
-  switch (self()) {
-  | Some(el) =>
-    switch (f(el)) {
-    | Some(ret) => Some(ret)
-    | None => for_each_break(f, self)
-    }
-  | None => None
-  };
-
-let from_next = (func) => func;
-
-exception Iter_zipped_iterators_of_different_lengths;
-let zip = (fst, snd) => () => {
-  switch ((fst(), snd())) {
-  | (Some(f), Some(s)) => Some((f, s))
-  | (None, None) => None
-  | _ => raise(Iter_zipped_iterators_of_different_lengths)
-  }
+let for_each = (f, Iter(state, iter)) => {
+  let rec helper = (state) =>
+    switch (iter(state)) {
+    | Some((state, el)) =>
+      f(el);
+      helper(state);
+    | None => ()
+    };
+  helper(state);
 };
 
-let enumerate = (iter) => {
+let for_each_break = (f, Iter(state, iter)) => {
+  let rec helper = (state) =>
+    switch (iter(state)) {
+    | Some((state, el)) =>
+      switch (f(el)) {
+      | Some(ret) => Some(ret)
+      | None => helper(state)
+      }
+    | None => None
+    };
+  helper(state);
+};
+
+let from_next = (state, func) => Iter(state, func);
+
+exception Iter_zipped_iterators_of_different_lengths;
+let zip = (Iter(state1, iter1), Iter(state2, iter2)) => {
+  let state = (state1, state2);
+  let iter = ((state1, state2)) =>
+    switch ((iter1(state1), iter2(state2))) {
+    | (Some((state1, el1)), Some((state2, el2))) =>
+      Some(((state1, state2), (el1, el2)))
+    | (None, None) => None
+    | _ => raise(Iter_zipped_iterators_of_different_lengths)
+    };
+  Iter(state, iter)
+};
+
+let enumerate = (_iter) => {
+  assert false;
+  /*
   let i = ref(0);
   () => {
     let old = i^;
@@ -39,9 +52,12 @@ let enumerate = (iter) => {
     | None => None
     }
   };
+  */
 };
 
-let range = (init, fin) => {
+let range = (_init, _fin) => {
+  assert false;
+  /*
   let i = ref(init);
   () => {
     let old = i^;
@@ -52,4 +68,5 @@ let range = (init, fin) => {
       Some(old)
     }
   }
+  */
 };

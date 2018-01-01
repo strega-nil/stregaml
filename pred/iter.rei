@@ -2,7 +2,7 @@
 
 type t('a);
 
-let for_each: ('a => unit, t('a)) => unit;
+let for_each: ('a => (unit), t('a)) => unit;
 
 /**
   if the inner closure returns Some(v), then for_each_break returns Some(v).
@@ -10,7 +10,7 @@ let for_each: ('a => unit, t('a)) => unit;
  */
 let for_each_break: ('a => option('b), t('a)) => option('b);
 
-let from_next: (unit => option('a)) => t('a);
+let from_next: ('state, 'state => option(('state, 'a))) => t('a);
 
 exception Iter_zipped_iterators_of_different_lengths;
 let zip: (t('a), t('b)) => t(('a, 'b));
