@@ -212,13 +212,12 @@ module rec Expr: {
   let make = ((unt_func, sp), ctxt, ty_ctxt) => {
     let module F = Untyped_ast.Function;
 
-    let decl = switch (find_in_context(unt_func.F.name, ctxt)) {
+    let ty = switch (find_in_context(unt_func.F.name, ctxt)) {
     | Some((decl, _)) => decl
     | None => assert false
     };
-    let _expr = Expr.make(unt_func.F.expr, decl, ctxt, ty_ctxt);
-
-    assert false;
+    Expr.make(unt_func.F.expr, ty, ctxt, ty_ctxt)
+    >>= (expr) => Ok(({ty, expr}, sp))
   };
 };
 
