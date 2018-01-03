@@ -46,52 +46,98 @@ module Type = {
 };
 
 module rec Expr: {
+  type builtin =
+    | Builtin_less_eq
+    | Builtin_add
+    | Builtin_sub;
   type builder =
     | Unit_literal
     | Bool_literal(bool)
     | Integer_literal(int)
     | If_else(t, t, t)
     | Call(t, list(t))
+    | Builtin(builtin)
     | Global_function(int)
     | Parameter(int)
   and t = spanned(builder);
 
   let make
-    : (Untyped_ast.Expr.t, Function.context, Type.context)
+    : (Untyped_ast.Expr.t, Function.decl, Function.context, Type.context)
       => result(Expr.t, Error.t);
 } = {
+  type builtin =
+    | Builtin_less_eq
+    | Builtin_add
+    | Builtin_sub;
   type builder =
     | Unit_literal
     | Bool_literal(bool)
     | Integer_literal(int)
     | If_else(t, t, t)
     | Call(t, list(t))
+    | Builtin(builtin)
     | Global_function(int)
     | Parameter(int)
   and t = spanned(builder);
 
-  let rec make = ((unt_expr, sp), ctxt, ty_ctxt) => {
+  let find_in_parms = (name, lst) => {
+    let rec helper = (name, lst, idx) =>
+      switch lst {
+      | [] => None
+      | [(name', ty), ..._] when name' == name => Some((ty, idx))
+      | [_, ...xs] =>
+        helper(name, xs, idx + 1)
+      };
+    helper(name, lst, 0)
+  };
+
+  let rec make = ((unt_expr, sp), decl, ctxt, ty_ctxt) => {
     let module E = Untyped_ast.Expr;
     switch unt_expr {
-    | E.Unit_literal => SOk(Unit_literal, sp)
-    | E.Bool_literal(b) => SOk(Bool_literal(b), sp)
-    | E.Integer_literal(i) => SOk(Integer_literal(i), sp)
+    | E.Unit_literal => Ok((Unit_literal, sp))
+    | E.Bool_literal(b) => Ok((Bool_literal(b), sp))
+    | E.Integer_literal(i) => Ok((Integer_literal(i), sp))
     | E.If_else(cond, thn, els) =>
-      make(cond)
-      >>= (cond) => make(thn)
-      >>= (thn) => make(els)
-      >>= (els) => SOk(If_else(cond, thn, els), sp)
-    | _ => assert false
-    /*
-    | E.Call(t, list(t))
-    | E.Global_function(int)
-    | E.Parameter(int)
-    */
+      make(cond, decl, ctxt, ty_ctxt)
+      >>= (cond) => make(thn, decl, ctxt, ty_ctxt)
+      >>= (thn) => make(els, decl, ctxt, ty_ctxt)
+      >>= (els) => Ok((If_else(cond, thn, els), sp))
+    | E.Call(callee, args) =>
+      make(callee, decl, ctxt, ty_ctxt)
+      >>= (callee) => {
+        let rec helper = (lst) =>
+          switch lst {
+          | [x, ...xs] =>
+            make(x, decl, ctxt, ty_ctxt)
+            >>= (x) => helper(xs)
+            >>= (xs) => Ok([x, ...xs])
+          | [] => Ok([])
+          };
+        helper(args);
+      } >>= (args) => Ok((Call(callee, args), sp))
+    | E.Variable(name) =>
+      {
+        let ({Function.params, _}, _) = decl;
+        switch (find_in_parms(name, params)) {
+        | None =>
+          switch (Function.find_in_context(name, ctxt)) {
+          | None =>
+            switch name {
+            | "LESS_EQ" => Ok((Builtin(Builtin_less_eq), sp))
+            | "ADD" => Ok((Builtin(Builtin_add), sp))
+            | "SUB" => Ok((Builtin(Builtin_sub), sp))
+            | _ => assert false
+            }
+          | Some((_dcl, idx)) => Ok((Global_function(idx), sp))
+          }
+        | Some((_ty, idx)) => Ok((Parameter(idx), sp))
+        }
+      }
     }
   };
 } and Function : {
   type decl_builder = {
-    params: list(Type.t),
+    params: list((string, Type.t)),
     ret_ty: Type.t
   } and decl = spanned(decl_builder);
   type builder = {
@@ -101,7 +147,7 @@ module rec Expr: {
 
   type context;
 
-  let find_in_context: (string, context) => option((int, decl));
+  let find_in_context: (string, context) => option((decl, int));
 
   let make_context
     : (list(Untyped_ast.Function.t), Type.context) => result(context, Error.t);
@@ -110,7 +156,7 @@ module rec Expr: {
     : (Untyped_ast.Function.t, context, Type.context) => result(t, Error.t);
 } = {
   type decl_builder = {
-    params: list(Type.t),
+    params: list((string, Type.t)),
     ret_ty: Type.t
   } and decl = spanned(decl_builder);
   type builder = {
@@ -125,7 +171,7 @@ module rec Expr: {
   let find_in_context = (name, Context(ctxt)) => {
     let rec helper = (ctxt, idx) =>
       switch ctxt {
-      | [(name', dcl), ..._] when name == name' => Some((idx, dcl))
+      | [(name', dcl), ..._] when name == name' => Some((dcl, idx))
       | [_, ...xs] => helper(xs, idx + 1)
       | [] => None
       };
@@ -143,9 +189,9 @@ module rec Expr: {
           switch params {
           | [] => pure([])
           | [(name, ty), ...params] =>
-            get_params(params)
-            >>= (params) => Type.make(ty, ty_ctxt)
-            >>= (ty) => pure([ty, ...params])
+            Type.make(ty, ty_ctxt)
+            >>= (ty) => get_params(params)
+            >>= (params) => pure([(name, ty), ...params])
           };
         let ret_ty = switch ret_ty {
         | None => pure(Type.unit_)
@@ -166,11 +212,11 @@ module rec Expr: {
   let make = ((unt_func, sp), ctxt, ty_ctxt) => {
     let module F = Untyped_ast.Function;
 
-    let _decl = switch (find_in_context(unt_func.F.name, ctxt)) {
-    | Some((_, decl)) => decl
+    let decl = switch (find_in_context(unt_func.F.name, ctxt)) {
+    | Some((decl, _)) => decl
     | None => assert false
     };
-    let _expr = Expr.make(unt_func.F.expr, ctxt, ty_ctxt);
+    let _expr = Expr.make(unt_func.F.expr, decl, ctxt, ty_ctxt);
 
     assert false;
   };
