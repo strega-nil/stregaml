@@ -23,4 +23,5 @@ let and_then = (f, self) =>
 module Monad = {
   let (>>=) = (self, f) => and_then(f, self);
   let pure = (ok) => Ok(ok);
+  let pure_err = (err) => Err(err);
 };

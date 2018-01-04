@@ -1,3 +1,4 @@
+open Pred;
 open Spanned.Prelude;
 
 open Spanned.Result_monad;
@@ -13,13 +14,13 @@ type t = {
 
 let peek_token = (parser) =>
   switch parser.peek {
-  | Some((pk, sp)) => SOk(pk, sp)
+  | Some((pk, sp)) => Ok((pk, sp))
   | None =>
     switch (Lex.next_token(parser.lexer)) {
-    | SOk(ret, sp) =>
-      parser.peek = Some((ret, sp));
-      SOk(ret, sp);
-    | SErr(e, sp) => SErr(e, sp)
+    | Ok(ret) =>
+      parser.peek = Some(ret);
+      Ok(ret);
+    | Err(e) => Err(e)
     }
   };
 
@@ -31,8 +32,8 @@ let next_token = (parser) => {
 
 let eat_token = (parser) =>
   switch (next_token(parser)) {
-  | SOk(_, _) => ()
-  | SErr(_, _) => assert false
+  | Ok(_) => ()
+  | Err(_) => assert false
   };
 
 let is_expression_end = (tok) =>
@@ -46,115 +47,113 @@ let is_expression_end = (tok) =>
 
 let wrap_sok: spanned_result('o, 'e) => spanned_result(spanned('o), 'e) =
   fun
-  | SOk(o, sp) => SOk((o, sp), sp)
-  | SErr(e, sp) => SErr(e, sp);
+  | Ok((o, sp)) => Ok(((o, sp), sp))
+  | Err((e, sp)) => Err((e, sp));
 let wrap_opt_sok: spanned_result(option('o), 'e) => spanned_result(option(spanned('o)), 'e) =
   fun
-  | SOk(Some(o), sp) => SOk(Some((o, sp)), sp)
-  | SOk(None, sp) => SOk(None, sp)
-  | SErr(e, sp) => SErr(e, sp);
+  | Ok((Some(o), sp)) => Ok((Some((o, sp)), sp))
+  | Ok((None, sp)) => Ok((None, sp))
+  | Err(e) => Err(e);
 
 type item =
   | Item_func(Ast.Function.builder);
 
 let get_ident = (parser) =>
-  switch (next_token(parser)) {
-  | SOk(Token.Identifier(id), sp) => SOk(id, sp)
-  | SOk(tok, sp) => SErr(Error.Unexpected_token(Error.Expected_identifier, tok), sp)
-  | SErr(e, sp) => SErr(e, sp)
+  next_token(parser)
+  >>= (tok) => switch tok {
+  | Token.Identifier(id) => pure(id)
+  | tok => pure_err(Error.Unexpected_token(Error.Expected_identifier, tok))
   };
 
 let maybe_get_specific = (parser, token) =>
-  switch (peek_token(parser)) {
-  | SOk(tok, sp) when tok == token =>
-    eat_token(parser);
-    SOk(Some(), sp);
-  | SOk(_, sp) => SOk(None, sp)
-  | SErr(e, sp) => SErr(e, sp)
-  };
+  peek_token(parser)
+  >>= (tok) =>
+    if (tok == token) {
+      pure(Some())
+    } else {
+      pure(None)
+    };
 
 let get_specific = (parser, token) =>
-  switch (maybe_get_specific(parser, token)) {
-  | SOk(Some (), sp) => SOk((), sp)
-  | SOk(None, _) =>
+  maybe_get_specific(parser, token)
+  >>= (opt) => switch opt {
+  | Some() => pure(())
+  | None =>
     next_token(parser)
-    >>= (
-      (tok) => pure_err(Error.Unexpected_token(Error.Expected_specific(token), tok))
-    )
-  | SErr(e, sp) => SErr(e, sp)
+    >>= (tok) =>
+      pure_err(Error.Unexpected_token(Error.Expected_specific(token), tok))
   };
 
 let rec maybe_parse_expression
   : 'a => spanned_result(option(Ast.Expr.t), Error.t)
   = (parser) => {
-  switch (peek_token(parser)) {
-  | SOk(Token.Keyword(Token.Keyword_true), sp) =>
+  peek_token(parser)
+  >>= (tok) => switch tok {
+  | Token.Keyword(Token.Keyword_true) =>
     eat_token(parser);
-    SOk(Some((Ast.Expr.Bool_literal(true), sp)), sp)
-  | SOk(Token.Keyword(Token.Keyword_false), sp) =>
+    pure(Some(Ast.Expr.Bool_literal(true)))
+  | Token.Keyword(Token.Keyword_false) =>
     eat_token(parser);
-    SOk(Some((Ast.Expr.Bool_literal(false), sp)), sp);
-  | SOk(Token.Integer_literal(n), sp) =>
+    pure(Some(Ast.Expr.Bool_literal(false)))
+  | Token.Integer_literal(n) =>
     eat_token(parser);
-    SOk(Some((Ast.Expr.Integer_literal(n), sp)), sp)
-  | SOk(Token.Open_paren, sp) =>
+    pure(Some(Ast.Expr.Integer_literal(n)))
+  | Token.Open_paren =>
     eat_token(parser);
-    {
-      with_span(sp)
-      >>= () => get_specific(parser, Token.Close_paren)
-      >>= () => pure(Some(Ast.Expr.Unit_literal))
-    } |> wrap_opt_sok
-  | SOk(Token.Keyword(Token.Keyword_if), sp) =>
+    get_specific(parser, Token.Close_paren)
+    >>= () => pure(Some(Ast.Expr.Unit_literal))
+  | Token.Keyword(Token.Keyword_if) =>
     eat_token(parser);
-    {
-      with_span(sp)
-      >>= () => get_specific(parser, Token.Open_paren)
-      >>= () => parse_expression(parser)
-      >>= (cond) => get_specific(parser, Token.Close_paren)
-      >>= () => parse_block(parser)
-      >>= (thn) => get_specific(parser, Token.Keyword(Token.Keyword_else))
-      >>= () => parse_block(parser)
-      >>= (els) => pure(Some(Ast.Expr.If_else(cond, thn, els)))
-    } |> wrap_opt_sok
-  | SOk(Token.Identifier(s), sp) =>
+    get_specific(parser, Token.Open_paren)
+    >>= () => parse_expression(parser)
+    >>= (cond) => get_specific(parser, Token.Close_paren)
+    >>= () => parse_block(parser)
+    >>= (thn) => get_specific(parser, Token.Keyword(Token.Keyword_else))
+    >>= () => parse_block(parser)
+    >>= (els) => pure(Some(Ast.Expr.If_else(cond, thn, els)))
+  | Token.Identifier(s) =>
     eat_token(parser);
-    SOk(Some((Ast.Expr.Variable(s), sp)), sp)
-  | SOk(_, sp) => SOk(None, sp)
-  | SErr(e, sp) => SErr(e, sp)
+    pure(Some(Ast.Expr.Variable(s)))
+  | _ => pure(None)
   }
-  >>= (initial) =>
-    switch initial {
-    | Some(i) => parse_follow(parser, i) >>= (x) => pure(Some(x))
-    | None => pure(None)
-    }
+  |> wrap_opt_sok
+  >>= (initial) => switch initial {
+  | Some(i) => parse_follow(parser, i) >>= (x) => pure(Some(x))
+  | None => pure(None)
+  }
 }
 and parse_expression = (parser) =>
-  switch (maybe_parse_expression(parser)) {
-  | SOk(Some(expr), sp) => SOk(expr, sp)
-  | SOk(None, _) =>
+  maybe_parse_expression(parser)
+  >>= (opt) => switch opt {
+  | Some(expr) => pure(expr)
+  | None =>
     next_token(parser)
-    >>= (tok) => pure_err(Error.Unexpected_token(Error.Expected_expression, tok))
-  | SErr(e, sp) => SErr(e, sp)
+    >>= (tok) =>
+      pure_err(Error.Unexpected_token(Error.Expected_expression, tok))
   }
 and parse_follow
   : ('a, Ast.Expr.t) => spanned_result(Ast.Expr.t, Error.t)
-  = (parser, initial) => {
-  let initial = switch (peek_token(parser)) {
-  | SOk(Token.Open_paren, sp) =>
-    with_span(sp)
-    >>= () => parse_argument_list(parser)
-    >>= (args) => pure((Ast.Expr.Call(initial, args), true))
-  | SOk(tok, _) when is_expression_end(tok) =>
-    let (i, sp) = initial;
-    SOk((i, false), sp)
-  | SOk(tok, sp) => SErr(Error.Unexpected_token(Error.Expected_expression_follow, tok), sp)
-  | SErr(e, sp) => SErr(e, sp)
-  };
-  switch initial {
-  | SOk((initial, true), sp) => parse_follow(parser, (initial, sp))
-  | SOk((initial, false), sp) => SOk((initial, sp), sp)
-  | SErr(e, sp) => SErr(e, sp)
+  = (parser, (initial, sp)) => {
+  /* this function deals with spans weirdly */
+  open! Result.Monad;
+  peek_token(parser)
+  >>= ((tok, tok_sp)) => switch tok {
+  | Token.Open_paren =>
+    parse_argument_list(parser)
+    >>= ((args, sp')) => pure(
+      (Ast.Expr.Call((initial, sp), args), true, Spanned.union(sp, sp')))
+  | tok when is_expression_end(tok) =>
+    pure((initial, false, sp))
+  | tok =>
+    pure_err(
+      (Error.Unexpected_token(Error.Expected_expression_follow, tok), tok_sp))
   }
+  >>= ((initial, cont, sp)) =>
+    if (cont) {
+      parse_follow(parser, (initial, sp))
+    } else {
+      pure(((initial, sp), sp))
+    }
 }
 and parse_type = (parser) => {
   {
@@ -164,29 +163,30 @@ and parse_type = (parser) => {
 }
 and parse_return_type = (parser) => {
   maybe_get_specific(parser, Token.Arrow)
-  >>= (opt) =>
-    switch opt {
-    | Some() =>
-      parse_type(parser)
-      >>= (ty) => pure(Some(ty))
-    | None => pure(None)
-    }
+  >>= (opt) => switch opt {
+  | Some() =>
+    parse_type(parser)
+    >>= (ty) => pure(Some(ty))
+  | None => pure(None)
+  }
 }
 and parse_parameter_list = (parser) => {
   /* TODO(ubsan): maybe abstract out list parsing? */
   let rec get_parms = (comma) =>
-    switch (peek_token(parser)) {
-    | SOk(Token.Close_paren, _) => pure([])
-    | SOk(Token.Comma, sp) =>
+    peek_token(parser)
+    >>= (tok) => switch tok {
+    | Token.Close_paren => pure([])
+    | Token.Comma =>
       if (comma) {
         eat_token(parser);
         get_parms(false)
       } else {
-        SErr(Error.Unexpected_token(Error.Expected_expression, Token.Comma), sp)
+        pure_err(Error.Unexpected_token(Error.Expected_expression, Token.Comma))
       }
-    | SOk(tok, sp) =>
+    | tok =>
       if (comma) {
-        SErr(Error.Unexpected_token(Error.Expected_specific(Token.Comma), tok), sp)
+        pure_err(
+          Error.Unexpected_token(Error.Expected_specific(Token.Comma), tok))
       } else {
         get_ident(parser)
         >>= (name) => get_specific(parser, Token.Colon)
@@ -196,7 +196,6 @@ and parse_parameter_list = (parser) => {
           >>= (tl) => pure([(name, ty), ...tl])
         }
       }
-    | SErr(e, sp) => SErr(e, sp)
     };
   get_specific(parser, Token.Open_paren)
   >>= () => get_parms(false)
@@ -205,20 +204,20 @@ and parse_parameter_list = (parser) => {
 }
 and parse_argument_list = (parser) => {
   let rec get_args = (comma) =>
-    switch (peek_token(parser)) {
-    | SOk(Token.Close_paren, _) => pure([])
-    | SOk(Token.Comma, sp) =>
+    peek_token(parser)
+    >>= (tok) => switch tok {
+    | Token.Close_paren => pure([])
+    | Token.Comma =>
       if (comma) {
         eat_token(parser);
         get_args(false)
       } else {
-        SErr(Error.Unexpected_token(Error.Expected_expression, Token.Comma), sp)
+        pure_err(Error.Unexpected_token(Error.Expected_expression, Token.Comma))
       }
-    | SOk(tok, sp) =>
+    | tok =>
       if (comma) {
-        SErr(
-          Error.Unexpected_token(Error.Expected_specific(Token.Comma), tok),
-          sp)
+        pure_err(
+          Error.Unexpected_token(Error.Expected_specific(Token.Comma), tok))
       } else {
         parse_expression(parser)
         >>= (expr) => {
@@ -226,7 +225,6 @@ and parse_argument_list = (parser) => {
           >>= (tl) => pure([expr, ...tl])
         }
       }
-    | SErr(e, sp) => SErr(e, sp)
     };
   get_specific(parser, Token.Open_paren)
   >>= () => get_args(false)
@@ -236,21 +234,19 @@ and parse_argument_list = (parser) => {
 and parse_block = (parser) => {
   get_specific(parser, Token.Open_brace)
   >>= () => maybe_parse_expression(parser)
-  >>= (opt_expr) =>
-    switch (opt_expr) {
-    | Some(e) =>
-      get_specific(parser, Token.Close_brace)
-      >>= () => pure(e)
-    | None =>
-      {
-        next_token(parser)
-        >>= (tok) =>
-          switch tok {
-          | Token.Close_brace => pure(Ast.Expr.Unit_literal)
-          | tok => pure_err(Error.Unexpected_token(Error.Expected_expression, tok))
-          }
-      } |> wrap_sok
-    }
+  >>= (opt_expr) => switch (opt_expr) {
+  | Some(e) =>
+    get_specific(parser, Token.Close_brace)
+    >>= () => pure(e)
+  | None =>
+    {
+      next_token(parser)
+      >>= (tok) => switch tok {
+      | Token.Close_brace => pure(Ast.Expr.Unit_literal)
+      | tok => pure_err(Error.Unexpected_token(Error.Expected_expression, tok))
+      }
+    } |> wrap_sok
+  }
 };
 
 let parse_item: t => spanned_result(option(item), Error.t) =
@@ -275,12 +271,13 @@ let parse_item: t => spanned_result(option(item), Error.t) =
 let parse_program: t => spanned_result(Ast.t, Error.t) =
   (parser) => {
     let rec helper = (parser) =>
-      switch (parse_item(parser)) {
-      | SOk(Some(Item_func(func)), sp) =>
+      parse_item(parser)
+      |> wrap_sok
+      >>= ((item, sp)) => switch item {
+      | Some(Item_func(func)) =>
         helper(parser)
-        >>= (tl) => SOk([(func, sp), ...tl], sp)
-      | SOk(None, sp) => SOk([], sp)
-      | SErr(e, sp) => SErr(e, sp)
+        >>= (tl) => pure([(func, sp), ...tl])
+      | None => pure([])
       };
     helper(parser)
     >>= (funcs) => pure(Ast.make(funcs))

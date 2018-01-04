@@ -1,3 +1,5 @@
+open Pred;
+
 let program = {|
 func fib(x: int) -> int {
   if (LESS_EQ(x, 1)) {
@@ -12,12 +14,10 @@ func main() -> int {
 |};
 
 let main = () => {
-  let ast = Spanned.Prelude.(
-    switch (Parse.parse(program)) {
-    | SOk(ast, _) => Untyped_ast.print(ast) |> print_newline; Some(ast)
-    | SErr(e, sp) => Parse.Error.print_spanned(e, sp) |> print_newline; None
-    }
-  );
+  let ast = switch (Parse.parse(program)) {
+  | Ok((ast, _)) => Untyped_ast.print(ast) |> print_newline; Some(ast)
+  | Err((e, sp)) => Parse.Error.print_spanned(e, sp) |> print_newline; None
+  };
   switch ast {
   | Some(ast) =>
     Typed_ast.make(ast) |> ignore;
