@@ -45,12 +45,10 @@ let print_span
   };
 
 module Monad(E: Pred.Type): {
-  type t('o) = spanned_result('o, E.t);
-  type error = E.t;
   include (
     Interfaces.Monad_result
-      with type t('o) := t('o)
-      and type error := error);
+      with type t('o) = spanned_result('o, E.t)
+      and type error = E.t);
 
   let with_span: span => t(unit);
 } = {
