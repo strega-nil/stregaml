@@ -12,7 +12,7 @@ module Monad(E: Interfaces.Type) {
   type nonrec t('o) = t('o, E.t);
   type error = E.t;
   include (
-    Monad_.Monad_result
+    Interfaces.Monad_result
       with type error := error
       and type t('o) := t('o));
 };

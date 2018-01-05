@@ -25,7 +25,7 @@ let for_each_break = (f, Iter(state, iter)) => {
   helper(state);
 };
 
-let from_next = (state, func) => Iter(state, func);
+let make = (state, func) => Iter(state, func);
 
 exception Iter_zipped_iterators_of_different_lengths;
 let zip = (Iter(state1, iter1), Iter(state2, iter2)) => {

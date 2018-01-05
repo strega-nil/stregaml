@@ -8,6 +8,8 @@ module String_buffer = String_buffer;
 
 module Result = Result;
 
+module Option = Option;
+
 module Dynamic_array = Dynamic_array;
 
 module Util = Util;
