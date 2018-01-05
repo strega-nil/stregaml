@@ -12,6 +12,10 @@ module Dynamic_array = Dynamic_array;
 
 module Util = Util;
 
+module Interfaces = Interfaces;
+
+include Interfaces.Prelude;
+
 type result('o, 'e) = Result.t('o, 'e) = | Ok('o) | Err('e);
 
 type iter('a) = Iter.t('a);

@@ -15,6 +15,8 @@ type t =
   | Unrecognized_character(char)
   | Unexpected_token(expected_token, Token.t);
 
+module Monad_spanned = Spanned.Monad({type nonrec t = t});
+
 let print_expected = (exp) =>
   switch exp {
   | Expected_specific(tok) => Token.print(tok)

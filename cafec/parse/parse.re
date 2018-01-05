@@ -1,7 +1,7 @@
 open Pred;
 open Spanned.Prelude;
 
-open Spanned.Result_monad;
+open Error.Monad_spanned;
 
 module Error = Error;
 
@@ -135,7 +135,8 @@ and parse_follow
   : ('a, Ast.Expr.t) => spanned_result(Ast.Expr.t, Error.t)
   = (parser, (initial, sp)) => {
   /* this function deals with spans weirdly */
-  open! Result.Monad;
+  let module M = Result.Monad({type t = spanned(Error.t)});
+  open! M;
   peek_token(parser)
   >>= ((tok, tok_sp)) => switch tok {
   | Token.Open_paren =>

@@ -1,7 +1,7 @@
 open Pred;
 
 open Spanned.Prelude;
-open Spanned.Result_monad;
+open Error.Monad_spanned;
 
 module Error = Error;
 

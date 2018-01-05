@@ -1,7 +1,7 @@
 open Pred;
 
 open Spanned.Prelude;
-open Result.Monad;
+open Error.Monad_result;
 
 module Type = {
   module Ctxt: {

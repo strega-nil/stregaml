@@ -44,27 +44,37 @@ let print_span
       end_column)
   };
 
+module Monad(E: Pred.Type): {
+  type t('o) = spanned_result('o, E.t);
+  type error = E.t;
+  include (
+    Interfaces.Monad_result
+      with type t('o) := t('o)
+      and type error := error);
 
-module Result_monad = {
-  let (>>=): (spanned_result('o, 'e), 'o => spanned_result('o2, 'e)) => spanned_result('o2, 'e) =
-    (self, f) =>
-      switch self {
-      | Ok((o, sp)) =>
-        switch (f(o)) {
-        | Ok((o', sp')) => Ok((o', union(sp, sp')))
-        | Err((e', sp')) =>
-          Err((
-            e',
-            if (is_made_up(sp')) {
-              sp;
-            } else {
-              sp';
-            }
-          ))
-        }
-      | Err((e, sp)) => Err((e, sp))
-      };
-  let pure: 'o => spanned_result('o, 'e) = (o) => Ok((o, made_up));
-  let pure_err: 'e => spanned_result('o, 'e) = (e) => Err((e, made_up));
-  let with_span: span => spanned_result(unit, 'e) = (sp) => Ok(((), sp));
+  let with_span: span => t(unit);
+} = {
+  type t('o) = spanned_result('o, E.t);
+  type error = E.t;
+
+  let (>>=) = (self, f) =>
+    switch self {
+    | Ok((o, sp)) =>
+      switch (f(o)) {
+      | Ok((o', sp')) => Ok((o', union(sp, sp')))
+      | Err((e', sp')) =>
+        Err((
+          e',
+          if (is_made_up(sp')) {
+            sp;
+          } else {
+            sp';
+          }
+        ))
+      }
+    | Err((e, sp)) => Err((e, sp))
+    };
+  let pure = (o) => Ok((o, made_up));
+  let pure_err = (e) => Err((e, made_up));
+  let with_span = (sp) => Ok(((), sp));
 };

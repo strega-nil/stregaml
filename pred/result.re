@@ -20,7 +20,10 @@ let and_then = (f, self) =>
   | Err(e) => Err(e)
   };
 
-module Monad = {
+module Monad(E: Interfaces.Type) = {
+  type nonrec t('o) = t('o, E.t);
+  type error = E.t;
+
   let (>>=) = (self, f) => and_then(f, self);
   let pure = (ok) => Ok(ok);
   let pure_err = (err) => Err(err);
