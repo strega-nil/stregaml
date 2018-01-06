@@ -3,4 +3,4 @@
 (library
   ((name typed_ast)
   (libraries (pred spanned untyped_ast))
-  (flags (:standard -w @a-4-37-27-32-60))))
+  (flags (:standard -w @a-4-37-27-32))))
