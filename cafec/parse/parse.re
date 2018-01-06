@@ -20,7 +20,7 @@ let peek_token = (parser) =>
     | Ok(ret) =>
       parser.peek = Some(ret);
       Ok(ret);
-    | Err(e) => Err(e)
+    | Error(e) => Error(e)
     }
   };
 
@@ -33,7 +33,7 @@ let next_token = (parser) => {
 let eat_token = (parser) =>
   switch (next_token(parser)) {
   | Ok(_) => ()
-  | Err(_) => assert false
+  | Error(_) => assert false
   };
 
 let is_expression_end = (tok) =>
@@ -48,12 +48,12 @@ let is_expression_end = (tok) =>
 let wrap_sok: spanned_result('o, 'e) => spanned_result(spanned('o), 'e) =
   fun
   | Ok((o, sp)) => Ok(((o, sp), sp))
-  | Err((e, sp)) => Err((e, sp));
+  | Error((e, sp)) => Error((e, sp));
 let wrap_opt_sok: spanned_result(option('o), 'e) => spanned_result(option(spanned('o)), 'e) =
   fun
   | Ok((Some(o), sp)) => Ok((Some((o, sp)), sp))
   | Ok((None, sp)) => Ok((None, sp))
-  | Err(e) => Err(e);
+  | Error(e) => Error(e);
 
 type item =
   | Item_func(Ast.Function.builder);

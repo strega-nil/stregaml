@@ -119,10 +119,10 @@ let rec next_token = (lex) => {
         | "else" => kw(Token.Keyword_else)
         | "func" => kw(Token.Keyword_func)
         | "_" => kw(Token.Keyword_underscore)
-        | "let" as res => Err((Error.Reserved_token(res), sp))
-        | "type" as res => Err((Error.Reserved_token(res), sp))
-        | "struct" as res => Err((Error.Reserved_token(res), sp))
-        | "variant" as res => Err((Error.Reserved_token(res), sp))
+        | "let" as res => Error((Error.Reserved_token(res), sp))
+        | "type" as res => Error((Error.Reserved_token(res), sp))
+        | "struct" as res => Error((Error.Reserved_token(res), sp))
+        | "variant" as res => Error((Error.Reserved_token(res), sp))
         | id => Ok((Token.Identifier(id), sp))
         };
       };
@@ -145,7 +145,7 @@ let rec next_token = (lex) => {
             | _ => eat_the_things()
             }
           | Some(_) => eat_the_things()
-          | None => Err((
+          | None => Error((
             Error.Unclosed_comment,
             Spanned.union(sp, current_span())))
           };
@@ -165,7 +165,7 @@ let rec next_token = (lex) => {
       eat_ch();
       switch (block_comment(sp)) {
       | Ok(((), _)) => next_token(lex)
-      | Err(e) => Err(e)
+      | Error(e) => Error(e)
       };
     | Some(('/', _)) when fst == '/' =>
       eat_ch();
@@ -186,8 +186,8 @@ let rec next_token = (lex) => {
           | ":" => Ok((Token.Colon, sp))
           | "=" => Ok((Token.Equals, sp))
           | "->" => Ok((Token.Arrow, sp))
-          | "|" as res => Err((Error.Reserved_token(res), sp))
-          | "." as res => Err((Error.Reserved_token(res), sp))
+          | "|" as res => Error((Error.Reserved_token(res), sp))
+          | "." as res => Error((Error.Reserved_token(res), sp))
           | op => Ok((Token.Operator(op), sp))
           }
         };
@@ -232,7 +232,7 @@ let rec next_token = (lex) => {
       | Some((ch, sp')) when space_allowed && (is_number_continue(ch, 10) || is_ident_continue(ch)) =>
         eat_ch();
         push(buff, ch);
-        Err((
+        Error((
           Error.Malformed_number_literal(to_string(buff)),
           Spanned.union(sp, sp')));
       | Some(_)
@@ -269,15 +269,15 @@ let rec next_token = (lex) => {
   | Some((')', sp)) => Ok((Token.Close_paren, sp))
   | Some(('{', sp)) => Ok((Token.Open_brace, sp))
   | Some(('}', sp)) => Ok((Token.Close_brace, sp))
-  | Some(('[', sp)) => Err((Error.Reserved_token("["), sp))
-  | Some((']', sp)) => Err((Error.Reserved_token("]"), sp))
+  | Some(('[', sp)) => Error((Error.Reserved_token("["), sp))
+  | Some((']', sp)) => Error((Error.Reserved_token("]"), sp))
   | Some((';', sp)) => Ok((Token.Semicolon, sp))
   | Some((',', sp)) => Ok((Token.Comma, sp))
-  | Some(('\'', sp)) => Err((Error.Reserved_token("'"), sp))
+  | Some(('\'', sp)) => Error((Error.Reserved_token("'"), sp))
   | Some((ch, sp)) when is_ident_start(ch) => lex_ident(ch, sp)
   | Some((ch, sp)) when is_operator_start(ch) => lex_operator(ch, sp)
   | Some((ch, sp)) when is_number_start(ch) => lex_number(ch, sp)
-  | Some((ch, sp)) => Err((Error.Unrecognized_character(ch), sp))
+  | Some((ch, sp)) => Error((Error.Unrecognized_character(ch), sp))
   | None => Ok((Token.Eof, current_span()))
   };
 };

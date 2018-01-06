@@ -60,8 +60,8 @@ module Monad(E: Pred.Type): {
     | Ok((o, sp)) =>
       switch (f(o)) {
       | Ok((o', sp')) => Ok((o', union(sp, sp')))
-      | Err((e', sp')) =>
-        Err((
+      | Error((e', sp')) =>
+        Error((
           e',
           if (is_made_up(sp')) {
             sp;
@@ -70,9 +70,9 @@ module Monad(E: Pred.Type): {
           }
         ))
       }
-    | Err((e, sp)) => Err((e, sp))
+    | Error((e, sp)) => Error((e, sp))
     };
   let pure = (o) => Ok((o, made_up));
-  let pure_err = (e) => Err((e, made_up));
+  let pure_err = (e) => Error((e, made_up));
   let with_span = (sp) => Ok(((), sp));
 };

@@ -1,5 +1,3 @@
-open Pred;
-
 let program = {|
 func fib(x: int) -> int {
   if (LESS_EQ(x, 1)) {
@@ -16,7 +14,7 @@ func main() -> int {
 let main = () => {
   let ast = switch (Parse.parse(program)) {
   | Ok((ast, _)) => Untyped_ast.print(ast) |> print_newline; Some(ast)
-  | Err((e, sp)) => Parse.Error.print_spanned(e, sp) |> print_newline; None
+  | Error((e, sp)) => Parse.Error.print_spanned(e, sp) |> print_newline; None
   };
   switch ast {
   | Some(ast) =>
