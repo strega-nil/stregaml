@@ -16,4 +16,4 @@ depends: [
   "re"
   "pred"
 ]
-available: [ ocaml-version >= "4.02" & ocaml-version < "4.05" ]
+available: [ ocaml-version >= "4.03" ]
