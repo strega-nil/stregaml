@@ -107,7 +107,7 @@ let rec next_token = (lex) => {
       switch (peek_ch()) {
       | Some((ch, sp')) when is_ident_continue(ch) =>
         eat_ch();
-        push(buff, ch);
+        buff |> push(ch);
         helper(idx + 1, Spanned.union(sp, sp'));
       | Some(_)
       | None =>
@@ -126,7 +126,7 @@ let rec next_token = (lex) => {
         | id => Ok((Token.Identifier(id), sp))
         };
       };
-    push(buff, fst);
+    buff |> push(fst);
     helper(1, sp);
   };
   let lex_operator = (fst, sp) => {
@@ -178,7 +178,7 @@ let rec next_token = (lex) => {
         switch (peek_ch()) {
         | Some((ch, sp')) when is_operator_continue(ch) =>
           eat_ch();
-          push(buff, ch);
+          buff |> push(ch);
           helper(idx + 1, Spanned.union(sp, sp'));
         | Some(_)
         | None =>
@@ -191,7 +191,7 @@ let rec next_token = (lex) => {
           | op => Ok((Token.Operator(op), sp))
           }
         };
-      push(buff, fst);
+      buff |> push(fst);
       helper(1, sp);
     };
   };
@@ -212,26 +212,26 @@ let rec next_token = (lex) => {
           (2, 0, Spanned.union(sp, sp'));
         | Some(_)
         | None =>
-          push(buff, '0');
+          buff |> push('0');
           (10, 1, sp);
         };
       } else {
-        push(buff, fst);
+        buff |> push(fst);
         (10, 1, sp);
       };
     let rec helper = (idx, sp, space_allowed) =>
       switch (peek_ch()) {
       | Some((ch, sp')) when is_number_continue(ch, base) =>
         eat_ch();
-        push(buff, ch);
+        buff |> push(ch);
         helper(idx + 1, Spanned.union(sp, sp'), true);
       | Some((' ', sp')) =>
         eat_ch();
-        push(buff, ' ');
+        buff |> push(' ');
         helper(idx, Spanned.union(sp, sp'), false);
       | Some((ch, sp')) when space_allowed && (is_number_continue(ch, 10) || is_ident_continue(ch)) =>
         eat_ch();
-        push(buff, ch);
+        buff |> push(ch);
         Error((
           Error.Malformed_number_literal(to_string(buff)),
           Spanned.union(sp, sp')));
@@ -250,7 +250,7 @@ let rec next_token = (lex) => {
         /* TODO(ubsan): fix overflow */
         let rec to_int = (idx, acc) =>
           if (idx < length(buff)) {
-            let ch = get(buff, idx);
+            let ch = buff |> get(idx);
             if (ch == ' ') {
               to_int(idx + 1, acc);
             } else {
