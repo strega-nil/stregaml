@@ -1,3 +1,5 @@
+module Spanned = Cafec_spanned;
+
 open Spanned.Prelude;
 
 type builder =

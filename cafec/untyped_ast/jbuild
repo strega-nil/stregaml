@@ -1,6 +1,6 @@
 (jbuild_version 1)
 
 (library
-  ((name untyped_ast)
-  (libraries (pred spanned))
+  ((name cafec_untyped_ast)
+  (libraries (pred cafec_spanned))
   (flags (:standard -w @a-4))))

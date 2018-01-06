@@ -1,4 +1,4 @@
-open Spanned.Prelude;
+open Cafec_spanned.Prelude;
 
 module Prelude = {
   type keyword =

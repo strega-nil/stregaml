@@ -1,6 +1,6 @@
 (jbuild_version 1)
 
 (library
-  ((name spanned)
+  ((name cafec_spanned)
   (libraries (pred))
   (flags (:standard -w @a))))

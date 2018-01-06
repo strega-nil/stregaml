@@ -2,7 +2,7 @@
 
 (executables
  ((names (main))
-  (libraries (pred parse spanned untyped_ast typed_ast))
+  (libraries (pred cafec_parse cafec_spanned cafec_untyped_ast cafec_typed_ast))
   (flags (:standard -w @a))))
 
 (install
