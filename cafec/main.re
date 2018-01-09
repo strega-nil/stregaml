@@ -1,3 +1,7 @@
+module Parse = Cafec_parse;
+module Untyped_ast = Cafec_untyped_ast;
+module Typed_ast = Cafec_typed_ast;
+
 let program = {|
 func fib(x: int) -> int {
   if (LESS_EQ(x, 1)) {

@@ -1,5 +1,7 @@
 open Pred;
 
+module Spanned = Cafec_spanned;
+
 open Spanned.Prelude;
 open Error.Monad_spanned;
 
@@ -232,9 +234,7 @@ let rec next_token = (lex) => {
       | Some((ch, sp')) when space_allowed && (is_number_continue(ch, 10) || is_ident_continue(ch)) =>
         eat_ch();
         buff |> push(ch);
-        Error((
-          Error.Malformed_number_literal(to_string(buff)),
-          Spanned.union(sp, sp')));
+        Error((Error.Malformed_number_literal, Spanned.union(sp, sp')));
       | Some(_)
       | None =>
         let char_to_int = (ch) =>

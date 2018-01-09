@@ -1,6 +1,7 @@
 (jbuild_version 1)
 
 (library
-  ((name typed_ast)
-  (libraries (pred spanned untyped_ast))
+  ((name cafec_typed_ast)
+  (libraries (pred ppx_let cafec_spanned cafec_untyped_ast))
+  (preprocess (pps (ppx_let)))
   (flags (:standard -w @a-4-37-27-32))))

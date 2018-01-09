@@ -1,3 +1,5 @@
+module Spanned = Cafec_spanned;
+module Untyped_ast = Cafec_untyped_ast;
 open Spanned.Prelude;
 open Error.Monad_result;
 
@@ -93,24 +95,21 @@ module Value {
             switch params {
             | [] => pure([])
             | [(name, ty), ...params] =>
-              Type.make(ty, ty_ctxt)
-              >>= (ty) => get_params(params)
-              >>= (params) => pure([(name, ty), ...params])
+              let%bind ty = Type.make(ty, ty_ctxt);
+              let%bind params = get_params(params);
+              pure([(name, ty), ...params])
             };
-          let ret_ty = switch ret_ty {
+          let%bind ret_ty = switch ret_ty {
           | None => pure(Type.unit_)
           | Some(ty) => Type.make(ty, ty_ctxt)
           };
-          ret_ty
-          >>= (ret_ty) => get_params(params)
-          >>= (params) => {
-            let dcl = ({params, ret_ty}, sp);
-            helper(funcs)
-            >>= (tl) => pure([(name, dcl), ...tl])
-          }
+          let%bind params = get_params(params);
+          let dcl = ({params, ret_ty}, sp);
+          let%bind tl = helper(funcs);
+          pure([(name, dcl), ...tl])
         };
-      helper(funcs)
-      >>= (inner) => pure(Context(inner));
+      let%bind inner = helper(funcs);
+      pure(Context(inner));
     };
   };
 
@@ -132,23 +131,22 @@ module Value {
     | E.Bool_literal(b) => Ok((Bool_literal(b), sp))
     | E.Integer_literal(i) => Ok((Integer_literal(i), sp))
     | E.If_else(cond, thn, els) =>
-      make_expr(cond, decl, ctxt, ty_ctxt)
-      >>= (cond) => make_expr(thn, decl, ctxt, ty_ctxt)
-      >>= (thn) => make_expr(els, decl, ctxt, ty_ctxt)
-      >>= (els) => Ok((If_else(cond, thn, els), sp))
+      let%bind cond = make_expr(cond, decl, ctxt, ty_ctxt);
+      let%bind thn = make_expr(thn, decl, ctxt, ty_ctxt);
+      let%bind els = make_expr(els, decl, ctxt, ty_ctxt);
+      Ok((If_else(cond, thn, els), sp))
     | E.Call(callee, args) =>
-      make_expr(callee, decl, ctxt, ty_ctxt)
-      >>= (callee) => {
-        let rec helper = (lst) =>
-          switch lst {
-          | [x, ...xs] =>
-            make_expr(x, decl, ctxt, ty_ctxt)
-            >>= (x) => helper(xs)
-            >>= (xs) => Ok([x, ...xs])
-          | [] => Ok([])
-          };
-        helper(args);
-      } >>= (args) => Ok((Call(callee, args), sp))
+      let%bind callee = make_expr(callee, decl, ctxt, ty_ctxt);
+      let rec helper = (lst) =>
+        switch lst {
+        | [x, ...xs] =>
+          let%bind x = make_expr(x, decl, ctxt, ty_ctxt);
+          let%bind xs = helper(xs);
+          Ok([x, ...xs])
+        | [] => Ok([])
+        };
+      let%bind args = helper(args);
+      Ok((Call(callee, args), sp))
     | E.Variable(name) =>
       {
         let ({params, _}, _) = decl;
@@ -177,8 +175,8 @@ module Value {
     | Some((decl, _)) => decl
     | None => assert false
     };
-    make_expr(unt_func.F.expr, ty, ctxt, ty_ctxt)
-    >>= (expr) => Ok(({ty, expr}, sp))
+    let%bind expr = make_expr(unt_func.F.expr, ty, ctxt, ty_ctxt);
+    Ok(({ty, expr}, sp))
   };
 };
 
@@ -188,18 +186,16 @@ type t = {
 
 let make = (unt_ast) => {
   let module U = Untyped_ast;
-  Type.make_context([])
-  >>= (ty_ctxt) => Value.Context.make(unt_ast.U.funcs, ty_ctxt)
-  >>= (func_ctxt) => {
-    let rec helper = (funcs) =>
-      switch funcs {
-      | [func, ...funcs] =>
-        Value.make_func(func, func_ctxt, ty_ctxt)
-        >>= (func) => helper(funcs)
-        >>= (funcs) => pure([func, ...funcs])
-      | [] => pure([])
-      };
-    helper(unt_ast.U.funcs)
-    >>= (funcs) => pure({funcs: funcs})
-  }
+  let%bind ty_ctxt = Type.make_context([]);
+  let%bind func_ctxt = Value.Context.make(unt_ast.U.funcs, ty_ctxt);
+  let rec helper = (funcs) =>
+    switch funcs {
+    | [func, ...funcs] =>
+      let%bind func = Value.make_func(func, func_ctxt, ty_ctxt);
+      let%bind funcs = helper(funcs);
+      pure([func, ...funcs])
+    | [] => pure([])
+    };
+  let%bind funcs = helper(unt_ast.U.funcs);
+  pure({funcs: funcs})
 };

@@ -1,3 +1,4 @@
+module Spanned = Cafec_spanned;
 open Spanned.Prelude;
 
 type expected_token =
@@ -10,7 +11,7 @@ type expected_token =
 
 type t =
   | Unclosed_comment
-  | Malformed_number_literal(string)
+  | Malformed_number_literal
   | Reserved_token(string)
   | Unrecognized_character(char)
   | Unexpected_token(expected_token, Token.t);
@@ -29,7 +30,7 @@ let print_expected = (exp) =>
 
 let print = (err) =>
   switch err {
-  | Malformed_number_literal(n) => Printf.printf("malformed number literal: %s", n)
+  | Malformed_number_literal => Printf.printf("malformed number literal")
   | Reserved_token(tok) => Printf.printf("reserved token: %s", tok)
   | Unrecognized_character(ch) =>
     Printf.printf("unrecognized character: `%c` (%d)", ch, Char.code(ch))

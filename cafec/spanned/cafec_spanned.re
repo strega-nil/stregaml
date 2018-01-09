@@ -44,7 +44,7 @@ let print_span
       end_column)
   };
 
-module Monad(E: Pred.Type): {
+module Monad(E: Type): {
   include (
     Interfaces.Monad_result
       with type t('o) = spanned_result('o, E.t)
@@ -75,4 +75,8 @@ module Monad(E: Pred.Type): {
   let pure = (o) => Ok((o, made_up));
   let pure_err = (e) => Error((e, made_up));
   let with_span = (sp) => Ok(((), sp));
+
+  module Let_syntax = {
+    let bind = (x, ~f) => x >>= f;
+  };
 };

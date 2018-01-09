@@ -15,5 +15,6 @@ depends: [
   "reason"  {= "2.0.0"}
   "re"
   "pred"
+  "ppx_let"
 ]
 available: [ ocaml-version >= "4.03" ]
