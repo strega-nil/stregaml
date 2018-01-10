@@ -3,7 +3,7 @@ module Error = Error;
 module Spanned = Cafec_spanned;
 module Untyped_ast = Cafec_parse.Ast;
 open Spanned.Prelude;
-open Error.Monad_result;
+open Error.Monad_spanned;
 
 module Type = {
   module Ctxt: {
@@ -16,19 +16,18 @@ module Type = {
   };
   include Ctxt;
 
-  type builder =
+  type t =
     | Unit
     | Bool
-    | Int
-  and t = spanned(builder);
+    | Int;
 
-  let unit_ = (Unit, Spanned.made_up);
-  let bool_ = (Bool, Spanned.made_up);
-  let int_ = (Int, Spanned.made_up);
+  let unit_ = Unit;
+  let bool_ = Bool;
+  let int_ = Int;
 
   /* NOTE(ubsan): this should *actually* be error handling */
   let make
-    : (Untyped_ast.Type.t, context) => result(t, Error.t)
+    : (Untyped_ast.Type.t, context) => spanned_result(t, Error.t)
     = (unt_ty, _ctxt) =>
   {
     module T = Untyped_ast.Type;
@@ -52,7 +51,7 @@ module Value {
     | Builtin_less_eq
     | Builtin_add
     | Builtin_sub;
-  type expr_builder =
+  type expr =
     | Unit_literal
     | Bool_literal(bool)
     | Integer_literal(int)
@@ -60,17 +59,16 @@ module Value {
     | Call(expr, list(expr))
     | Builtin(builtin)
     | Global_function(int)
-    | Parameter(int)
-  and expr = spanned(expr_builder);
+    | Parameter(int);
 
-  type decl_builder = {
+  type decl = {
     params: list((string, Type.t)),
     ret_ty: Type.t
-  } and decl = spanned(decl_builder);
-  type func_builder = {
-    ty: decl,
-    expr: expr
-  } and func = spanned(func_builder);
+  };
+  type func = {
+    ty: spanned(decl),
+    expr: spanned(expr)
+  };
 
   module Context = {
     type t =

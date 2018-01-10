@@ -152,7 +152,7 @@ and parse_follow = (parser, (initial, sp)) => {
 and parse_type = (parser) => {
   {
     let%bind name = get_ident(parser);
-    pure(Ast.Type.named(name))
+    pure(Ast.Type.Named(name))
   } |> wrap_sok
 }
 and parse_return_type = (parser) => {
@@ -236,11 +236,11 @@ let parse_item: t => spanned_result(option(item), Error.t) = (parser) =>
   switch%bind (next_token(parser)) {
   | Token.Keyword(Token.Keyword_func) =>
     let%bind name = get_ident(parser);
-    let%bind parms = parse_parameter_list(parser);
+    let%bind params = parse_parameter_list(parser);
     let%bind ret_ty = parse_return_type(parser);
     let%bind expr = parse_block(parser);
     let%bind () = get_specific(parser, Token.Semicolon);
-    pure(Some(Item_func(Ast.Function.make(name, parms, ret_ty, expr))));
+    pure(Some(Item_func(Ast.Function.({name, params, ret_ty, expr}))));
   | Token.Eof => pure(None)
   | tok =>
     pure_err(Error.Unexpected_token(Error.Expected_item_declarator, tok))

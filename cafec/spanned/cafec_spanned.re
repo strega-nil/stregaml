@@ -13,29 +13,25 @@ module Prelude = {
 
 include Prelude;
 
-let made_up: span = {start_line: 0, start_column: 0, end_line: 0, end_column: 0};
+let made_up = {start_line: 0, start_column: 0, end_line: 0, end_column: 0};
 
-let is_made_up: span => bool = (sp) => sp == made_up;
+let is_made_up = (sp) => sp == made_up;
 
-let union: (span, span) => span =
-  (fst, snd) =>
-    if (is_made_up(fst)) {
-      snd;
-    } else if (is_made_up(snd)) {
-      fst;
-    } else {
-      {
-        start_line: fst.start_line,
-        start_column: fst.start_column,
-        end_line: snd.end_line,
-        end_column: snd.end_column
-      };
+let union = (fst, snd) =>
+  if (is_made_up(fst)) {
+    snd;
+  } else if (is_made_up(snd)) {
+    fst;
+  } else {
+    {
+      start_line: fst.start_line,
+      start_column: fst.start_column,
+      end_line: snd.end_line,
+      end_column: snd.end_column
     };
+  };
 
-let print_span
-  : span => unit
-  = ({start_line, start_column, end_line, end_column})
-  => {
+let print_span = ({start_line, start_column, end_line, end_column}) => {
     Printf.printf(
       "(%d, %d) to (%d, %d)",
       start_line,
@@ -44,14 +40,7 @@ let print_span
       end_column)
   };
 
-module Monad(E: Type): {
-  include (
-    Interfaces.Monad_result
-      with type t('o) = spanned_result('o, E.t)
-      and type error = E.t);
-
-  let with_span: span => t(unit);
-} = {
+module Monad(E: Type) = {
   type t('o) = spanned_result('o, E.t);
   type error = E.t;
 

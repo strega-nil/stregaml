@@ -2,11 +2,10 @@ module Spanned = Cafec_spanned;
 
 open Spanned.Prelude;
 
-type builder =
-  | Multiple_function_definitions(string, span)
-and t = spanned(builder);
+type t =
+  | Multiple_function_definitions(string, span);
 
-module Monad_result = Pred.Result.Monad({type nonrec t = t;});
+module Monad_spanned = Spanned.Monad({type nonrec t = t;});
 
 let print = (self) =>
   switch self {

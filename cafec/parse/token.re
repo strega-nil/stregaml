@@ -63,7 +63,7 @@ let print = (tok) =>
   | Eof => print_string("end of file")
   };
 
-let print_spanned = (tok, sp) => {
+let print_spanned = ((tok, sp)) => {
   print(tok);
   Printf.printf(
     " from (%d, %d) to (%d, %d)",
