@@ -42,7 +42,7 @@ let print = (err) =>
     Token.print(tok);
   };
 
-let print_spanned = (err, sp) => {
+let print_spanned = ((err, sp)) => {
   print(err);
   Printf.printf(
     " from (%d, %d) to (%d, %d)",

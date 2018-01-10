@@ -1,5 +1,6 @@
+open Pred;
+
 module Parse = Cafec_parse;
-module Untyped_ast = Cafec_untyped_ast;
 module Typed_ast = Cafec_typed_ast;
 
 let program = {|
@@ -16,16 +17,23 @@ func main() -> int {
 |};
 
 let main = () => {
-  let ast = switch (Parse.parse(program)) {
-  | Ok((ast, _)) => Untyped_ast.print(ast) |> print_newline; Some(ast)
-  | Error((e, sp)) => Parse.Error.print_spanned(e, sp) |> print_newline; None
-  };
-  switch ast {
-  | Some(ast) =>
-    Typed_ast.make(ast) |> ignore;
-    Untyped_ast.run(ast);
-  | None => ()
-  }
+  let (unt_ast, _) =
+    Parse.parse(program)
+    |> Result.expect((e) => {
+      print_string("Error: ");
+      Parse.Error.print_spanned(e);
+      print_newline();
+      assert false;
+    });
+  let ty_ast =
+    Typed_ast.make(unt_ast)
+    |> Result.expect((e) => {
+      print_string("Error: ");
+      Typed_ast.Error.print_spanned(e);
+      print_newline();
+      assert false;
+    });
+  Typed_ast.run(ty_ast)
 };
 
 main();

@@ -7,7 +7,7 @@ open Error.Monad_spanned;
 
 module Error = Error;
 
-module Ast = Cafec_untyped_ast;
+module Ast = Ast;
 
 type t = {
   lexer: Lex.t,

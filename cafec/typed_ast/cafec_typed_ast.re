@@ -1,5 +1,7 @@
+module Error = Error;
+
 module Spanned = Cafec_spanned;
-module Untyped_ast = Cafec_untyped_ast;
+module Untyped_ast = Cafec_parse.Ast;
 open Spanned.Prelude;
 open Error.Monad_result;
 
@@ -184,7 +186,7 @@ type t = {
   funcs: list(Value.func)
 };
 
-let make = (unt_ast) => {
+let make = unt_ast => {
   let module U = Untyped_ast;
   let%bind ty_ctxt = Type.make_context([]);
   let%bind func_ctxt = Value.Context.make(unt_ast.U.funcs, ty_ctxt);
@@ -199,3 +201,75 @@ let make = (unt_ast) => {
   let%bind funcs = helper(unt_ast.U.funcs);
   pure({funcs: funcs})
 };
+
+let run = (self) => ();
+
+/*
+type builtin =
+  | Builtin_add
+  | Builtin_sub
+  | Builtin_less_eq;
+
+type value =
+  | Value_unit
+  | Value_bool(bool)
+  | Value_integer(int)
+  | Value_function(int)
+  | Value_builtin(builtin);
+
+let run = (self) => {
+  let rec call = (func, args, ctxt) => {
+    let callee_ctxt = ref([]);
+    Iter.zip(List.iter(func.Value.params), List.iter(args))
+    |> Iter.for_each(
+      (((name, _), expr)) =>
+        callee_ctxt := [(name, eval(expr, ctxt)), ...callee_ctxt^]
+    );
+    eval(func.Value.expr, callee_ctxt^)
+  }
+  and eval = ((expr, _), ctxt) => {
+    switch expr {
+    | Value.Unit_literal => Value_unit
+    | Value.Bool_literal(b) => Value_bool(b)
+    | Value.Integer_literal(n) => Value_integer(n)
+    | Value.If_else(cond, thn, els) =>
+      switch (eval(cond, ctxt)) {
+      | Value_bool(true) => eval(thn, ctxt)
+      | Value_bool(false) => eval(els, ctxt)
+      | _ => assert false
+      }
+    | Expr.Variable(s) => find_in_ctxt(s, ctxt)
+    | Expr.Call(e, args) =>
+      switch (eval(e, ctxt)) {
+      | Value_function(f) => call(f, args, ctxt)
+      | Value_builtin(b) =>
+        let (a0, a1) = switch args {
+        | [a0, a1] => (a0, a1)
+        | _ => assert false
+        };
+        let (lhs, rhs) = switch (eval(a0, ctxt), eval(a1, ctxt)) {
+        | (Value_integer(lhs), Value_integer(rhs)) => (lhs, rhs)
+        | _ => assert false
+        };
+        switch b {
+        | Builtin_add => Value_integer(lhs + rhs)
+        | Builtin_sub => Value_integer(lhs - rhs)
+        | Builtin_less_eq => Value_bool(lhs <= rhs)
+        }
+      | _ => assert false
+      }
+    }
+  };
+
+  let main = switch(find_in_ctxt("main", [])) {
+  | Value_function(f) => f
+  | _ => assert false
+  };
+  switch (call(main, [], [])) {
+  | Value_integer(n) => Printf.printf("main returned %d\n", n)
+  | Value_bool(true) => print_string("main returned true\n")
+  | Value_bool(false) => print_string("main returned false\n")
+  | _ => assert false
+  }
+};
+*/

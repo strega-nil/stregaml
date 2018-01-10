@@ -1,6 +1,0 @@
-(jbuild_version 1)
-
-(library
-  ((name cafec_untyped_ast)
-  (libraries (pred cafec_spanned))
-  (flags (:standard -w @a-4))))

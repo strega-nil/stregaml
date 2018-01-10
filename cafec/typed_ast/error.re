@@ -15,3 +15,13 @@ let print = (self) =>
     Spanned.print_span(sp);
     Printf.printf(") defined multiple times");
   };
+
+let print_spanned = ((self, sp)) =>
+  switch self {
+  | Multiple_function_definitions(name, sp') =>
+    Printf.printf("function %s (found from ", name);
+    Spanned.print_span(sp');
+    print_string(") defined multiple times (at ");
+    Spanned.print_span(sp);
+    print_char(')');
+  };
