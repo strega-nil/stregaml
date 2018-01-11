@@ -9,10 +9,11 @@ module Type = {
   module Ctxt: {
     type context;
     let make_context
-      : list(Untyped_ast.Type_declaration.t) => result(context, Error.t);
+      : list(Untyped_ast.Type_declaration.t)
+        => spanned_result(context, Error.t);
   } = {
     type context = unit;
-    let make_context = (_) => Ok();
+    let make_context = (_) => pure();
   };
   include Ctxt;
 
@@ -34,11 +35,11 @@ module Type = {
     switch unt_ty {
     | (T.Named(name), _) =>
       if (name == "unit") {
-        Ok(unit_)
+        pure(unit_)
       } else if (name == "bool") {
-        Ok(bool_)
+        pure(bool_)
       } else if (name == "int") {
-        Ok(int_)
+        pure(int_)
       } else {
         assert false
       }
@@ -72,7 +73,7 @@ module Value {
 
   module Context = {
     type t =
-      | Context(list((string, decl)));
+      | Context(list((string, spanned(decl))));
 
     let find = (name, Context(ctxt)) => {
       let rec helper = (ctxt, idx) =>
@@ -142,8 +143,8 @@ module Value {
         | [x, ...xs] =>
           let%bind x = make_expr(x, decl, ctxt, ty_ctxt);
           let%bind xs = helper(xs);
-          Ok([x, ...xs])
-        | [] => Ok([])
+          pure([x, ...xs])
+        | [] => pure([])
         };
       let%bind args = helper(args);
       Ok((Call(callee, args), sp))
@@ -175,8 +176,10 @@ module Value {
     | Some((decl, _)) => decl
     | None => assert false
     };
-    let%bind expr = make_expr(unt_func.F.expr, ty, ctxt, ty_ctxt);
-    Ok(({ty, expr}, sp))
+    switch (make_expr(unt_func.F.expr, ty, ctxt, ty_ctxt)) {
+    | Ok(expr) => Ok(({ty, expr}, sp))
+    | Error(e) => Error(e)
+    }
   };
 };
 

@@ -25,7 +25,7 @@ let main = () => {
       print_newline();
       assert false;
     });
-  let ty_ast =
+  let (ty_ast, _) =
     Typed_ast.make(unt_ast)
     |> Result.expect((e) => {
       print_string("Error: ");
