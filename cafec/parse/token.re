@@ -6,7 +6,7 @@ module Prelude = {
     | Keyword_false
     | Keyword_if
     | Keyword_else
-    | Keyword_func
+    | Keyword_let
     | Keyword_underscore;
   type t =
     | Open_paren
@@ -33,7 +33,7 @@ let print_keyword = (kw) =>
   | Keyword_false => print_string("false")
   | Keyword_if => print_string("if")
   | Keyword_else => print_string("else")
-  | Keyword_func => print_string("func")
+  | Keyword_let => print_string("let")
   | Keyword_underscore => print_string("_")
   };
 

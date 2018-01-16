@@ -155,8 +155,8 @@ and parse_type = (parser) => {
     pure(Ast.Type.Named(name))
   } |> wrap_sok
 }
-and parse_return_type = (parser) => {
-  switch%bind (maybe_get_specific(parser, Token.Arrow)) {
+and maybe_parse_type_annotation = (parser) => {
+  switch%bind (maybe_get_specific(parser, Token.Colon)) {
   | Some() =>
     let%bind ty = parse_type(parser);
     pure(Some(ty))
@@ -234,11 +234,12 @@ and parse_block = (parser) => {
 
 let parse_item: t => spanned_result(option(item), Error.t) = (parser) =>
   switch%bind (next_token(parser)) {
-  | Token.Keyword(Token.Keyword_func) =>
+  | Token.Keyword(Token.Keyword_let) =>
     let%bind name = get_ident(parser);
     let%bind params = parse_parameter_list(parser);
-    let%bind ret_ty = parse_return_type(parser);
-    let%bind expr = parse_block(parser);
+    let%bind ret_ty = maybe_parse_type_annotation(parser);
+    let%bind () = get_specific(parser, Token.Equals);
+    let%bind expr = parse_expression(parser);
     let%bind () = get_specific(parser, Token.Semicolon);
     pure(Some(Item_func(Ast.Function.({name, params, ret_ty, expr}))));
   | Token.Eof => pure(None)

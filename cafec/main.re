@@ -4,16 +4,13 @@ module Parse = Cafec_parse;
 module Typed_ast = Cafec_typed_ast;
 
 let program = {|
-func fib(x: int) -> int {
+let fib(x: int): int =
   if (LESS_EQ(x, 1)) {
     x
   } else {
     ADD(fib(SUB(x, 1)), fib(SUB(x, 2)))
-  }
-};
-func main() -> int {
-  fib(7)
-};
+  };
+let main(): int = fib(7);
 |};
 
 let main = () => {
