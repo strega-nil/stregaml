@@ -203,7 +203,7 @@ let make = unt_ast => {
   pure({funcs: funcs})
 };
 
-let run = (self) => ();
+let run = (_self) => ();
 
 /*
 type builtin =

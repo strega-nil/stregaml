@@ -3,7 +3,7 @@
 (executables
  ((names (main))
   (libraries (pred cafec_parse cafec_spanned cafec_typed_ast))
-  (flags (:standard -w @a))))
+  (flags (:standard -w @a-4 -open Pred))))
 
 (install
  ((section bin)

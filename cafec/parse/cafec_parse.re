@@ -1,5 +1,3 @@
-open Pred;
-
 module Spanned = Cafec_spanned;
 open Spanned.Prelude;
 

@@ -4,4 +4,4 @@
   ((name cafec_parse)
   (libraries (pred ppx_let cafec_spanned))
   (preprocess (pps (ppx_let)))
-  (flags (:standard -w @a-4-60-32-37-34))))
+  (flags (:standard -w @a-4 -open Pred))))

@@ -1,5 +1,3 @@
-open Pred;
-
 module Parse = Cafec_parse;
 module Typed_ast = Cafec_typed_ast;
 
