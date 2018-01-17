@@ -13,7 +13,7 @@ module Type = {
         => spanned_result(context, Error.t);
   } = {
     type context = unit;
-    let make_context = (_) => pure();
+    let make_context = (_) => wrap();
   };
   include Ctxt;
 
@@ -35,11 +35,11 @@ module Type = {
     switch unt_ty {
     | (T.Named(name), _) =>
       if (name == "unit") {
-        pure(unit_)
+        wrap(unit_)
       } else if (name == "bool") {
-        pure(bool_)
+        wrap(bool_)
       } else if (name == "int") {
-        pure(int_)
+        wrap(int_)
       } else {
         assert false
       }
@@ -90,27 +90,27 @@ module Value {
 
       let rec helper = (funcs) =>
         switch funcs {
-        | [] => pure([])
+        | [] => wrap([])
         | [({F.name, F.params, F.ret_ty, _}, sp), ...funcs] =>
           let rec get_params = (params) =>
             switch params {
-            | [] => pure([])
+            | [] => wrap([])
             | [(name, ty), ...params] =>
               let%bind ty = Type.make(ty, ty_ctxt);
               let%bind params = get_params(params);
-              pure([(name, ty), ...params])
+              wrap([(name, ty), ...params])
             };
           let%bind ret_ty = switch ret_ty {
-          | None => pure(Type.unit_)
+          | None => wrap(Type.unit_)
           | Some(ty) => Type.make(ty, ty_ctxt)
           };
           let%bind params = get_params(params);
           let dcl = ({params, ret_ty}, sp);
           let%bind tl = helper(funcs);
-          pure([(name, dcl), ...tl])
+          wrap([(name, dcl), ...tl])
         };
       let%bind inner = helper(funcs);
-      pure(Context(inner));
+      wrap(Context(inner));
     };
   };
 
@@ -143,8 +143,8 @@ module Value {
         | [x, ...xs] =>
           let%bind x = make_expr(x, decl, ctxt, ty_ctxt);
           let%bind xs = helper(xs);
-          pure([x, ...xs])
-        | [] => pure([])
+          wrap([x, ...xs])
+        | [] => wrap([])
         };
       let%bind args = helper(args);
       Ok((Call(callee, args), sp))
@@ -196,11 +196,11 @@ let make = unt_ast => {
     | [func, ...funcs] =>
       let%bind func = Value.make_func(func, func_ctxt, ty_ctxt);
       let%bind funcs = helper(funcs);
-      pure([func, ...funcs])
-    | [] => pure([])
+      wrap([func, ...funcs])
+    | [] => wrap([])
     };
   let%bind funcs = helper(unt_ast.U.funcs);
-  pure({funcs: funcs})
+  wrap({funcs: funcs})
 };
 
 let run = (_self) => ();

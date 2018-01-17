@@ -59,8 +59,8 @@ module Monad(E: Interfaces.Type) = {
       }
     | Error((e, sp)) => Error((e, sp))
     };
-  let pure = (o) => Ok((o, made_up));
-  let pure_err = (e) => Error((e, made_up));
+  let wrap = (o) => Ok((o, made_up));
+  let wrap_err = (e) => Error((e, made_up));
   let with_span = (sp) => Ok(((), sp));
 
   module Let_syntax = {

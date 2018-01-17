@@ -60,26 +60,26 @@ type item =
 
 let get_ident = (parser) =>
   switch%bind (next_token(parser)) {
-  | Token.Identifier(id) => pure(id)
-  | tok => pure_err(Error.Unexpected_token(Error.Expected_identifier, tok))
+  | Token.Identifier(id) => wrap(id)
+  | tok => wrap_err(Error.Unexpected_token(Error.Expected_identifier, tok))
   };
 
 let maybe_get_specific = (parser, token) => {
   let%bind tok = peek_token(parser);
   if (tok == token) {
     eat_token(parser);
-    pure(Some())
+    wrap(Some())
   } else {
-    pure(None)
+    wrap(None)
   };
 };
 
 let get_specific = (parser, token) =>
   switch%bind (maybe_get_specific(parser, token)) {
-  | Some() => pure(())
+  | Some() => wrap(())
   | None =>
     let%bind tok = next_token(parser);
-    pure_err(Error.Unexpected_token(Error.Expected_specific(token), tok))
+    wrap_err(Error.Unexpected_token(Error.Expected_specific(token), tok))
   };
 
 let rec maybe_parse_expression = (parser) => {
@@ -87,17 +87,17 @@ let rec maybe_parse_expression = (parser) => {
     switch%bind (peek_token(parser)) {
     | Token.Keyword(Token.Keyword_true) =>
       eat_token(parser);
-      pure(Some(Ast.Expr.Bool_literal(true)))
+      wrap(Some(Ast.Expr.Bool_literal(true)))
     | Token.Keyword(Token.Keyword_false) =>
       eat_token(parser);
-      pure(Some(Ast.Expr.Bool_literal(false)))
+      wrap(Some(Ast.Expr.Bool_literal(false)))
     | Token.Integer_literal(n) =>
       eat_token(parser);
-      pure(Some(Ast.Expr.Integer_literal(n)))
+      wrap(Some(Ast.Expr.Integer_literal(n)))
     | Token.Open_paren =>
       eat_token(parser);
       let%bind () = get_specific(parser, Token.Close_paren);
-      pure(Some(Ast.Expr.Unit_literal))
+      wrap(Some(Ast.Expr.Unit_literal))
     | Token.Keyword(Token.Keyword_if) =>
       eat_token(parser);
       let%bind () = get_specific(parser, Token.Open_paren);
@@ -106,25 +106,25 @@ let rec maybe_parse_expression = (parser) => {
       let%bind thn = parse_block(parser);
       let%bind () = get_specific(parser, Token.Keyword(Token.Keyword_else));
       let%bind els = parse_block(parser);
-      pure(Some(Ast.Expr.If_else(cond, thn, els)))
+      wrap(Some(Ast.Expr.If_else(cond, thn, els)))
     | Token.Identifier(s) =>
       eat_token(parser);
-      pure(Some(Ast.Expr.Variable(s)))
-    | _ => pure(None)
+      wrap(Some(Ast.Expr.Variable(s)))
+    | _ => wrap(None)
     };
   switch%bind (wrap_opt_sok(initial)) {
   | Some(i) =>
     let%bind x = parse_follow(parser, i);
-    pure(Some(x))
-  | None => pure(None)
+    wrap(Some(x))
+  | None => wrap(None)
   }
 }
 and parse_expression = (parser) =>
   switch%bind (maybe_parse_expression(parser)) {
-  | Some(expr) => pure(expr)
+  | Some(expr) => wrap(expr)
   | None =>
     let%bind tok = next_token(parser);
-    pure_err(Error.Unexpected_token(Error.Expected_expression, tok))
+    wrap_err(Error.Unexpected_token(Error.Expected_expression, tok))
   }
 and parse_follow = (parser, (initial, sp)) => {
   /* this function deals with spans weirdly */
@@ -134,98 +134,98 @@ and parse_follow = (parser, (initial, sp)) => {
   let%bind (initial, cont, sp) = switch tok {
   | Token.Open_paren =>
     let%bind (args, sp') = parse_argument_list(parser);
-    pure((Ast.Expr.Call((initial, sp), args), true, Spanned.union(sp, sp')))
+    wrap((Ast.Expr.Call((initial, sp), args), true, Spanned.union(sp, sp')))
   | tok when is_expression_end(tok) =>
-    pure((initial, false, sp))
+    wrap((initial, false, sp))
   | tok =>
-    pure_err(
+    wrap_err(
       (Error.Unexpected_token(Error.Expected_expression_follow, tok), tok_sp))
   };
   if (cont) {
     parse_follow(parser, (initial, sp))
   } else {
-    pure(((initial, sp), sp))
+    wrap(((initial, sp), sp))
   }
 }
 and parse_type = (parser) => {
   {
     let%bind name = get_ident(parser);
-    pure(Ast.Type.Named(name))
+    wrap(Ast.Type.Named(name))
   } |> wrap_sok
 }
 and maybe_parse_type_annotation = (parser) => {
   switch%bind (maybe_get_specific(parser, Token.Colon)) {
   | Some() =>
     let%bind ty = parse_type(parser);
-    pure(Some(ty))
-  | None => pure(None)
+    wrap(Some(ty))
+  | None => wrap(None)
   }
 }
 and parse_parameter_list = (parser) => {
   /* TODO(ubsan): maybe abstract out list parsing? */
   let rec get_parms = (comma) =>
     switch%bind (peek_token(parser)) {
-    | Token.Close_paren => pure([])
+    | Token.Close_paren => wrap([])
     | Token.Comma =>
       if (comma) {
         eat_token(parser);
         get_parms(false)
       } else {
-        pure_err(Error.Unexpected_token(Error.Expected_expression, Token.Comma))
+        wrap_err(Error.Unexpected_token(Error.Expected_expression, Token.Comma))
       }
     | tok =>
       if (comma) {
-        pure_err(
+        wrap_err(
           Error.Unexpected_token(Error.Expected_specific(Token.Comma), tok))
       } else {
         let%bind name = get_ident(parser);
         let%bind () = get_specific(parser, Token.Colon);
         let%bind ty = parse_type(parser);
         let%bind tl = get_parms(true);
-        pure([(name, ty), ...tl])
+        wrap([(name, ty), ...tl])
       }
     };
   let%bind () = get_specific(parser, Token.Open_paren);
   let%bind parms = get_parms(false);
   let%bind () = get_specific(parser, Token.Close_paren);
-  pure(parms)
+  wrap(parms)
 }
 and parse_argument_list = (parser) => {
   let rec get_args = (comma) =>
     switch%bind (peek_token(parser)) {
-    | Token.Close_paren => pure([])
+    | Token.Close_paren => wrap([])
     | Token.Comma =>
       if (comma) {
         eat_token(parser);
         get_args(false)
       } else {
-        pure_err(Error.Unexpected_token(Error.Expected_expression, Token.Comma))
+        wrap_err(Error.Unexpected_token(Error.Expected_expression, Token.Comma))
       }
     | tok =>
       if (comma) {
-        pure_err(
+        wrap_err(
           Error.Unexpected_token(Error.Expected_specific(Token.Comma), tok))
       } else {
         let%bind expr = parse_expression(parser);
         let%bind tl = get_args(true);
-        pure([expr, ...tl])
+        wrap([expr, ...tl])
       }
     };
   let%bind () = get_specific(parser, Token.Open_paren);
   let%bind args = get_args(false);
   let%bind () = get_specific(parser, Token.Close_paren);
-  pure(args)
+  wrap(args)
 }
 and parse_block = (parser) => {
   let%bind () = get_specific(parser, Token.Open_brace);
   switch%bind (maybe_parse_expression(parser)) {
   | Some(e) =>
     let%bind () = get_specific(parser, Token.Close_brace);
-    pure(e)
+    wrap(e)
   | None =>
     switch%bind (next_token(parser)) {
-    | Token.Close_brace => pure(Ast.Expr.Unit_literal)
-    | tok => pure_err(Error.Unexpected_token(Error.Expected_expression, tok))
+    | Token.Close_brace => wrap(Ast.Expr.Unit_literal)
+    | tok => wrap_err(Error.Unexpected_token(Error.Expected_expression, tok))
     } |> wrap_sok
   }
 };
@@ -239,10 +239,10 @@ let parse_item: t => spanned_result(option(item), Error.t) = (parser) =>
     let%bind () = get_specific(parser, Token.Equals);
     let%bind expr = parse_expression(parser);
     let%bind () = get_specific(parser, Token.Semicolon);
-    pure(Some(Item_func(Ast.Function.({name, params, ret_ty, expr}))));
-  | Token.Eof => pure(None)
+    wrap(Some(Item_func(Ast.Function.({name, params, ret_ty, expr}))));
+  | Token.Eof => wrap(None)
   | tok =>
-    pure_err(Error.Unexpected_token(Error.Expected_item_declarator, tok))
+    wrap_err(Error.Unexpected_token(Error.Expected_item_declarator, tok))
   };
 
 let parse_program: t => spanned_result(Ast.t, Error.t) = (parser) => {
@@ -251,12 +251,12 @@ let parse_program: t => spanned_result(Ast.t, Error.t) = (parser) => {
     switch item {
     | Some(Item_func(func)) =>
       let%bind tl = helper(parser);
-      pure([(func, sp), ...tl])
-    | None => pure([])
+      wrap([(func, sp), ...tl])
+    | None => wrap([])
     };
   };
   let%bind funcs = helper(parser);
-  pure(Ast.make(funcs))
+  wrap(Ast.make(funcs))
 };
 
 let parse = (program) => {

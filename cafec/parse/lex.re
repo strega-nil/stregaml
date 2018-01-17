@@ -136,7 +136,7 @@ let rec next_token = (lex) => {
           switch (next_ch()) {
           | Some(('*', _)) =>
             switch (next_ch()) {
-            | Some(('/', _)) => pure()
+            | Some(('/', _)) => wrap()
             | _ => eat_the_things()
             }
           | Some(('/', sp')) =>
