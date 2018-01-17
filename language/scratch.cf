@@ -1,0 +1,7 @@
+let fib(x: int): int =
+  if (LESS_EQ(x, 1)) {
+    x
+  } else {
+    ADD(fib(SUB(x, 1)), fib(SUB(x, 2)))
+  };
+let main(): int = fib(7);

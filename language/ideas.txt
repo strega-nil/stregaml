@@ -1,0 +1,13 @@
+- modular implicits
+  - http://www.lpw25.net/ml2014.pdf
+- effects like F*
+  - http://www2.imm.dtu.dk/~fnie/Papers/NiNi99tes.pdf
+  - https://www.fstar-lang.org/papers/dm4free/
+  - https://www.fstar-lang.org/papers/mumon/
+- regions/references
+  - http://209.68.42.137/ucsd-pages/Courses/cse227.w03/handouts/cyclone-regions.pdf
+  - https://www.microsoft.com/en-us/research/publication/uniqueness-and-reference-immutability-for-safe-parallelism
+  - http://web.cs.ucla.edu/~palsberg/tba/papers/tofte-talpin-iandc97.pdf
+- just cool
+  - http://www.ccs.neu.edu/home/amal/papers/funtal.pdf
+  - http://www.ccs.neu.edu/home/amal/papers/linking-types.pdf
