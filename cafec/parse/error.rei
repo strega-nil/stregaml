@@ -16,7 +16,7 @@ type t =
   | Unexpected_token(expected_token, Token.t);
 
 module Monad_spanned
-: Interfaces.Result_monad
+: Interfaces.Result_monad.Interface
   with type error = t
   and type t('a) = spanned_result('a, t);
 

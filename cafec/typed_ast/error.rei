@@ -4,7 +4,7 @@ type t =
   | Multiple_function_definitions(string, span);
 
 module Monad_spanned:
-  Interfaces.Result_monad
+  Interfaces.Result_monad.Interface
   with type error = t
   and type t('a) = spanned_result('a, t);
 

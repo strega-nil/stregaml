@@ -39,7 +39,7 @@ let print_span = ({start_line, start_column, end_line, end_column}) => {
   };
 
 module Monad(E: Interfaces.Type) = {
-  include Interfaces.Make_result_monad({
+  include Interfaces.Result_monad.Make({
     type error = E.t;
     type t('o) = spanned_result('o, E.t);
 

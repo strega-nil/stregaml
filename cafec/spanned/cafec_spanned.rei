@@ -21,7 +21,7 @@ let print_span : span => unit;
 
 module Monad(E: Interfaces.Type): {
   include (
-    Interfaces.Result_monad
+    Interfaces.Result_monad.Interface
       with type t('o) = spanned_result('o, E.t)
       and type error = E.t);
 
