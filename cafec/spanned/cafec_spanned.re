@@ -39,31 +39,30 @@ let print_span = ({start_line, start_column, end_line, end_column}) => {
   };
 
 module Monad(E: Interfaces.Type) = {
-  type t('o) = spanned_result('o, E.t);
-  type error = E.t;
+  include Interfaces.Make_result_monad({
+    type error = E.t;
+    type t('o) = spanned_result('o, E.t);
 
-  let (>>=) = (self, f) =>
-    switch self {
-    | Ok((o, sp)) =>
-      switch (f(o)) {
-      | Ok((o', sp')) => Ok((o', union(sp, sp')))
-      | Error((e', sp')) =>
-        Error((
-          e',
-          if (is_made_up(sp')) {
-            sp;
-          } else {
-            sp';
-          }
-        ))
-      }
-    | Error((e, sp)) => Error((e, sp))
-    };
-  let wrap = (o) => Ok((o, made_up));
-  let wrap_err = (e) => Error((e, made_up));
+    let (>>=) = (self, f) =>
+      switch self {
+      | Ok((o, sp)) =>
+        switch (f(o)) {
+        | Ok((o', sp')) => Ok((o', union(sp, sp')))
+        | Error((e', sp')) =>
+          Error((
+            e',
+            if (is_made_up(sp')) {
+              sp;
+            } else {
+              sp';
+            }
+          ))
+        }
+      | Error((e, sp)) => Error((e, sp))
+      };
+    let wrap = (o) => Ok((o, made_up));
+    let wrap_err = (e) => Error((e, made_up));
+  });
+
   let with_span = (sp) => Ok(((), sp));
-
-  module Let_syntax = {
-    let bind = (x, ~f) => x >>= f;
-  };
 };
