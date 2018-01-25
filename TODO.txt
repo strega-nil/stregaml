@@ -1,4 +1,3 @@
-* load from an actual file
 * actually start typeck
 
 * names for stuff
