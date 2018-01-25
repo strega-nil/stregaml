@@ -13,4 +13,4 @@ clean:
 	jbuilder clean
 
 format:
-	ocamlformat --inplace */*.ml */*/*.ml */*/*.mli
+	ocamlformat --inplace cafec/*.ml cafec/*/*.ml cafec/*/*.mli

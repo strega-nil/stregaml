@@ -43,7 +43,8 @@ let main () =
       String_buffer.push (input_char file) buffer ;
       loop ()
     in
-    (try loop () with _ -> ()) close_in file ;
+    (try loop () with _ -> ()) ;
+    close_in file ;
     String_buffer.to_string buffer
   in
   let unt_ast, _ =

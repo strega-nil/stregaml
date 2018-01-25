@@ -34,6 +34,7 @@ end
 module Value = struct
   type builtin = Builtin_less_eq | Builtin_add | Builtin_sub
 
+  (* TODO(ubsan): add spans *)
   type expr =
     | Unit_literal
     | Bool_literal of bool
@@ -147,91 +148,84 @@ module Value = struct
     | Error e -> Error e
 end
 
-type t = {funcs: Value.func list}
+type t = {funcs: Value.func list; main: Value.func option}
 
 let make unt_ast =
   let module U = Untyped_ast in
   let%bind ty_ctxt = Type.make_context [] in
   let%bind func_ctxt = Value.Context.make unt_ast.U.funcs ty_ctxt in
+  let main = ref None in
   let rec helper = function
-    | func :: funcs ->
-        let%bind func = Value.make_func func func_ctxt ty_ctxt in
+    | unt_func :: funcs ->
+        let%bind func = Value.make_func unt_func func_ctxt ty_ctxt in
         let%bind funcs = helper funcs in
+        let name =
+          let (tmp, _) = unt_func in
+          tmp.U.Function.name
+        in
+        if name = "main" then
+          (match !main with
+          | Some _ -> assert false
+          | None -> main := Some func);
         wrap (func :: funcs)
     | [] -> wrap []
   in
   let%bind funcs = helper unt_ast.U.funcs in
-  wrap {funcs}
-
-
-let run _self = ()
-
-(*
-type builtin =
-  | Builtin_add
-  | Builtin_sub
-  | Builtin_less_eq;
+  wrap {funcs; main= !main}
 
 type value =
   | Value_unit
-  | Value_bool(bool)
-  | Value_integer(int)
-  | Value_function(int)
-  | Value_builtin(builtin);
+  | Value_bool of bool
+  | Value_integer of int
+  | Value_function of int
+  | Value_builtin of Value.builtin
 
-let run = (self) => {
-  let rec call = (func, args, ctxt) => {
-    let callee_ctxt = ref([]);
-    Iter.zip(List.iter(func.Value.params), List.iter(args))
-    |> Iter.for_each(
-      (((name, _), expr)) =>
-        callee_ctxt := [(name, eval(expr, ctxt)), ...callee_ctxt^]
-    );
-    eval(func.Value.expr, callee_ctxt^)
-  }
-  and eval = ((expr, _), ctxt) => {
-    switch expr {
-    | Value.Unit_literal => Value_unit
-    | Value.Bool_literal(b) => Value_bool(b)
-    | Value.Integer_literal(n) => Value_integer(n)
-    | Value.If_else(cond, thn, els) =>
-      switch (eval(cond, ctxt)) {
-      | Value_bool(true) => eval(thn, ctxt)
-      | Value_bool(false) => eval(els, ctxt)
-      | _ => assert false
-      }
-    | Expr.Variable(s) => find_in_ctxt(s, ctxt)
-    | Expr.Call(e, args) =>
-      switch (eval(e, ctxt)) {
-      | Value_function(f) => call(f, args, ctxt)
-      | Value_builtin(b) =>
-        let (a0, a1) = switch args {
-        | [a0, a1] => (a0, a1)
-        | _ => assert false
-        };
-        let (lhs, rhs) = switch (eval(a0, ctxt), eval(a1, ctxt)) {
-        | (Value_integer(lhs), Value_integer(rhs)) => (lhs, rhs)
-        | _ => assert false
-        };
-        switch b {
-        | Builtin_add => Value_integer(lhs + rhs)
-        | Builtin_sub => Value_integer(lhs - rhs)
-        | Builtin_less_eq => Value_bool(lhs <= rhs)
-        }
-      | _ => assert false
-      }
-    }
-  };
+let run self =
+  let rec eval expr args ctxt =
+    match expr with
+    | Value.Unit_literal -> Value_unit
+    | Value.Bool_literal b -> Value_bool b
+    | Value.Integer_literal n -> Value_integer n
+    | Value.If_else (cond, thn, els) ->
+      (match eval cond args ctxt with
+      | Value_bool true -> eval thn args ctxt
+      | Value_bool false -> eval els args ctxt
+      | _ -> assert false)
+    | Value.Parameter i -> List.nth_exn i args
+    | Value.Call (e, args') ->
+      (match eval e args ctxt with
+      | Value_function i ->
+        let func = List.nth_exn i ctxt in
+        let (expr, _) = func.Value.expr in
+        let args' =
+          List.map 
+            (fun e -> eval e args ctxt)
+            args'
+        in
+        eval expr args' ctxt
+      | Value_builtin b ->
+        let module V = Value in
+        let lhs, rhs = match args with
+        | [Value_integer lhs; Value_integer rhs] -> (lhs, rhs)
+        | _ -> assert false
+        in
+        let ret = match b with
+        | V.Builtin_add -> Value_integer(lhs + rhs)
+        | V.Builtin_sub -> Value_integer(lhs - rhs)
+        | V.Builtin_less_eq -> Value_bool(lhs <= rhs)
+        in
+        ret
+      | _ -> assert false)
+    | Value.Builtin b -> Value_builtin b
+    | Value.Global_function i -> Value_function i
+  in
 
-  let main = switch(find_in_ctxt("main", [])) {
-  | Value_function(f) => f
-  | _ => assert false
-  };
-  switch (call(main, [], [])) {
-  | Value_integer(n) => Printf.printf("main returned %d\n", n)
-  | Value_bool(true) => print_string("main returned true\n")
-  | Value_bool(false) => print_string("main returned false\n")
-  | _ => assert false
-  }
-};
-*)
+  match self.main with
+  | None -> print_endline "main not defined"
+  | Some main -> 
+    let (main_expr, _) = main.Value.expr in
+    match eval main_expr [] self.funcs with
+    | Value_integer n -> Printf.printf "main returned %d\n" n
+    | Value_bool true -> print_endline "main returned true"
+    | Value_bool false -> print_endline "main returned false"
+    | _ -> assert false
