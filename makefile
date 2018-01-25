@@ -1,3 +1,5 @@
+.PHONY: build scratch test clean reformat
+
 build:
 	jbuilder build
 
@@ -10,5 +12,5 @@ test: build
 clean:
 	jbuilder clean
 
-reformat:
-	refmt --in-place */*.re */*/*.re */*.rei */*/*.rei
+format:
+	ocamlformat --inplace */*.ml */*/*.ml */*/*.mli
