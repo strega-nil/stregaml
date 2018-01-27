@@ -181,32 +181,39 @@ type value =
   | Value_builtin of Value.builtin
 
 let run self =
-  let rec eval expr args ctxt =
-    match expr with
+  let rec eval args ctxt = function
     | Value.Unit_literal -> Value_unit
     | Value.Bool_literal b -> Value_bool b
     | Value.Integer_literal n -> Value_integer n
     | Value.If_else (cond, thn, els) ->
-      (match eval cond args ctxt with
-      | Value_bool true -> eval thn args ctxt
-      | Value_bool false -> eval els args ctxt
+      (match eval args ctxt cond with
+      | Value_bool true -> eval args ctxt thn
+      | Value_bool false -> eval args ctxt els
       | _ -> assert false)
     | Value.Parameter i -> List.nth_exn i args
     | Value.Call (e, args') ->
-      (match eval e args ctxt with
+      (match eval args ctxt e with
       | Value_function i ->
         let func = List.nth_exn i ctxt in
         let (expr, _) = func.Value.expr in
         let args' =
           List.map 
-            (fun e -> eval e args ctxt)
+            (fun e -> eval args ctxt e)
             args'
         in
-        eval expr args' ctxt
+        eval args' ctxt expr
       | Value_builtin b ->
         let module V = Value in
-        let lhs, rhs = match args with
-        | [Value_integer lhs; Value_integer rhs] -> (lhs, rhs)
+        let lhs, rhs = match args' with
+        | [lhs; rhs] -> (lhs, rhs)
+        | _ -> assert false
+        in
+        let lhs = match eval args ctxt lhs with
+        | Value_integer v -> v
+        | _ -> assert false
+        in
+        let rhs = match eval args ctxt rhs with
+        | Value_integer v -> v
         | _ -> assert false
         in
         let ret = match b with
@@ -224,7 +231,7 @@ let run self =
   | None -> print_endline "main not defined"
   | Some main -> 
     let (main_expr, _) = main.Value.expr in
-    match eval main_expr [] self.funcs with
+    match eval [] self.funcs main_expr with
     | Value_integer n -> Printf.printf "main returned %d\n" n
     | Value_bool true -> print_endline "main returned true"
     | Value_bool false -> print_endline "main returned false"
