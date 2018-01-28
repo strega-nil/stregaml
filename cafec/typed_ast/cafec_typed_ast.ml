@@ -63,27 +63,27 @@ let find_parameter name lst =
 let rec type_expression decl ast unt_expr =
   let module E = Untyped_ast.Expr in
   match%bind (Ok unt_expr) with
-  | E.Unit_literal -> wrap Unit_literal
-  | E.Bool_literal b -> wrap (Bool_literal b)
-  | E.Integer_literal i -> wrap (Integer_literal i)
-  | E.If_else (cond, thn, els) ->
-      let%bind cond = type_expression decl ast cond in
-      let%bind thn = type_expression decl ast thn in
-      let%bind els = type_expression decl ast els in
+  | E.Unit_literal, _ -> wrap Unit_literal
+  | E.Bool_literal b, _ -> wrap (Bool_literal b)
+  | E.Integer_literal i, _ -> wrap (Integer_literal i)
+  | E.If_else (cond, thn, els), _ ->
+      let%bind cond, _ = type_expression decl ast cond in
+      let%bind thn, _ = type_expression decl ast thn in
+      let%bind els, _ = type_expression decl ast els in
       wrap (If_else (cond, thn, els))
-  | E.Call (callee, args) ->
-      let%bind callee = type_expression decl ast callee in
+  | E.Call (callee, args), _ ->
+      let%bind callee, _ = type_expression decl ast callee in
       let rec helper = function
         | [] -> wrap []
         | x :: xs ->
-            let%bind x = type_expression decl ast x in
-            let%bind xs = helper xs in
+            let%bind x, _ = type_expression decl ast x in
+            let%bind xs, _ = helper xs in
             wrap (x :: xs)
       in
-      let%bind args = helper args in
+      let%bind args, _ = helper args in
       wrap (Call (callee, args))
-  | E.Variable name ->
-      let {params; _}, _ = decl in
+  | E.Variable name, _ ->
+      let {params; _} = decl in
       match find_parameter name params with
       | None -> (
         match find_function_by_name ast name with
@@ -99,38 +99,27 @@ let rec type_expression decl ast unt_expr =
 
 let add_function unt_func (ast: t): (t, Error.t) spanned_result =
   let module F = Untyped_ast.Function in
-  let func =
-    let ty =
+  let%bind func =
+    let%bind ty, ty_sp =
       let ({F.params; F.ret_ty; _}, _) = unt_func in
       let rec get_params = function
         | [] -> wrap []
         | (name, ty) :: params ->
-            let%bind ty = Type.get ast.types ty in
-            let%bind params = get_params params in
+            let%bind ty, _ = Type.get ast.types ty in
+            let%bind params, _ = get_params params in
             wrap ((name, ty) :: params)
       in
-      let%bind ret_ty =
+      let%bind ret_ty, _ =
         match ret_ty with
         | None -> wrap Type.Unit
         | Some ty -> Type.get ast.types ty
       in
-      let%bind params = get_params params in
+      let%bind params, _ = get_params params in
       wrap {params; ret_ty}
-    in
-    let%bind ty =
-      match ty with
-      | Ok (ty, sp) -> Ok ((ty, sp), sp)
-      | Error e -> Error e
     in
     let (unt_func, _) = unt_func in
     match type_expression ty ast unt_func.F.expr with
-    | Ok expr -> wrap {ty; expr}
-    | Error e -> Error e
-  in
-  (* TODO: delete this stuff eventually when bind becomes comonadic *)
-  let%bind func =
-    match func with
-    | Ok (f, sp) -> Ok ((f, sp), sp)
+    | Ok expr -> wrap {ty=(ty, ty_sp); expr}
     | Error e -> Error e
   in
   let ({F.name; _}, _) = unt_func in
@@ -149,7 +138,7 @@ let make unt_ast =
   let empty_ast = wrap {funcs=[]; types=[]; main=None} in
   let rec helper ast = function
     | (unt_func: U.Function.t) :: funcs ->
-        let%bind ast = ast in
+        let%bind ast, _ = ast in
         let new_ast = add_function unt_func ast in
         helper new_ast funcs
     | [] -> ast

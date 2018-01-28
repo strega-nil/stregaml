@@ -15,10 +15,8 @@ type t =
   | Unrecognized_character of char
   | Unexpected_token of (expected_token * Token.t)
 
-module Monad_spanned :
-  Interfaces.Result_monad.Interface
-  with type error = t
-   and type 'a t = ('a, t) spanned_result
+module Monad_spanned : module type of Cafec_spanned.Monad (struct
+  type nonrec t = t end)
 
 val print : t -> unit
 

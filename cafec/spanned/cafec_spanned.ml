@@ -33,12 +33,13 @@ module Monad (E : Interfaces.Type) = struct
     type error = E.t
 
     type 'o t = ('o, E.t) spanned_result
+    type 'a comonad = 'a spanned
 
     let ( >>= ) self f =
       match self with
       | Error e -> Error e
       | Ok (o, sp) ->
-        match f o with
+        match f (o, sp) with
         | Ok (o', sp') -> Ok (o', union sp sp')
         | Error (e', sp') -> Error (e', if is_made_up sp' then sp else sp')
 

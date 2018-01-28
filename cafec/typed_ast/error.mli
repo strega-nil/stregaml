@@ -1,11 +1,9 @@
 open Cafec_spanned.Prelude
 
-type t = Multiple_function_definitions of (string * span)
+type t
 
 module Monad_spanned :
-  Interfaces.Result_monad.Interface
-  with type error = t
-   and type 'a t = ('a, t) spanned_result
+  module type of Cafec_spanned.Monad(struct type nonrec t = t end)
 
 val print : t -> unit
 

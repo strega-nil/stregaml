@@ -23,6 +23,7 @@ module Monad (E : Interfaces.Type) : sig
   include Interfaces.Result_monad.Interface
           with type 'o t = ('o, E.t) spanned_result
            and type error = E.t
+           and type 'a comonad = 'a spanned
 
   val with_span : span -> unit t
 end
