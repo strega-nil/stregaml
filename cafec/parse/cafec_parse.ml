@@ -32,14 +32,14 @@ let is_expression_end = function
       true
   | _ -> false
 
+
 type item = Item_func of Ast.Function.builder
 
 let get_ident parser =
-  [%bind
-    match next_token parser with
-    | Token.Identifier id, _ -> wrap id
-    | tok, _ ->
-        wrap_err (Error.Unexpected_token (Error.Expected_identifier, tok))]
+  match%bind next_token parser with
+  | Token.Identifier id, _ -> wrap id
+  | tok, _ ->
+      wrap_err (Error.Unexpected_token (Error.Expected_identifier, tok))
 
 
 let maybe_get_specific parser token =
@@ -48,62 +48,58 @@ let maybe_get_specific parser token =
 
 
 let get_specific parser token =
-  [%bind
-    match maybe_get_specific parser token with
-    | Some (), _ -> wrap ()
-    | None, _ ->
-        let%bind tok, _ = next_token parser in
-        wrap_err (Error.Unexpected_token (Error.Expected_specific token, tok))]
+  match%bind maybe_get_specific parser token with
+  | Some (), _ -> wrap ()
+  | None, _ ->
+      let%bind tok, _ = next_token parser in
+      wrap_err (Error.Unexpected_token (Error.Expected_specific token, tok))
 
 
 let rec maybe_parse_expression parser =
   let initial =
-    [%bind
-      match peek_token parser with
-      | Token.Keyword Token.Keyword_true, _ ->
-          eat_token parser ;
-          wrap (Some (Ast.Expr.Bool_literal true))
-      | Token.Keyword Token.Keyword_false, _ ->
-          eat_token parser ;
-          wrap (Some (Ast.Expr.Bool_literal false))
-      | Token.Integer_literal n, _ ->
-          eat_token parser ;
-          wrap (Some (Ast.Expr.Integer_literal n))
-      | Token.Open_paren, _ ->
-          eat_token parser ;
-          let%bind (), _ = get_specific parser Token.Close_paren in
-          wrap (Some Ast.Expr.Unit_literal)
-      | Token.Keyword Token.Keyword_if, _ ->
-          eat_token parser ;
-          let%bind (), _ = get_specific parser Token.Open_paren in
-          let%bind cond, _ = parse_expression parser in
-          let%bind (), _ = get_specific parser Token.Close_paren in
-          let%bind thn, _ = parse_block parser in
-          let%bind (), _ =
-            get_specific parser (Token.Keyword Token.Keyword_else)
-          in
-          let%bind els, _ = parse_block parser in
-          wrap (Some (Ast.Expr.If_else (cond, thn, els)))
-      | Token.Identifier s, _ ->
-          eat_token parser ;
-          wrap (Some (Ast.Expr.Variable s))
-      | _ -> wrap None]
+    match%bind peek_token parser with
+    | Token.Keyword Token.Keyword_true, _ ->
+        eat_token parser ;
+        wrap (Some (Ast.Expr.Bool_literal true))
+    | Token.Keyword Token.Keyword_false, _ ->
+        eat_token parser ;
+        wrap (Some (Ast.Expr.Bool_literal false))
+    | Token.Integer_literal n, _ ->
+        eat_token parser ;
+        wrap (Some (Ast.Expr.Integer_literal n))
+    | Token.Open_paren, _ ->
+        eat_token parser ;
+        let%bind (), _ = get_specific parser Token.Close_paren in
+        wrap (Some Ast.Expr.Unit_literal)
+    | Token.Keyword Token.Keyword_if, _ ->
+        eat_token parser ;
+        let%bind (), _ = get_specific parser Token.Open_paren in
+        let%bind cond, _ = parse_expression parser in
+        let%bind (), _ = get_specific parser Token.Close_paren in
+        let%bind thn, _ = parse_block parser in
+        let%bind (), _ =
+          get_specific parser (Token.Keyword Token.Keyword_else)
+        in
+        let%bind els, _ = parse_block parser in
+        wrap (Some (Ast.Expr.If_else (cond, thn, els)))
+    | Token.Identifier s, _ ->
+        eat_token parser ;
+        wrap (Some (Ast.Expr.Variable s))
+    | _ -> wrap None
   in
-  [%bind
-    match initial with
-    | Some i, sp ->
-        let%bind x, _ = parse_follow parser (i, sp) in
-        wrap (Some x)
-    | None, _ -> wrap None]
+  match%bind initial with
+  | Some i, sp ->
+      let%bind x, _ = parse_follow parser (i, sp) in
+      wrap (Some x)
+  | None, _ -> wrap None
 
 
 and parse_expression parser =
-  [%bind
-    match maybe_parse_expression parser with
-    | Some expr, _ -> wrap expr
-    | None, _ ->
-        let%bind tok, _ = next_token parser in
-        wrap_err (Error.Unexpected_token (Error.Expected_expression, tok))]
+  match%bind maybe_parse_expression parser with
+  | Some expr, _ -> wrap expr
+  | None, _ ->
+      let%bind tok, _ = next_token parser in
+      wrap_err (Error.Unexpected_token (Error.Expected_expression, tok))
 
 
 and parse_follow parser (initial, sp) =
@@ -133,35 +129,33 @@ and parse_type parser =
 
 
 and maybe_parse_type_annotation parser =
-  [%bind
-    match maybe_get_specific parser Token.Colon with
-    | Some (), _ ->
-        let%bind ty, _ = parse_type parser in
-        wrap (Some ty)
-    | None, _ -> wrap None]
+  match%bind maybe_get_specific parser Token.Colon with
+  | Some (), _ ->
+      let%bind ty, _ = parse_type parser in
+      wrap (Some ty)
+  | None, _ -> wrap None
 
 
 and parse_parameter_list parser =
   (* TODO(ubsan): maybe abstract out list parsing? *)
   let rec get_parms comma =
-    [%bind
-      match peek_token parser with
-      | Token.Close_paren, _ -> wrap []
-      | Token.Comma, _ ->
-          if comma then ( eat_token parser ; get_parms false )
-          else
-            wrap_err
-              (Error.Unexpected_token (Error.Expected_expression, Token.Comma))
-      | tok, _ ->
-          if comma then
-            wrap_err
-              (Error.Unexpected_token (Error.Expected_specific Token.Comma, tok))
-          else
-            let%bind name, _ = get_ident parser in
-            let%bind (), _ = get_specific parser Token.Colon in
-            let%bind ty, _ = parse_type parser in
-            let%bind tl, _ = get_parms true in
-            wrap ((name, ty) :: tl)]
+    match%bind peek_token parser with
+    | Token.Close_paren, _ -> wrap []
+    | Token.Comma, _ ->
+        if comma then ( eat_token parser ; get_parms false )
+        else
+          wrap_err
+            (Error.Unexpected_token (Error.Expected_expression, Token.Comma))
+    | tok, _ ->
+        if comma then
+          wrap_err
+            (Error.Unexpected_token (Error.Expected_specific Token.Comma, tok))
+        else
+          let%bind name, _ = get_ident parser in
+          let%bind (), _ = get_specific parser Token.Colon in
+          let%bind ty, _ = parse_type parser in
+          let%bind tl, _ = get_parms true in
+          wrap ((name, ty) :: tl)
   in
   let%bind (), _ = get_specific parser Token.Open_paren in
   let%bind parms, _ = get_parms false in
@@ -171,22 +165,21 @@ and parse_parameter_list parser =
 
 and parse_argument_list parser =
   let rec get_args comma =
-    [%bind
-      match peek_token parser with
-      | Token.Close_paren, _ -> wrap []
-      | Token.Comma, _ ->
-          if comma then ( eat_token parser ; get_args false )
-          else
-            wrap_err
-              (Error.Unexpected_token (Error.Expected_expression, Token.Comma))
-      | tok, _ ->
-          if comma then
-            wrap_err
-              (Error.Unexpected_token (Error.Expected_specific Token.Comma, tok))
-          else
-            let%bind expr, _ = parse_expression parser in
-            let%bind tl, _ = get_args true in
-            wrap (expr :: tl)]
+    match%bind peek_token parser with
+    | Token.Close_paren, _ -> wrap []
+    | Token.Comma, _ ->
+        if comma then ( eat_token parser ; get_args false )
+        else
+          wrap_err
+            (Error.Unexpected_token (Error.Expected_expression, Token.Comma))
+    | tok, _ ->
+        if comma then
+          wrap_err
+            (Error.Unexpected_token (Error.Expected_specific Token.Comma, tok))
+        else
+          let%bind expr, _ = parse_expression parser in
+          let%bind tl, _ = get_args true in
+          wrap (expr :: tl)
   in
   let%bind (), _ = get_specific parser Token.Open_paren in
   let%bind args, _ = get_args false in
@@ -196,36 +189,32 @@ and parse_argument_list parser =
 
 and parse_block parser =
   let%bind (), _ = get_specific parser Token.Open_brace in
-  [%bind
-    match maybe_parse_expression parser with
-    | Some e, _ ->
-        let%bind (), _ = get_specific parser Token.Close_brace in
-        wrap e
-    | None, sp ->
-        [%bind
-          match next_token parser with
-          | Token.Close_brace, sp' ->
-              wrap (Ast.Expr.Unit_literal, Spanned.union sp sp')
-          | tok, _ ->
-              wrap_err
-                (Error.Unexpected_token (Error.Expected_expression, tok))]]
+  match%bind maybe_parse_expression parser with
+  | Some e, _ ->
+      let%bind (), _ = get_specific parser Token.Close_brace in
+      wrap e
+  | None, sp ->
+      match%bind next_token parser with
+      | Token.Close_brace, sp' ->
+          wrap (Ast.Expr.Unit_literal, Spanned.union sp sp')
+      | tok, _ ->
+          wrap_err (Error.Unexpected_token (Error.Expected_expression, tok))
 
 
 let parse_item (parser: t) : (item option, Error.t) spanned_result =
-  [%bind
-    match next_token parser with
-    | Token.Keyword Token.Keyword_let, _ ->
-        let%bind name, _ = get_ident parser in
-        let%bind params, _ = parse_parameter_list parser in
-        let%bind ret_ty, _ = maybe_parse_type_annotation parser in
-        let%bind (), _ = get_specific parser Token.Equals in
-        let%bind expr, _ = parse_expression parser in
-        let%bind (), _ = get_specific parser Token.Semicolon in
-        let func = Ast.Function.{name; params; ret_ty; expr} in
-        wrap (Some (Item_func func))
-    | Token.Eof, _ -> wrap None
-    | tok, _ ->
-        wrap_err (Error.Unexpected_token (Error.Expected_item_declarator, tok))]
+  match%bind next_token parser with
+  | Token.Keyword Token.Keyword_let, _ ->
+      let%bind name, _ = get_ident parser in
+      let%bind params, _ = parse_parameter_list parser in
+      let%bind ret_ty, _ = maybe_parse_type_annotation parser in
+      let%bind (), _ = get_specific parser Token.Equals in
+      let%bind expr, _ = parse_expression parser in
+      let%bind (), _ = get_specific parser Token.Semicolon in
+      let func = Ast.Function.{name; params; ret_ty; expr} in
+      wrap (Some (Item_func func))
+  | Token.Eof, _ -> wrap None
+  | tok, _ ->
+      wrap_err (Error.Unexpected_token (Error.Expected_item_declarator, tok))
 
 
 let parse_program (parser: t) : (Ast.t, Error.t) spanned_result =

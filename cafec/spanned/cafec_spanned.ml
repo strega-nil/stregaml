@@ -33,6 +33,7 @@ module Monad (E : Interfaces.Type) = struct
     type error = E.t
 
     type 'o t = ('o, E.t) spanned_result
+
     type 'a comonad = 'a spanned
 
     let ( >>= ) self f =
