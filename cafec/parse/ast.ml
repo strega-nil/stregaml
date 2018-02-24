@@ -58,9 +58,9 @@ end
 
 module Type = struct
   type builder = Named of string
- and t = builder spanned
+  and t = builder spanned
 
-  let print (Named self, _) = print_string self
+  let print (Named self) = print_string self
 end
 
 module Type_declaration = struct
@@ -79,7 +79,7 @@ module Function = struct
   let print (self, _) =
     let print_parameter_list lst =
       let rec helper ?start = function
-        | (name, ty) :: xs ->
+        | (name, (ty, _)) :: xs ->
             (match start with Some () -> print_string ", " | None -> ()) ;
             print_string name ;
             print_string ": " ;
@@ -89,16 +89,15 @@ module Function = struct
       in
       print_char '(' ; helper lst ; print_char ')'
     in
-    print_string "func " ;
+    print_string "let " ;
     print_string self.name ;
     print_parameter_list self.params ;
     ( match self.ret_ty with
-    | Some ty -> print_string " -> " ; Type.print ty
+    | Some (ty, _) -> print_string ": " ; Type.print ty
     | None -> print_char ' ' ) ;
-    print_string " {\n" ;
-    print_indent 1 ;
+    print_string " = " ;
     Expr.print 1 self.expr ;
-    print_string "\n};\n"
+    print_string ";\n"
 end
 
 type t = {funcs: Function.t list}

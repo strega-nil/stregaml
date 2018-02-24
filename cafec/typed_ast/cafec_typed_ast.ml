@@ -4,19 +4,16 @@ module Untyped_ast = Cafec_parse.Ast
 open Spanned.Prelude
 open Error.Monad_spanned
 
-module Type = struct
-  type t = Unit | Bool | Int
-
-  (* NOTE(ubsan): this should *actually* be error handling *)
-  let get (_ctxt: (string * t spanned) list) (unt_ty: Untyped_ast.Type.t)
-      : (t, Error.t) spanned_result =
-    let module T = Untyped_ast.Type in
-    match unt_ty with T.Named name, _ ->
-      if name = "unit" then wrap Unit
-      else if name = "bool" then wrap Bool
-      else if name = "int" then wrap Int
-      else assert false
-end
+let get_type _ctxt unt_ty =
+  let module T = Untyped_ast.Type in
+  let unt_ty, sp = unt_ty in
+  let%bind (), _ = with_span sp in
+  match unt_ty with T.Named name ->
+    (match name with
+    | "unit" -> wrap Type.Unit
+    | "bool" -> wrap Type.Bool
+    | "int" -> wrap Type.Int
+    | _ -> wrap_err (Error.Type_not_found unt_ty))
 
 type builtin = Builtin_less_eq | Builtin_add | Builtin_sub
 
@@ -48,6 +45,20 @@ let find_function_by_name {funcs; _} name =
   in
   helper funcs
 
+let type_of_expr e =
+  let e, sp = e in
+  let%bind (), _ = with_span sp in
+  match e with
+  | Unit_literal -> wrap Type.Unit
+  | Bool_literal _ -> wrap Type.Bool
+  | Integer_literal _ -> wrap Type.Int
+  | If_else (_, _e1, _e2) -> assert false
+    (*let t1 = type_of_expr e1 in
+    let t2 = type_of_expr e2 in*)
+  | Call _ -> assert false
+  | Builtin _ -> assert false
+  | Global_function _ -> assert false
+  | Parameter _ -> assert false
 
 let find_parameter name lst =
   let rec helper name lst idx =
@@ -91,37 +102,44 @@ let rec type_expression decl ast unt_expr =
           | "LESS_EQ" -> wrap (Builtin Builtin_less_eq)
           | "ADD" -> wrap (Builtin Builtin_add)
           | "SUB" -> wrap (Builtin Builtin_sub)
-          | _ -> assert false )
+          | _ -> wrap_err (Error.Name_not_found name))
         | Some (e, _) -> wrap (Global_function e) )
       | Some (_ty, idx) -> wrap (Parameter idx)
 
 
 let add_function unt_func (ast: t) : (t, Error.t) spanned_result =
   let module F = Untyped_ast.Function in
+  let {F.name; _}, _ = unt_func in
   let%bind func =
     let%bind ty, ty_sp =
       let {F.params; F.ret_ty; _}, _ = unt_func in
       let rec get_params = function
         | [] -> wrap []
         | (name, ty) :: params ->
-            let%bind ty, _ = Type.get ast.types ty in
+            let%bind ty, _ = get_type ast.types ty in
             let%bind params, _ = get_params params in
             wrap ((name, ty) :: params)
       in
       let%bind ret_ty, _ =
         match ret_ty with
         | None -> wrap Type.Unit
-        | Some ty -> Type.get ast.types ty
+        | Some ty -> get_type ast.types ty
       in
       let%bind params, _ = get_params params in
       wrap {params; ret_ty}
     in
     let unt_func, _ = unt_func in
     match type_expression ty ast unt_func.F.expr with
-    | Ok expr -> wrap {ty= (ty, ty_sp); expr}
+    | Ok expr ->
+      let%bind te, _ = type_of_expr expr in
+      if te = ty.ret_ty then
+        wrap {ty= (ty, ty_sp); expr}
+      else
+        wrap_err Error.(
+          Return_type_mismatch
+            {func_name= name; expected= ty.ret_ty; found= te})
     | Error e -> Error e
   in
-  let {F.name; _}, _ = unt_func in
   let ast_with_f = {ast with funcs= (name, func) :: ast.funcs} in
   if name = "main" then
     let func, _ = func in

@@ -1,0 +1,49 @@
+(*
+  no idea what mutability polymorphism should look like
+  no idea what this-passing should look like
+  no idea what getting `ref data` members should look like
+*)
+
+type slice('a) = {
+  (*
+    no `data` declaration means one can't have a prvalue of it
+    it's an opaque type
+  *)
+
+  (* and this is what a pointer to slice looks like *)
+  ref data = {
+    pointer: &raw 'a,
+    length: usize,
+  };
+
+  let index{'m}(idx: usize): 'm 'a = unsafe {
+    if (idx < length) {
+      mutability_cast(
+        'm,
+        *(pointer + length): raw 'a)
+    } else {
+      abort()
+    }
+  };
+};
+
+type bit_index = {
+  data = bool;
+
+  ref data = {
+    pointer: &raw u8,
+    index: usize, (* always <= 8 *),
+  };
+
+  set(rhs: bool) = unsafe {
+    if rhs {
+      *pointer |= 0x1 << index;
+    } else {
+      *pointer &= ~(0x1 << index);
+    }
+  };
+
+  get(): bool = unsafe {
+    (*pointer & 0x1 << index) == 1
+  };
+};

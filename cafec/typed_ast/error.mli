@@ -1,6 +1,9 @@
 open Cafec_spanned.Prelude
 
-type t
+type t =
+  | Name_not_found of string
+  | Type_not_found of Cafec_parse.Ast.Type.builder
+  | Return_type_mismatch of {func_name: string; expected: Type.t; found: Type.t}
 
 module Monad_spanned : module type of Cafec_spanned.Monad (struct
   type nonrec t = t end)

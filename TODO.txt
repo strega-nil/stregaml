@@ -1,9 +1,6 @@
 * actually start typeck
-* spanned_result should implement comonadic bind
-  * change
-      `'a -> ('b, 'c) spanned_result` to
-      `'a spanned -> ('b, 'c) spanned_result`
 * unt_ast shouldn't differentiate between function and type items
+* get rid of the silly builder/t stuff
 
 * names for stuff
   * tamper - build
@@ -14,3 +11,5 @@
   * roast
   * toddy
   * drip
+
+* name for café programmers - baristas

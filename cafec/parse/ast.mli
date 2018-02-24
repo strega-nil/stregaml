@@ -6,7 +6,9 @@ end
 
 module Type : sig
   type builder = Named of string
- and t = builder spanned
+  and t = builder spanned
+
+  val print : builder -> unit
 end
 
 module Expr : sig
