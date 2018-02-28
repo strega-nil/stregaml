@@ -58,7 +58,7 @@ end
 
 module Type = struct
   type builder = Named of string
-  and t = builder spanned
+ and t = builder spanned
 
   let print (Named self) = print_string self
 end
@@ -95,9 +95,7 @@ module Function = struct
     ( match self.ret_ty with
     | Some (ty, _) -> print_string ": " ; Type.print ty
     | None -> print_char ' ' ) ;
-    print_string " = " ;
-    Expr.print 1 self.expr ;
-    print_string ";\n"
+    print_string " = " ; Expr.print 1 self.expr ; print_string ";\n"
 end
 
 type t = {funcs: Function.t list}

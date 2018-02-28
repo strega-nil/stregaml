@@ -9,11 +9,12 @@ let get_type _ctxt unt_ty =
   let unt_ty, sp = unt_ty in
   let%bind (), _ = with_span sp in
   match unt_ty with T.Named name ->
-    (match name with
+    match name with
     | "unit" -> wrap Type.Unit
     | "bool" -> wrap Type.Bool
     | "int" -> wrap Type.Int
-    | _ -> wrap_err (Error.Type_not_found unt_ty))
+    | _ -> wrap_err (Error.Type_not_found unt_ty)
+
 
 type builtin = Builtin_less_eq | Builtin_add | Builtin_sub
 
@@ -25,7 +26,7 @@ type expr =
   | Bool_literal of bool
   | Integer_literal of int
   | If_else of (expr * expr * expr)
-  | Call of (expr * expr list)
+  | Call of (expr spanned * expr spanned list)
   | Builtin of builtin
   | Global_function of func
   | Parameter of int
@@ -45,7 +46,8 @@ let find_function_by_name {funcs; _} name =
   in
   helper funcs
 
-let type_of_expr e =
+
+let rec type_of_expr e =
   let e, sp = e in
   let%bind (), _ = with_span sp in
   match e with
@@ -53,12 +55,33 @@ let type_of_expr e =
   | Bool_literal _ -> wrap Type.Bool
   | Integer_literal _ -> wrap Type.Int
   | If_else (_, _e1, _e2) -> assert false
-    (*let t1 = type_of_expr e1 in
+  (*let t1 = type_of_expr e1 in
     let t2 = type_of_expr e2 in*)
-  | Call _ -> assert false
-  | Builtin _ -> assert false
+  | Call (callee, args) ->
+      let%bind ty_callee, _ = type_of_expr callee in
+      let%bind ty_args, _ = (
+        let rec helper = function
+        | [] -> wrap []
+        | x :: xs ->
+          let%bind ty, _ = type_of_expr x in
+          let%bind rest, _ = helper xs in
+          wrap (ty :: rest)
+        in
+        helper args
+      ) in
+      ( match ty_callee with
+      | Type.Function {params; ret_ty} ->
+        if ty_args = params then wrap ret_ty
+        else assert false
+      | Type.Unit | Type.Bool | Type.Int -> assert false )
+  | Builtin b -> (
+    match b with
+    | Builtin_add ->
+        wrap (Type.Function {params= [Type.Int; Type.Int]; ret_ty= Type.Int})
+    | Builtin_sub | Builtin_less_eq -> assert false )
   | Global_function _ -> assert false
   | Parameter _ -> assert false
+
 
 let find_parameter name lst =
   let rec helper name lst idx =
@@ -82,11 +105,11 @@ let rec type_expression decl ast unt_expr =
       let%bind els, _ = type_expression decl ast els in
       wrap (If_else (cond, thn, els))
   | E.Call (callee, args), _ ->
-      let%bind callee, _ = type_expression decl ast callee in
+      let%bind callee = type_expression decl ast callee in
       let rec helper = function
         | [] -> wrap []
         | x :: xs ->
-            let%bind x, _ = type_expression decl ast x in
+            let%bind x = type_expression decl ast x in
             let%bind xs, _ = helper xs in
             wrap (x :: xs)
       in
@@ -102,7 +125,7 @@ let rec type_expression decl ast unt_expr =
           | "LESS_EQ" -> wrap (Builtin Builtin_less_eq)
           | "ADD" -> wrap (Builtin Builtin_add)
           | "SUB" -> wrap (Builtin Builtin_sub)
-          | _ -> wrap_err (Error.Name_not_found name))
+          | _ -> wrap_err (Error.Name_not_found name) )
         | Some (e, _) -> wrap (Global_function e) )
       | Some (_ty, idx) -> wrap (Parameter idx)
 
@@ -131,13 +154,13 @@ let add_function unt_func (ast: t) : (t, Error.t) spanned_result =
     let unt_func, _ = unt_func in
     match type_expression ty ast unt_func.F.expr with
     | Ok expr ->
-      let%bind te, _ = type_of_expr expr in
-      if te = ty.ret_ty then
-        wrap {ty= (ty, ty_sp); expr}
-      else
-        wrap_err Error.(
-          Return_type_mismatch
-            {func_name= name; expected= ty.ret_ty; found= te})
+        let%bind te, _ = type_of_expr expr in
+        if te = ty.ret_ty then wrap {ty= (ty, ty_sp); expr}
+        else
+          wrap_err
+            Error.(
+              Return_type_mismatch
+                {func_name= name; expected= ty.ret_ty; found= te})
     | Error e -> Error e
   in
   let ast_with_f = {ast with funcs= (name, func) :: ast.funcs} in
@@ -179,14 +202,14 @@ let run self =
       | Value_bool false -> eval args ctxt els
       | _ -> assert false )
     | Parameter i -> List.nth_exn i args
-    | Call (e, args') -> (
+    | Call ((e, _), args') -> (
       match eval args ctxt e with
       | Value_function func ->
           let expr, _ = func.expr in
-          let args' = List.map (fun e -> eval args ctxt e) args' in
+          let args' = List.map (fun (e, _) -> eval args ctxt e) args' in
           eval args' ctxt expr
       | Value_builtin b ->
-          let lhs, rhs =
+          let (lhs, _), (rhs, _) =
             match args' with [lhs; rhs] -> (lhs, rhs) | _ -> assert false
           in
           let lhs =
