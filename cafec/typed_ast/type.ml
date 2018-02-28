@@ -12,11 +12,12 @@ let rec print = function
 
 and print_list lst =
   print_char '(' ;
-  match lst with
+  ( match lst with
   | x :: xs ->
       let rec helper = function
         | x :: xs -> print_string ", " ; print x ; helper xs
         | [] -> ()
       in
       print x ; helper xs
-  | [] -> () ; print_char ')'
+  | [] -> () ) ;
+  print_char ')'

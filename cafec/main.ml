@@ -47,24 +47,19 @@ let main () =
     close_in file ;
     String_buffer.to_string buffer
   in
-  let unt_ast, _ =
-    Parse.parse program
-    |> Result.expect (fun e ->
-           print_string "Error: " ;
-           Parse.Error.print_spanned e ;
-           print_newline () ;
-           assert false )
-  in
-  Parse.Ast.print unt_ast ;
-  let ty_ast, _ =
-    Typed_ast.make unt_ast
-    |> Result.expect (fun e ->
-           print_string "Error: " ;
-           Typed_ast.Error.print_spanned e ;
-           print_newline () ;
-           assert false )
-  in
-  Typed_ast.run ty_ast
+  match Parse.parse program with
+  | Error e ->
+      print_string "Error: " ;
+      Parse.Error.print_spanned e ;
+      print_newline ()
+  | Ok (unt_ast, _) ->
+      Parse.Ast.print unt_ast ;
+      match Typed_ast.make unt_ast with
+      | Error e ->
+          print_string "Error: " ;
+          Typed_ast.Error.print_spanned e ;
+          print_newline ()
+      | Ok (ty_ast, _) -> Typed_ast.run ty_ast
 
 
 let () = main ()

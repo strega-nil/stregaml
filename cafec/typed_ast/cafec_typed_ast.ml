@@ -35,8 +35,7 @@ and func = {ty: decl spanned; expr: expr spanned}
 
 type t =
   { types: (string * Type.t spanned) list
-  ; funcs: (string * func spanned) list
-  ; main: func option }
+  ; funcs: (string * func spanned) list }
 
 let find_function_by_name {funcs; _} name =
   let rec helper = function
@@ -57,27 +56,31 @@ let rec type_of_expr e =
   | If_else (_, _e1, _e2) -> assert false
   (*let t1 = type_of_expr e1 in
     let t2 = type_of_expr e2 in*)
-  | Call (callee, args) ->
+  | Call (callee, args)
+    -> (
       let%bind ty_callee, _ = type_of_expr callee in
-      let%bind ty_args, _ = (
+      let%bind ty_args, _ =
         let rec helper = function
-        | [] -> wrap []
-        | x :: xs ->
-          let%bind ty, _ = type_of_expr x in
-          let%bind rest, _ = helper xs in
-          wrap (ty :: rest)
+          | [] -> wrap []
+          | x :: xs ->
+              let%bind ty, _ = type_of_expr x in
+              let%bind rest, _ = helper xs in
+              wrap (ty :: rest)
         in
         helper args
-      ) in
-      ( match ty_callee with
-      | Type.Function {params; ret_ty} ->
-        if ty_args = params then wrap ret_ty
-        else assert false
-      | Type.Unit | Type.Bool | Type.Int -> assert false )
+      in
+      match ty_callee with
+      | Type.(Function {params; ret_ty}) ->
+          if ty_args = params then wrap ret_ty
+          else
+            wrap_err
+              (Error.Invalid_function_arguments
+                 {expected= params; found= ty_args})
+      | ty -> wrap_err (Error.Call_of_non_function ty) )
   | Builtin b -> (
     match b with
     | Builtin_add ->
-        wrap (Type.Function {params= [Type.Int; Type.Int]; ret_ty= Type.Int})
+        wrap Type.(Function {params= [Type.Int; Type.Int]; ret_ty= Type.Int})
     | Builtin_sub | Builtin_less_eq -> assert false )
   | Global_function _ -> assert false
   | Parameter _ -> assert false
@@ -132,8 +135,8 @@ let rec type_expression decl ast unt_expr =
 
 let add_function unt_func (ast: t) : (t, Error.t) spanned_result =
   let module F = Untyped_ast.Function in
-  let {F.name; _}, _ = unt_func in
-  let%bind func =
+  let {F.name; _}, sp = unt_func in
+  let%bind func, _ =
     let%bind ty, ty_sp =
       let {F.params; F.ret_ty; _}, _ = unt_func in
       let rec get_params = function
@@ -158,31 +161,42 @@ let add_function unt_func (ast: t) : (t, Error.t) spanned_result =
         if te = ty.ret_ty then wrap {ty= (ty, ty_sp); expr}
         else
           wrap_err
-            Error.(
-              Return_type_mismatch
-                {func_name= name; expected= ty.ret_ty; found= te})
+            Error.(Return_type_mismatch {expected= ty.ret_ty; found= te})
     | Error e -> Error e
   in
-  let ast_with_f = {ast with funcs= (name, func) :: ast.funcs} in
-  if name = "main" then
-    let func, _ = func in
-    if ast_with_f.main = None then wrap {ast_with_f with main= Some func}
-    else assert false
-  else wrap ast_with_f
+  let ast_with_f = {ast with funcs= (name, (func, sp)) :: ast.funcs} in
+  wrap ast_with_f
 
 
 let make unt_ast =
   let module U = Untyped_ast in
-  let empty_ast = wrap {funcs= []; types= []; main= None} in
+  let empty_ast = wrap {funcs= []; types= []} in
   let rec helper ast = function
-    | (unt_func: U.Function.t) :: funcs ->
+    | unt_func :: funcs ->
         let%bind ast, _ = ast in
         let new_ast = add_function unt_func ast in
         helper new_ast funcs
     | [] -> ast
   in
-  helper empty_ast unt_ast.U.funcs
-
+  let rec check_for_duplicates values =
+    let rec helper v v_sp = function
+      | (name, (_, sp)) :: _ when name = v -> 
+          Error (Error.Defined_multiple_times { name;
+          original_declaration= sp}, v_sp)
+      | _ :: xs -> helper v v_sp xs
+      | [] -> wrap ()
+    in
+    match values with
+      | (name, (_, sp)) :: xs ->
+          let%bind (), _ = helper name sp xs in
+          check_for_duplicates xs
+      | [] -> wrap ()
+  in
+  let%bind ret, _ = helper empty_ast unt_ast.U.funcs in
+  let%bind (), _ = check_for_duplicates ret.funcs in
+  let%bind (), _ = check_for_duplicates ret.types in
+  wrap ret
+  
 
 type value =
   | Value_unit
@@ -233,7 +247,12 @@ let run self =
     | Builtin b -> Value_builtin b
     | Global_function i -> Value_function i
   in
-  match self.main with
+  let rec find = function
+    | (name, (func, _sp)) :: _ when name = "main" -> Some func
+    | _ :: xs -> find xs
+    | [] -> None
+  in
+  match find self.funcs with
   | None -> print_endline "main not defined"
   | Some main ->
       let main_expr, _ = main.expr in

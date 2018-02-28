@@ -1,1 +1,4 @@
+let foo(): int = 0;
+let foo(): int = 0;
+
 let main(): int = ADD(0, 1);
