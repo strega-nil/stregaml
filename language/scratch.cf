@@ -1,4 +1,8 @@
-let foo(): int = 0;
-let foo(): int = 0;
+let fib(x: int): int =
+  if (LESS_EQ(x, 1)) {
+    x
+  } else {
+    fib(SUB(x, 1), SUB(x, 2))
+  };
 
-let main(): int = ADD(0, 1);
+let main(): int = fib(0);

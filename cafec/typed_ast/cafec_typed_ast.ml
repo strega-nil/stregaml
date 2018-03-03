@@ -25,7 +25,7 @@ type expr =
   | Unit_literal
   | Bool_literal of bool
   | Integer_literal of int
-  | If_else of (expr * expr * expr)
+  | If_else of (expr spanned * expr spanned * expr spanned)
   | Call of (expr spanned * expr spanned list)
   | Builtin of builtin
   | Global_function of func
@@ -34,8 +34,7 @@ type expr =
 and func = {ty: decl spanned; expr: expr spanned}
 
 type t =
-  { types: (string * Type.t spanned) list
-  ; funcs: (string * func spanned) list }
+  {types: (string * Type.t spanned) list; funcs: (string * func spanned) list}
 
 let find_function_by_name {funcs; _} name =
   let rec helper = function
@@ -53,11 +52,15 @@ let rec type_of_expr e =
   | Unit_literal -> wrap Type.Unit
   | Bool_literal _ -> wrap Type.Bool
   | Integer_literal _ -> wrap Type.Int
-  | If_else (_, _e1, _e2) -> assert false
-  (*let t1 = type_of_expr e1 in
-    let t2 = type_of_expr e2 in*)
-  | Call (callee, args)
-    -> (
+  | If_else (cond, e1, e2) -> (
+      match%bind type_of_expr cond with
+      | Type.Bool, _ ->
+          let%bind t1, _ = type_of_expr e1 in
+          let%bind t2, _ = type_of_expr e2 in
+          if t1 = t2 then wrap t1
+          else wrap_err (Error.If_branches_of_differing_type (t1, t2))
+      | ty, _ -> wrap_err (Error.If_on_non_bool ty) )
+  | Call (callee, args) -> (
       let%bind ty_callee, _ = type_of_expr callee in
       let%bind ty_args, _ =
         let rec helper = function
@@ -82,7 +85,13 @@ let rec type_of_expr e =
     | Builtin_add ->
         wrap Type.(Function {params= [Type.Int; Type.Int]; ret_ty= Type.Int})
     | Builtin_sub | Builtin_less_eq -> assert false )
-  | Global_function _ -> assert false
+  | Global_function f ->
+      let params =
+        let ty, _ = f.ty in
+        List.map (fun (_, ty) -> ty) ty.params
+      in
+      let%bind ret_ty, _ = type_of_expr f.expr in
+      wrap Type.(Function {params; ret_ty})
   | Parameter _ -> assert false
 
 
@@ -103,9 +112,9 @@ let rec type_expression decl ast unt_expr =
   | E.Bool_literal b, _ -> wrap (Bool_literal b)
   | E.Integer_literal i, _ -> wrap (Integer_literal i)
   | E.If_else (cond, thn, els), _ ->
-      let%bind cond, _ = type_expression decl ast cond in
-      let%bind thn, _ = type_expression decl ast thn in
-      let%bind els, _ = type_expression decl ast els in
+      let%bind cond = type_expression decl ast cond in
+      let%bind thn = type_expression decl ast thn in
+      let%bind els = type_expression decl ast els in
       wrap (If_else (cond, thn, els))
   | E.Call (callee, args), _ ->
       let%bind callee = type_expression decl ast callee in
@@ -178,25 +187,31 @@ let make unt_ast =
         helper new_ast funcs
     | [] -> ast
   in
+  (* 
+   note(ubsan): this eventually won't be an issue
+   it's currently O(n^2), but by the time n gets big enough,
+   this should be rewritten
+  *)
   let rec check_for_duplicates values =
     let rec helper v v_sp = function
-      | (name, (_, sp)) :: _ when name = v -> 
-          Error (Error.Defined_multiple_times { name;
-          original_declaration= sp}, v_sp)
+      | (name, (_, sp)) :: _ when name = v ->
+          Error
+            ( Error.Defined_multiple_times {name; original_declaration= sp}
+            , v_sp )
       | _ :: xs -> helper v v_sp xs
       | [] -> wrap ()
     in
     match values with
-      | (name, (_, sp)) :: xs ->
-          let%bind (), _ = helper name sp xs in
-          check_for_duplicates xs
-      | [] -> wrap ()
+    | (name, (_, sp)) :: xs ->
+        let%bind (), _ = helper name sp xs in
+        check_for_duplicates xs
+    | [] -> wrap ()
   in
   let%bind ret, _ = helper empty_ast unt_ast.U.funcs in
   let%bind (), _ = check_for_duplicates ret.funcs in
   let%bind (), _ = check_for_duplicates ret.types in
   wrap ret
-  
+
 
 type value =
   | Value_unit
@@ -210,7 +225,7 @@ let run self =
     | Unit_literal -> Value_unit
     | Bool_literal b -> Value_bool b
     | Integer_literal n -> Value_integer n
-    | If_else (cond, thn, els) -> (
+    | If_else ((cond, _), (thn, _), (els, _)) -> (
       match eval args ctxt cond with
       | Value_bool true -> eval args ctxt thn
       | Value_bool false -> eval args ctxt els
