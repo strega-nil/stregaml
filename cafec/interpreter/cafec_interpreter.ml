@@ -1,14 +1,39 @@
 module Ast = Cafec_typed_ast
 module Expr = Ast.Expr
 
+type context = {funcs: (string * Expr.t) list}
+
 type value =
   | Value_unit
   | Value_bool of bool
   | Value_integer of int
-  | Value_function of Expr.function_index
+  | Value_function of int
   | Value_builtin of Expr.builtin
 
-let run ctxt =
+let build_context ast =
+  let rec helper x =
+    match x () with
+    | Seq.Nil -> []
+    | Seq.Cons ((({Ast.name; _}, _), (expr, _)), xs) ->
+        (name, expr) :: helper xs
+  in
+  {funcs= helper (Ast.function_seq ast)}
+
+
+let function_expression_by_index ctxt idx =
+  let (_, expr) = List.nth_exn idx ctxt.funcs in
+  expr
+
+let function_index_by_name ctxt name =
+  let rec helper n find = function
+    | [] -> None
+    | (name, _) :: _ when name = find -> Some n
+    | _ :: xs -> helper (n + 1) name xs
+  in
+  helper 0 name ctxt.funcs
+
+
+let run ast =
   let rec eval args ctxt = function
     | Expr.Unit_literal -> Value_unit
     | Expr.Bool_literal b -> Value_bool b
@@ -22,7 +47,7 @@ let run ctxt =
     | Expr.Call ((e, _), args') -> (
       match eval args ctxt e with
       | Value_function func ->
-          let {Ast.expr; Ast.name; _} = Ast.function_by_index ctxt func in
+          let expr = function_expression_by_index ctxt func in
           let args' = List.map (fun (e, _) -> eval args ctxt e) args' in
           eval args' ctxt expr
       | Value_builtin b ->
@@ -50,10 +75,11 @@ let run ctxt =
     | Expr.Builtin b -> Value_builtin b
     | Expr.Global_function i -> Value_function i
   in
-  match Ast.function_index_by_name ctxt "main" with
+  let ctxt = build_context ast in
+  match function_index_by_name ctxt "main" with
   | None -> print_endline "main not defined"
   | Some idx ->
-      let {Ast.expr= main_expr; _} = Ast.function_by_index ctxt idx in
+      let main_expr = function_expression_by_index ctxt idx in
       match eval [] ctxt main_expr with
       | Value_integer n -> Printf.printf "main returned %d\n" n
       | Value_bool true -> print_endline "main returned true"
