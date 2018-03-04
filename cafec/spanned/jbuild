@@ -3,4 +3,4 @@
 (library
   ((name cafec_spanned)
   (libraries (pred))
-  (flags (:standard -w @a-4 -open Pred))))
+  (flags (:standard -w +a-4 -open Pred))))

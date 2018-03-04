@@ -63,10 +63,6 @@ module Type = struct
   let print (Named self) = print_string self
 end
 
-module Type_declaration = struct
-  type t
-end
-
 module Function = struct
   type builder =
     { name: string

@@ -1,9 +1,5 @@
 open Cafec_spanned.Prelude
 
-module Type_declaration : sig
-  type t
-end
-
 module Type : sig
   type builder = Named of string
  and t = builder spanned

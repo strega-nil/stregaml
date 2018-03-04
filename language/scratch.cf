@@ -1,8 +1,8 @@
 let fib(x: int): int =
-  if (LESS_EQ(x, 1)) {
-    x
+  if (LESS_EQ(0, 1)) {
+    0
   } else {
-    fib(SUB(x, 1), SUB(x, 2))
+    fib(1)
   };
 
 let main(): int = fib(0);
