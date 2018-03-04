@@ -4,7 +4,7 @@ module Prelude : sig
     | Keyword_false
     | Keyword_if
     | Keyword_else
-    | Keyword_let
+    | Keyword_func
     | Keyword_underscore
 
   type t =

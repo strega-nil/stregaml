@@ -90,9 +90,9 @@ let lex_ident fst sp lex =
         | "false" -> kw Token.Keyword_false
         | "if" -> kw Token.Keyword_if
         | "else" -> kw Token.Keyword_else
-        | "let" -> kw Token.Keyword_let
+        | "func" -> kw Token.Keyword_func
         | "_" -> kw Token.Keyword_underscore
-        | "func" as res -> Error (Error.Reserved_token res, sp)
+        | "let" as res -> Error (Error.Reserved_token res, sp)
         | "type" as res -> Error (Error.Reserved_token res, sp)
         | "struct" as res -> Error (Error.Reserved_token res, sp)
         | "variant" as res -> Error (Error.Reserved_token res, sp)

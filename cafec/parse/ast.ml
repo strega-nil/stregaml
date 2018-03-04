@@ -85,7 +85,7 @@ module Function = struct
       in
       print_char '(' ; helper lst ; print_char ')'
     in
-    print_string "let " ;
+    print_string "func " ;
     print_string self.name ;
     print_parameter_list self.params ;
     ( match self.ret_ty with

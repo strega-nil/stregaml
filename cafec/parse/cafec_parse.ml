@@ -203,7 +203,7 @@ and parse_block parser =
 
 let parse_item (parser: t) : (item option, Error.t) spanned_result =
   match%bind next_token parser with
-  | Token.Keyword Token.Keyword_let, _ ->
+  | Token.Keyword Token.Keyword_func, _ ->
       let%bind name, _ = get_ident parser in
       let%bind params, _ = parse_parameter_list parser in
       let%bind ret_ty, _ = maybe_parse_type_annotation parser in

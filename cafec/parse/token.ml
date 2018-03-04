@@ -6,7 +6,7 @@ module Prelude = struct
     | Keyword_false
     | Keyword_if
     | Keyword_else
-    | Keyword_let
+    | Keyword_func
     | Keyword_underscore
 
   type t =
@@ -33,7 +33,7 @@ let print_keyword = function
   | Keyword_false -> print_string "false"
   | Keyword_if -> print_string "if"
   | Keyword_else -> print_string "else"
-  | Keyword_let -> print_string "let"
+  | Keyword_func -> print_string "func"
   | Keyword_underscore -> print_char '_'
 
 
