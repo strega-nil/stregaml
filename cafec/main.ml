@@ -1,5 +1,6 @@
 module Parse = Cafec_parse
 module Typed_ast = Cafec_typed_ast
+module Interpreter = Cafec_interpreter
 
 type command_line_arguments = {filename: string; print_parse_ast: bool}
 
@@ -54,12 +55,13 @@ let main () =
       print_newline ()
   | Ok (unt_ast, _) ->
       Parse.Ast.print unt_ast ;
+      flush stdout ;
       match Typed_ast.make unt_ast with
       | Error e ->
           print_string "Error: " ;
           Typed_ast.Error.print_spanned e ;
           print_newline ()
-      | Ok (ty_ast, _) -> Typed_ast.run ty_ast
+      | Ok (ty_ast, _) -> Interpreter.run ty_ast
 
 
 let () = main ()
