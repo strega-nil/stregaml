@@ -35,7 +35,7 @@ let is_expression_end = function
   | _ -> false
 
 
-type item = Item_func of Ast.Function.builder
+type item = Item_func of Ast.Function.t
 
 let get_ident parser =
   match%bind next_token parser with
@@ -202,7 +202,8 @@ and parse_block parser =
       | tok, _ ->
           wrap_err (Error.Unexpected_token (Error.Expected_expression, tok))
 
-let parse_type_definition _: unit monad = assert false
+
+let parse_type_definition _ : unit monad = assert false
 
 let parse_item (parser: t) : (item option, Error.t) spanned_result =
   match%bind next_token parser with

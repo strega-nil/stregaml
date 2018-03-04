@@ -2,7 +2,7 @@ open Cafec_spanned.Prelude
 
 type t =
   | Name_not_found of string
-  | Type_not_found of Cafec_parse.Ast.Type.builder
+  | Type_not_found of Cafec_parse.Ast.Type.t
   | If_on_non_bool of Type.t
   | If_branches_of_differing_type of (Type.t * Type.t)
   | Call_of_non_function of Type.t

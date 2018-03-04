@@ -187,12 +187,9 @@ let rec next_token lex =
       in
       let rec helper s idx =
         if String.length s > idx + 1 then
-          if not (is_invalid (s.[idx], s.[idx + 1])) then
-            false
-          else
-            helper s (idx + 1)
-        else
-          true
+          if not (is_invalid (s.[idx], s.[idx + 1])) then false
+          else helper s (idx + 1)
+        else true
       in
       helper s 0
     in
@@ -206,12 +203,11 @@ let rec next_token lex =
           helper (idx + 1) (Spanned.union sp sp')
       | Some _ | None ->
         match S.to_string buff with
-        | "/*" ->
-            ( match block_comment sp with
-            | Ok ((), _) -> next_token lex
-            | Error e -> Error e )
-        | "//" ->
-            line_comment () ; next_token lex
+        | "/*" -> (
+          match block_comment sp with
+          | Ok ((), _) -> next_token lex
+          | Error e -> Error e )
+        | "//" -> line_comment () ; next_token lex
         | ":" -> Ok (Token.Colon, sp)
         | "=" -> Ok (Token.Equals, sp)
         | "->" -> Ok (Token.Arrow, sp)

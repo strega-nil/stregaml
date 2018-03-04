@@ -12,7 +12,7 @@ type decl = {name: string; params: (string * Type.t) list; ret_ty: Type.t}
 type t = {func_decls: decl spanned list; func_exprs: Expr.t spanned list}
 
 module Types : sig
-  val get : t -> Untyped_ast.Type.t -> Type.t monad
+  val get : t -> Untyped_ast.Type.t spanned -> Type.t monad
 end = struct
   let get _ctxt unt_ty =
     let module T = Untyped_ast.Type in

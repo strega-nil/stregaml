@@ -1,6 +1,4 @@
-* add types
-* unt_ast shouldn't differentiate between function and type items
-* get rid of the silly builder/t stuff
+* add type definitions
 
 * names for stuff
   * tamper - build

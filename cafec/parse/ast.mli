@@ -1,36 +1,31 @@
 open Cafec_spanned.Prelude
 
 module Type : sig
-  type builder = Named of string
- and t = builder spanned
+  type t = Named of string
 
-  val print : builder -> unit
+  val print : t -> unit
 end
 
 module Expr : sig
-  type builder =
+  type t =
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
-    | If_else of (t * t * t)
+    | If_else of (t spanned * t spanned * t spanned)
     | Variable of string
-    | Call of (t * t list)
-
-  and t = builder spanned
+    | Call of (t spanned * t spanned list)
 end
 
 module Function : sig
-  type builder =
+  type t =
     { name: string
-    ; params: (string * Type.t) list
-    ; ret_ty: Type.t option
-    ; expr: Expr.t }
-
-  and t = builder spanned
+    ; params: (string * Type.t spanned) list
+    ; ret_ty: Type.t spanned option
+    ; expr: Expr.t spanned }
 end
 
-type t = {funcs: Function.t list}
+type t = {funcs: Function.t spanned list}
 
-val make : Function.t list -> t
+val make : Function.t spanned list -> t
 
 val print : t -> unit
