@@ -12,3 +12,5 @@ type t
 val make : Cafec_parse.Ast.t -> (t, Error.t) spanned_result
 
 val function_seq : t -> (func_decl spanned * Expr.t spanned) seq
+
+val number_of_functions : t -> int

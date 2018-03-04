@@ -1,7 +1,7 @@
 module Ast = Cafec_typed_ast
 module Expr = Ast.Expr
 
-type context = {funcs: (string * Expr.t) list}
+type context = {funcs: (string * Expr.t) array}
 
 type value =
   | Value_unit
@@ -11,26 +11,28 @@ type value =
   | Value_builtin of Expr.builtin
 
 let build_context ast =
-  let rec helper x =
-    match x () with
-    | Seq.Nil -> []
+  let seq = ref (Ast.function_seq ast) in
+  let helper _ =
+    match !seq () with
+    | Seq.Nil -> assert false
     | Seq.Cons ((({Ast.name; _}, _), (expr, _)), xs) ->
-        (name, expr) :: helper xs
+        seq := xs ;
+        (name, expr)
   in
-  {funcs= helper (Ast.function_seq ast)}
+  let ret = {funcs= Array.init (Ast.number_of_functions ast) helper} in
+  match !seq () with
+  | Seq.Cons _ -> assert false
+  | Seq.Nil -> ret
 
 
 let function_expression_by_index ctxt idx =
-  let (_, expr) = List.nth_exn idx ctxt.funcs in
+  let (_, expr) = ctxt.funcs.(idx) in
   expr
 
-let function_index_by_name ctxt name =
-  let rec helper n find = function
-    | [] -> None
-    | (name, _) :: _ when name = find -> Some n
-    | _ :: xs -> helper (n + 1) name xs
-  in
-  helper 0 name ctxt.funcs
+let function_index_by_name ctxt find =
+  match Array.find (fun (name, _) -> name = find) ctxt.funcs with
+  | None -> None
+  | Some (n, _) -> Some n
 
 
 let run ast =
