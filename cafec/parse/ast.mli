@@ -16,16 +16,21 @@ module Expr : sig
     | Call of (t spanned * t spanned list)
 end
 
-module Function : sig
-  type t =
-    { name: string
+module Item : sig
+  type func =
+    { fname: string
     ; params: (string * Type.t spanned) list
     ; ret_ty: Type.t spanned option
     ; expr: Expr.t spanned }
+
+  type type_kind =
+    | Alias of Type.t spanned
+
+  type type_def =
+    { tname: string
+    ; kind: type_kind }
 end
 
-type t = {funcs: Function.t spanned list}
-
-val make : Function.t spanned list -> t
+type t = {funcs: Item.func spanned list ; types: Item.type_def spanned list}
 
 val print : t -> unit

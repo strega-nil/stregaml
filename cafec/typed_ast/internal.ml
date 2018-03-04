@@ -161,9 +161,9 @@ let rec type_expression decl ast unt_expr =
 
 
 let add_function_declaration unt_func (ctxt: t) : t monad =
-  let module U = Untyped_ast.Function in
+  let module U = Untyped_ast.Item in
   let unt_func, _ = unt_func in
-  let {U.name; U.params; U.ret_ty; _} = unt_func in
+  let {U.fname= name; U.params; U.ret_ty; _} = unt_func in
   let%bind params, parm_sp =
     let rec helper ctxt = function
       | [] -> wrap []
@@ -188,13 +188,13 @@ let add_function_declaration unt_func (ctxt: t) : t monad =
   add_function_declaration
 *)
 let add_function_definition unt_func (ctxt: t) : t monad =
-  let module U = Untyped_ast.Function in
+  let module U = Untyped_ast.Item in
   let unt_func, _ = unt_func in
   let decl =
     let num_funcs = List.length ctxt.func_decls in
     let idx = num_funcs - 1 - List.length ctxt.func_exprs in
     let decl, _ = Functions.decl_by_index ctxt idx in
-    assert (decl.name = unt_func.U.name) ;
+    assert (decl.name = unt_func.U.fname) ;
     decl
   in
   let%bind expr = type_expression decl ctxt unt_func.U.expr in
@@ -220,7 +220,7 @@ let make unt_ast =
         add_definitions new_ast funcs
     | [] -> wrap ast
   in
-  (* 
+  (*
    note(ubsan): this eventually won't be an issue
    it's currently O(n^2), but by the time n gets big enough,
    this should be rewritten

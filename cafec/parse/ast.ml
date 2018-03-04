@@ -60,14 +60,21 @@ module Type = struct
   let print (Named self) = print_string self
 end
 
-module Function = struct
-  type t =
-    { name: string
+module Item = struct
+  type func =
+    { fname: string
     ; params: (string * Type.t spanned) list
     ; ret_ty: Type.t spanned option
     ; expr: Expr.t spanned }
 
-  let print self =
+  type type_kind =
+    | Alias of Type.t spanned
+
+  type type_def =
+    { tname: string
+    ; kind: type_kind }
+
+  let print_func self =
     let print_parameter_list lst =
       let rec helper ?start = function
         | (name, (ty, _)) :: xs ->
@@ -81,7 +88,7 @@ module Function = struct
       print_char '(' ; helper lst ; print_char ')'
     in
     print_string "func " ;
-    print_string self.name ;
+    print_string self.fname ;
     print_parameter_list self.params ;
     ( match self.ret_ty with
     | Some (ty, _) -> print_string ": " ; Type.print ty
@@ -91,15 +98,27 @@ module Function = struct
     (let expr, _ = self.expr in
      Expr.print 1 expr) ;
     print_string ";\n"
+
+  let print_type_def self =
+    print_string "type " ;
+    print_string self.tname ;
+    print_string " =\n" ;
+    print_indent 1 ;
+    ( match self.kind with
+    | Alias (ty, _) -> Type.print ty ) ;
+    print_string ";\n"
 end
 
-type t = {funcs: Function.t spanned list}
-
-let make funcs = {funcs}
+type t = {funcs: Item.func spanned list ; types: Item.type_def spanned list}
 
 let print self =
-  let rec helper = function
-    | (x, _) :: xs -> Function.print x ; helper xs
+  let rec print_types = function
+    | (x, _) :: xs -> Item.print_type_def x ; print_types xs
     | [] -> ()
   in
-  helper self.funcs
+  let rec print_funcs = function
+    | (x, _) :: xs -> Item.print_func x ; print_funcs xs
+    | [] -> ()
+  in
+  print_types self.types ;
+  print_funcs self.funcs

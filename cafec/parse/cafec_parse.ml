@@ -35,7 +35,9 @@ let is_expression_end = function
   | _ -> false
 
 
-type item = Item_func of Ast.Function.t
+type item =
+  | Item_func of Ast.Item.func
+  | Item_type of Ast.Item.type_def
 
 let get_ident parser =
   match%bind next_token parser with
@@ -208,13 +210,13 @@ let parse_type_definition _ : unit monad = assert false
 let parse_item (parser: t) : (item option, Error.t) spanned_result =
   match%bind next_token parser with
   | Token.Keyword Token.Keyword_func, _ ->
-      let%bind name, _ = get_ident parser in
+      let%bind fname, _ = get_ident parser in
       let%bind params, _ = parse_parameter_list parser in
       let%bind ret_ty, _ = maybe_parse_type_annotation parser in
       let%bind (), _ = get_specific parser Token.Equals in
       let%bind expr, _ = parse_expression parser in
       let%bind (), _ = get_specific parser Token.Semicolon in
-      let func = Ast.Function.{name; params; ret_ty; expr} in
+      let func = Ast.Item.{fname; params; ret_ty; expr} in
       wrap (Some (Item_func func))
   | Token.Keyword Token.Keyword_type, _ ->
       let%bind _name, _ = get_ident parser in
@@ -231,12 +233,13 @@ let parse_program (parser: t) : (Ast.t, Error.t) spanned_result =
     let%bind item, sp = parse_item parser in
     match item with
     | Some Item_func func ->
-        let%bind tl, _ = helper parser in
-        wrap ((func, sp) :: tl)
-    | None -> wrap []
+        let%bind (ftl, ttl), _ = helper parser in
+        wrap ((func, sp) :: ftl, ttl)
+    | Some Item_type _def -> assert false
+    | None -> wrap ([], [])
   in
-  let%bind funcs, _ = helper parser in
-  wrap (Ast.make funcs)
+  let%bind (funcs, types), _ = helper parser in
+  wrap Ast.{funcs; types}
 
 
 let parse program =
