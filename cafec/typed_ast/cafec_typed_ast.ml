@@ -94,7 +94,7 @@ end = struct
     if idx < 0 then assert false else helper (idx, func_exprs)
 end
 
-let rec type_of_expr ctxt e =
+let rec type_of_expr ctxt decl e =
   let e, sp = e in
   let%bind (), _ = with_span sp in
   match e with
@@ -102,20 +102,20 @@ let rec type_of_expr ctxt e =
   | Bool_literal _ -> wrap Type.Bool
   | Integer_literal _ -> wrap Type.Int
   | If_else (cond, e1, e2) -> (
-      match%bind type_of_expr ctxt cond with
+      match%bind type_of_expr ctxt decl cond with
       | Type.Bool, _ ->
-          let%bind t1, _ = type_of_expr ctxt e1 in
-          let%bind t2, _ = type_of_expr ctxt e2 in
+          let%bind t1, _ = type_of_expr ctxt decl e1 in
+          let%bind t2, _ = type_of_expr ctxt decl e2 in
           if t1 = t2 then wrap t1
           else wrap_err (Error.If_branches_of_differing_type (t1, t2))
       | ty, _ -> wrap_err (Error.If_on_non_bool ty) )
   | Call (callee, args) -> (
-      let%bind ty_callee, _ = type_of_expr ctxt callee in
+      let%bind ty_callee, _ = type_of_expr ctxt decl callee in
       let%bind ty_args, _ =
         let rec helper = function
           | [] -> wrap []
           | x :: xs ->
-              let%bind ty, _ = type_of_expr ctxt x in
+              let%bind ty, _ = type_of_expr ctxt decl x in
               let%bind rest, _ = helper xs in
               wrap (ty :: rest)
         in
@@ -141,7 +141,9 @@ let rec type_of_expr ctxt e =
       let params = List.map (fun (_, ty) -> ty) decl.params in
       let ret_ty = decl.ret_ty in
       wrap Type.(Function {params; ret_ty})
-  | Parameter _ -> assert false
+  | Parameter p -> 
+      let _, ty = List.nth_exn p decl.params in
+      wrap ty
 
 
 let find_parameter name lst =
@@ -232,7 +234,7 @@ let add_function_definition unt_func (ctxt: t) : t monad =
     decl
   in
   let%bind expr = type_expression decl ctxt unt_func.F.expr in
-  let%bind expr_ty, _ = type_of_expr ctxt expr in
+  let%bind expr_ty, _ = type_of_expr ctxt decl expr in
   if expr_ty = decl.ret_ty then
     wrap {ctxt with func_exprs= expr :: ctxt.func_exprs}
   else
