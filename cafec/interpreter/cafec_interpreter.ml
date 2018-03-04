@@ -20,14 +20,13 @@ let build_context ast =
         (name, expr)
   in
   let ret = {funcs= Array.init (Ast.number_of_functions ast) helper} in
-  match !seq () with
-  | Seq.Cons _ -> assert false
-  | Seq.Nil -> ret
+  match !seq () with Seq.Cons _ -> assert false | Seq.Nil -> ret
 
 
 let function_expression_by_index ctxt idx =
-  let (_, expr) = ctxt.funcs.(idx) in
+  let _, expr = (ctxt.funcs).(idx) in
   expr
+
 
 let function_index_by_name ctxt find =
   match Array.find (fun (name, _) -> name = find) ctxt.funcs with

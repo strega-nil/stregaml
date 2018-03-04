@@ -10,6 +10,7 @@ type expected_token =
 
 type t =
   | Unclosed_comment
+  | Operator_including_comment_token of string
   | Malformed_number_literal
   | Reserved_token of string
   | Unrecognized_character of char

@@ -11,6 +11,7 @@ type expected_token =
 
 type t =
   | Unclosed_comment
+  | Operator_including_comment_token of string
   | Malformed_number_literal
   | Reserved_token of string
   | Unrecognized_character of char
@@ -31,7 +32,9 @@ let print_expected = function
 
 
 let print = function
-  | Malformed_number_literal -> Printf.printf "malformed number literal"
+  | Malformed_number_literal -> print_string "malformed number literal"
+  | Operator_including_comment_token s ->
+      Printf.printf "operator %s includes a sequence of comment characters" s
   | Reserved_token tok -> Printf.printf "reserved token: %s" tok
   | Unrecognized_character ch ->
       Printf.printf "unrecognized character: `%c` (%d)" ch (Char.code ch)
@@ -45,5 +48,5 @@ let print = function
 
 let print_spanned (err, sp) =
   print err ;
-  Printf.printf " from (%d, %d) to (%d, %d)" sp.start_line sp.start_column
+  Printf.printf "\n  from (%d, %d) to (%d, %d)" sp.start_line sp.start_column
     sp.end_line sp.end_column

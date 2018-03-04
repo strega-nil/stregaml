@@ -4,6 +4,8 @@ open Error.Monad_spanned
 module Error = Error
 module Ast = Ast
 
+type 'a monad = 'a Error.Monad_spanned.t
+
 type t = {lexer: Lex.t; mutable peek: (Token.t * span) option}
 
 let peek_token parser =
@@ -200,6 +202,7 @@ and parse_block parser =
       | tok, _ ->
           wrap_err (Error.Unexpected_token (Error.Expected_expression, tok))
 
+let parse_type_definition _: unit monad = assert false
 
 let parse_item (parser: t) : (item option, Error.t) spanned_result =
   match%bind next_token parser with
@@ -212,6 +215,11 @@ let parse_item (parser: t) : (item option, Error.t) spanned_result =
       let%bind (), _ = get_specific parser Token.Semicolon in
       let func = Ast.Function.{name; params; ret_ty; expr} in
       wrap (Some (Item_func func))
+  | Token.Keyword Token.Keyword_type, _ ->
+      let%bind _name, _ = get_ident parser in
+      let%bind (), _ = get_specific parser Token.Equals in
+      let%bind _def, _ = parse_type_definition parser in
+      assert false
   | Token.Eof, _ -> wrap None
   | tok, _ ->
       wrap_err (Error.Unexpected_token (Error.Expected_item_declarator, tok))

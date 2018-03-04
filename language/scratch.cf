@@ -1,3 +1,8 @@
+type pair = struct {
+  x: int;
+  y: int;
+};
+
 func fib(x: int): int =
   if (LESS_EQ(x, 1)) {
     x

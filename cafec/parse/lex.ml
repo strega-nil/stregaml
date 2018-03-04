@@ -91,10 +91,10 @@ let lex_ident fst sp lex =
         | "if" -> kw Token.Keyword_if
         | "else" -> kw Token.Keyword_else
         | "func" -> kw Token.Keyword_func
+        | "type" -> kw Token.Keyword_type
+        | "struct" -> kw Token.Keyword_struct
         | "_" -> kw Token.Keyword_underscore
         | "let" as res -> Error (Error.Reserved_token res, sp)
-        | "type" as res -> Error (Error.Reserved_token res, sp)
-        | "struct" as res -> Error (Error.Reserved_token res, sp)
         | "variant" as res -> Error (Error.Reserved_token res, sp)
         | id -> Ok (Token.Identifier id, sp)
   in
@@ -159,7 +159,9 @@ let rec next_token lex =
           | _ -> eat_the_things () )
         | Some ('/', sp') -> (
           match next_ch lex with
-          | Some ('*', _) -> block_comment sp'
+          | Some ('*', _) ->
+              let%bind (), _ = block_comment sp' in
+              eat_the_things ()
           | _ -> eat_the_things () )
         | Some _ -> eat_the_things ()
         | None ->
@@ -175,33 +177,51 @@ let rec next_token lex =
       in
       eat_the_things ()
     in
-    match peek_ch lex with
-    | Some ('*', _) when fst = '/' -> (
-        eat_ch lex ;
-        match block_comment sp with
-        | Ok ((), _) -> next_token lex
-        | Error e -> Error e )
-    | Some ('/', _) when fst = '/' ->
-        eat_ch lex ; line_comment () ; next_token lex
-    | _ ->
-        let module S = String_buffer in
-        let buff = S.with_capacity 8 in
-        let rec helper idx sp =
-          match peek_ch lex with
-          | Some (ch, sp') when is_operator_continue ch ->
-              eat_ch lex ;
-              S.push ch buff ;
-              helper (idx + 1) (Spanned.union sp sp')
-          | Some _ | None ->
-            match S.to_string buff with
-            | ":" -> Ok (Token.Colon, sp)
-            | "=" -> Ok (Token.Equals, sp)
-            | "->" -> Ok (Token.Arrow, sp)
-            | "|" as res -> Error (Error.Reserved_token res, sp)
-            | "." as res -> Error (Error.Reserved_token res, sp)
-            | op -> Ok (Token.Operator op, sp)
-        in
-        S.push fst buff ; helper 1 sp
+    (* TODO(ubsan): pull this out into pred *)
+    let includes_operator_token s =
+      let is_invalid = function
+        | '*', '/' -> true
+        | '/', '/' -> true
+        | '/', '*' -> true
+        | _ -> false
+      in
+      let rec helper s idx =
+        if String.length s > idx + 1 then
+          if not (is_invalid (s.[idx], s.[idx + 1])) then
+            false
+          else
+            helper s (idx + 1)
+        else
+          true
+      in
+      helper s 0
+    in
+    let module S = String_buffer in
+    let buff = S.with_capacity 8 in
+    let rec helper idx sp =
+      match peek_ch lex with
+      | Some (ch, sp') when is_operator_continue ch ->
+          eat_ch lex ;
+          S.push ch buff ;
+          helper (idx + 1) (Spanned.union sp sp')
+      | Some _ | None ->
+        match S.to_string buff with
+        | "/*" ->
+            ( match block_comment sp with
+            | Ok ((), _) -> next_token lex
+            | Error e -> Error e )
+        | "//" ->
+            line_comment () ; next_token lex
+        | ":" -> Ok (Token.Colon, sp)
+        | "=" -> Ok (Token.Equals, sp)
+        | "->" -> Ok (Token.Arrow, sp)
+        | "|" as res -> Error (Error.Reserved_token res, sp)
+        | "." as res -> Error (Error.Reserved_token res, sp)
+        | op when includes_operator_token op ->
+            Error (Error.Operator_including_comment_token op, sp)
+        | op -> Ok (Token.Operator op, sp)
+    in
+    S.push fst buff ; helper 1 sp
   in
   eat_whitespace lex ;
   match next_ch lex with

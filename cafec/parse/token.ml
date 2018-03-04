@@ -7,6 +7,8 @@ module Prelude = struct
     | Keyword_if
     | Keyword_else
     | Keyword_func
+    | Keyword_type
+    | Keyword_struct
     | Keyword_underscore
 
   type t =
@@ -34,6 +36,8 @@ let print_keyword = function
   | Keyword_if -> print_string "if"
   | Keyword_else -> print_string "else"
   | Keyword_func -> print_string "func"
+  | Keyword_type -> print_string "type"
+  | Keyword_struct -> print_string "struct"
   | Keyword_underscore -> print_char '_'
 
 
@@ -42,11 +46,13 @@ let print = function
   | Close_paren -> print_string "close paren `)`"
   | Open_brace -> print_string "open brace `{`"
   | Close_brace -> print_string "close brace `}`"
-  | Keyword kw -> print_string "keyword: " ; print_keyword kw
-  | Operator op -> print_string "operator: " ; print_string op
+  | Keyword kw -> print_string "keyword: `" ; print_keyword kw ; print_char '`'
+  | Operator op ->
+      print_string "operator: `" ; print_string op ; print_char '`'
   | Identifier id ->
-      print_string "identifier: " ;
-      print_string id
+      print_string "identifier: `" ;
+      print_string id ;
+      print_char '`'
   | Integer_literal i ->
       print_string "int literal: " ;
       print_int i

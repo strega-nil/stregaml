@@ -1,8 +1,6 @@
-* fix the parser so that comments nest
-* actually start typeck
+* add types
 * unt_ast shouldn't differentiate between function and type items
 * get rid of the silly builder/t stuff
-* remove the restriction on value ordering
 
 * names for stuff
   * tamper - build

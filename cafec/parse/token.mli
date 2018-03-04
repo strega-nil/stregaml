@@ -5,6 +5,8 @@ module Prelude : sig
     | Keyword_if
     | Keyword_else
     | Keyword_func
+    | Keyword_type
+    | Keyword_struct
     | Keyword_underscore
 
   type t =

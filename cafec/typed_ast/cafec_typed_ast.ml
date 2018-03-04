@@ -14,6 +14,7 @@ let make unt_ast =
       Ok ({number_of_functions; ast}, sp)
   | Error e -> Error e
 
+
 let function_seq ast =
   let rec helper decls exprs () =
     match (decls, exprs) with
@@ -24,5 +25,6 @@ let function_seq ast =
   in
   let {ast= {Internal.func_decls; Internal.func_exprs}; _} = ast in
   helper func_decls func_exprs
+
 
 let number_of_functions {number_of_functions; _} = number_of_functions
