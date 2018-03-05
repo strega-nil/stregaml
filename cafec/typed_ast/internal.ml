@@ -7,35 +7,52 @@ open Error.Monad_spanned
 
 type 'a monad = 'a Error.Monad_spanned.t
 
-type decl = {name: string; params: (string * Type.t) list; ret_ty: Type.t}
+type func_decl = {fname: string; params: (string * Type.t) list; ret_ty: Type.t}
 
-type t = {func_decls: decl spanned list; func_exprs: Expr.t spanned list}
+(*
+type type_kind =
+
+type type_def = {tname: string; kind: type_kind}
+*)
+
+type t =
+  { type_aliases: (string * Type.t) list
+  ; func_decls: func_decl spanned list
+  ; func_exprs: Expr.t spanned list }
 
 module Types : sig
   val get : t -> Untyped_ast.Type.t spanned -> Type.t monad
 end = struct
-  let get _ctxt unt_ty =
+  let get ctxt unt_ty =
     let module T = Untyped_ast.Type in
     let unt_ty, sp = unt_ty in
     let%bind (), _ = with_span sp in
     match unt_ty with T.Named name ->
-      match name with
-      | "unit" -> wrap Type.Unit
-      | "bool" -> wrap Type.Bool
-      | "int" -> wrap Type.Int
-      | _ -> wrap_err (Error.Type_not_found unt_ty)
+      let rec helper find = function
+        | [] -> None
+        | (name, ty) :: _ when find = name -> Some ty
+        | _ :: xs -> helper find xs
+      in
+      match helper name ctxt.type_aliases with
+      | Some ty -> wrap ty
+      | None ->
+        ( match name with
+        | "unit" -> wrap Type.Unit
+        | "bool" -> wrap Type.Bool
+        | "int" -> wrap Type.Int
+        | _ -> wrap_err (Error.Type_not_found unt_ty) )
 end
 
 module Functions : sig
   val index_by_name : t -> string -> int option
 
-  val decl_by_index : t -> int -> decl spanned
+  val decl_by_index : t -> int -> func_decl spanned
 
   val expr_by_index : t -> int -> Expr.t spanned
 end = struct
   let index_by_name {func_decls; _} search =
     let rec helper n = function
-      | ({name; _}, _) :: _ when name = search -> Some n
+      | ({fname; _}, _) :: _ when fname = search -> Some n
       | _ :: names -> helper (n + 1) names
       | [] -> None
     in
@@ -160,10 +177,26 @@ let rec type_expression decl ast unt_expr =
       | Some (_ty, idx) -> wrap (T.Parameter idx)
 
 
+let add_type_definition unt_type ctxt =
+  let module T = Untyped_ast.Type in
+  let module I = Untyped_ast.Item in
+  let ({I.tname; I.kind= I.Alias ty}, sp) = unt_type in
+  let%bind (), _ = with_span sp in
+  let rec check_for_duplicates search = function
+    | [] -> None
+    | (name, t) :: _ when name = search -> Some t
+    | _ :: xs -> check_for_duplicates search xs
+  in
+  match check_for_duplicates tname ctxt.type_aliases with
+  | Some _ -> assert false
+  | None ->
+      let%bind ty, _ = Types.get ctxt ty in
+      wrap {ctxt with type_aliases= (tname, ty) :: ctxt.type_aliases}
+
 let add_function_declaration unt_func (ctxt: t) : t monad =
   let module U = Untyped_ast.Item in
   let unt_func, _ = unt_func in
-  let {U.fname= name; U.params; U.ret_ty; _} = unt_func in
+  let {U.fname; U.params; U.ret_ty; _} = unt_func in
   let%bind params, parm_sp =
     let rec helper ctxt = function
       | [] -> wrap []
@@ -179,8 +212,20 @@ let add_function_declaration unt_func (ctxt: t) : t monad =
     | Some ret_ty -> Types.get ctxt ret_ty
     | None -> wrap Type.Unit
   in
-  let decl = ({name; params; ret_ty}, Spanned.union parm_sp rty_sp) in
-  wrap {ctxt with func_decls= decl :: ctxt.func_decls}
+  (* check for duplicates *)
+  let rec check_for_duplicates search = function
+    | [] -> None
+    | (f, sp) :: _ when f.fname = search -> Some (f, sp)
+    | _ :: xs -> check_for_duplicates search xs
+  in
+  match check_for_duplicates fname ctxt.func_decls with
+  | Some (_, sp) ->
+      wrap_err
+        (Error.Defined_function_multiple_times
+           {name= fname; original_declaration= sp})
+  | None ->
+      let decl = ({fname; params; ret_ty}, Spanned.union parm_sp rty_sp) in
+      wrap {ctxt with func_decls= decl :: ctxt.func_decls}
 
 
 (*
@@ -194,7 +239,7 @@ let add_function_definition unt_func (ctxt: t) : t monad =
     let num_funcs = List.length ctxt.func_decls in
     let idx = num_funcs - 1 - List.length ctxt.func_exprs in
     let decl, _ = Functions.decl_by_index ctxt idx in
-    assert (decl.name = unt_func.U.fname) ;
+    assert (decl.fname = unt_func.U.fname) ;
     decl
   in
   let%bind expr = type_expression decl ctxt unt_func.U.expr in
@@ -208,26 +253,26 @@ let add_function_definition unt_func (ctxt: t) : t monad =
 
 let make unt_ast =
   let module U = Untyped_ast in
-  let rec add_declarations ast = function
+  let rec add_type_definitions ast = function
+    | unt_type :: types ->
+        let%bind new_ast, _ = add_type_definition unt_type ast in
+        add_type_definitions new_ast types
+    | [] -> wrap ast
+  in
+  let rec add_function_declarations ast = function
     | unt_func :: funcs ->
         let%bind new_ast, _ = add_function_declaration unt_func ast in
-        add_declarations new_ast funcs
+        add_function_declarations new_ast funcs
     | [] -> wrap ast
   in
-  let rec add_definitions ast = function
+  let rec add_function_definitions ast = function
     | unt_func :: funcs ->
         let%bind new_ast, _ = add_function_definition unt_func ast in
-        add_definitions new_ast funcs
+        add_function_definitions new_ast funcs
     | [] -> wrap ast
   in
-  (*
-   note(ubsan): this eventually won't be an issue
-   it's currently O(n^2), but by the time n gets big enough,
-   this should be rewritten
-  *)
-  let check_for_duplicates _ast = wrap () in
-  let ret = {func_decls= []; func_exprs= []} in
-  let%bind ret, _ = add_declarations ret unt_ast.U.funcs in
-  let%bind ret, _ = add_definitions ret unt_ast.U.funcs in
-  let%bind (), _ = check_for_duplicates ret in
+  let ret = {type_aliases= []; func_decls= []; func_exprs= []} in
+  let%bind ret, _ = add_type_definitions ret unt_ast.U.types in
+  let%bind ret, _ = add_function_declarations ret unt_ast.U.funcs in
+  let%bind ret, _ = add_function_definitions ret unt_ast.U.funcs in
   wrap ret

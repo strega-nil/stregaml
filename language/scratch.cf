@@ -1,13 +1,5 @@
-type pair = struct {
-  x: int;
-  y: int;
-};
+type alias = int;
 
-func fib(x: int): int =
-  if (LESS_EQ(x, 1)) {
-    x
-  } else {
-    ADD(fib(SUB(x, 1)), fib(SUB(x, 2)))
-  };
+func test_alias(x: alias): int = x;
 
-func main(): int = fib(6);
+func main(): int = test_alias(6);

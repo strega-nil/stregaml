@@ -67,12 +67,9 @@ module Item = struct
     ; ret_ty: Type.t spanned option
     ; expr: Expr.t spanned }
 
-  type type_kind =
-    | Alias of Type.t spanned
+  type type_kind = Alias of Type.t spanned
 
-  type type_def =
-    { tname: string
-    ; kind: type_kind }
+  type type_def = {tname: string; kind: type_kind}
 
   let print_func self =
     let print_parameter_list lst =
@@ -99,17 +96,17 @@ module Item = struct
      Expr.print 1 expr) ;
     print_string ";\n"
 
+
   let print_type_def self =
     print_string "type " ;
     print_string self.tname ;
     print_string " =\n" ;
     print_indent 1 ;
-    ( match self.kind with
-    | Alias (ty, _) -> Type.print ty ) ;
+    (match self.kind with Alias (ty, _) -> Type.print ty) ;
     print_string ";\n"
 end
 
-type t = {funcs: Item.func spanned list ; types: Item.type_def spanned list}
+type t = {funcs: Item.func spanned list; types: Item.type_def spanned list}
 
 let print self =
   let rec print_types = function
@@ -120,5 +117,4 @@ let print self =
     | (x, _) :: xs -> Item.print_func x ; print_funcs xs
     | [] -> ()
   in
-  print_types self.types ;
-  print_funcs self.funcs
+  print_types self.types ; print_funcs self.funcs

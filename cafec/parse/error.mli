@@ -3,6 +3,7 @@ open Cafec_spanned.Prelude
 type expected_token =
   | Expected_specific of Token.t
   | Expected_item_declarator
+  | Expected_type_definition
   | Expected_identifier_or_under
   | Expected_identifier
   | Expected_expression

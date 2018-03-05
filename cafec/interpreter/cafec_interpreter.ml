@@ -15,9 +15,9 @@ let build_context ast =
   let helper _ =
     match !seq () with
     | Seq.Nil -> assert false
-    | Seq.Cons ((({Ast.name; _}, _), (expr, _)), xs) ->
+    | Seq.Cons ((({Ast.fname; _}, _), (expr, _)), xs) ->
         seq := xs ;
-        (name, expr)
+        (fname, expr)
   in
   let ret = {funcs= Array.init (Ast.number_of_functions ast) helper} in
   match !seq () with Seq.Cons _ -> assert false | Seq.Nil -> ret

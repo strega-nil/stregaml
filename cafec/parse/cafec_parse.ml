@@ -4,8 +4,6 @@ open Error.Monad_spanned
 module Error = Error
 module Ast = Ast
 
-type 'a monad = 'a Error.Monad_spanned.t
-
 type t = {lexer: Lex.t; mutable peek: (Token.t * span) option}
 
 let peek_token parser =
@@ -35,9 +33,7 @@ let is_expression_end = function
   | _ -> false
 
 
-type item =
-  | Item_func of Ast.Item.func
-  | Item_type of Ast.Item.type_def
+type item = Item_func of Ast.Item.func | Item_type of Ast.Item.type_def
 
 let get_ident parser =
   match%bind next_token parser with
@@ -205,7 +201,16 @@ and parse_block parser =
           wrap_err (Error.Unexpected_token (Error.Expected_expression, tok))
 
 
-let parse_type_definition _ : unit monad = assert false
+let parse_type_definition parser =
+  match%bind peek_token parser with
+  | Token.Keyword Token.Keyword_struct, _ -> assert false
+  | _ ->
+    match parse_type parser with
+    | Ok (o, sp) -> Ok (Ast.Item.Alias o, sp)
+    | Error (Error.Unexpected_token (_, tok), sp) ->
+        Error (Error.Unexpected_token (Error.Expected_type_definition, tok), sp)
+    | Error e -> Error e
+
 
 let parse_item (parser: t) : (item option, Error.t) spanned_result =
   match%bind next_token parser with
@@ -219,10 +224,12 @@ let parse_item (parser: t) : (item option, Error.t) spanned_result =
       let func = Ast.Item.{fname; params; ret_ty; expr} in
       wrap (Some (Item_func func))
   | Token.Keyword Token.Keyword_type, _ ->
-      let%bind _name, _ = get_ident parser in
+      let%bind tname, _ = get_ident parser in
       let%bind (), _ = get_specific parser Token.Equals in
-      let%bind _def, _ = parse_type_definition parser in
-      assert false
+      let%bind kind, _ = parse_type_definition parser in
+      let%bind (), _ = get_specific parser Token.Semicolon in
+      let ty = Ast.Item.{tname; kind} in
+      wrap (Some (Item_type ty))
   | Token.Eof, _ -> wrap None
   | tok, _ ->
       wrap_err (Error.Unexpected_token (Error.Expected_item_declarator, tok))
@@ -235,7 +242,9 @@ let parse_program (parser: t) : (Ast.t, Error.t) spanned_result =
     | Some Item_func func ->
         let%bind (ftl, ttl), _ = helper parser in
         wrap ((func, sp) :: ftl, ttl)
-    | Some Item_type _def -> assert false
+    | Some Item_type ty ->
+        let%bind (ftl, ttl), _ = helper parser in
+        wrap (ftl, (ty, sp) :: ttl)
     | None -> wrap ([], [])
   in
   let%bind (funcs, types), _ = helper parser in

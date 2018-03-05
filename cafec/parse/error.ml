@@ -4,6 +4,7 @@ open Spanned.Prelude
 type expected_token =
   | Expected_specific of Token.t
   | Expected_item_declarator
+  | Expected_type_definition
   | Expected_identifier_or_under
   | Expected_identifier
   | Expected_expression
@@ -24,6 +25,7 @@ end)
 let print_expected = function
   | Expected_specific tok -> Token.print tok
   | Expected_item_declarator -> print_string "either `func` or `type`"
+  | Expected_type_definition -> print_string "`struct`, `variant`, or a type"
   | Expected_identifier -> print_string "an identifier"
   | Expected_identifier_or_under -> print_string "an identifier or `_`"
   | Expected_expression -> print_string "the start of an expression"

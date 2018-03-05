@@ -23,14 +23,11 @@ module Item : sig
     ; ret_ty: Type.t spanned option
     ; expr: Expr.t spanned }
 
-  type type_kind =
-    | Alias of Type.t spanned
+  type type_kind = Alias of Type.t spanned
 
-  type type_def =
-    { tname: string
-    ; kind: type_kind }
+  type type_def = {tname: string; kind: type_kind}
 end
 
-type t = {funcs: Item.func spanned list ; types: Item.type_def spanned list}
+type t = {funcs: Item.func spanned list; types: Item.type_def spanned list}
 
 val print : t -> unit

@@ -6,7 +6,9 @@ type t =
   | If_on_non_bool of Type.t
   | If_branches_of_differing_type of (Type.t * Type.t)
   | Call_of_non_function of Type.t
-  | Defined_multiple_times of {name: string; original_declaration: Spanned.span}
+  | Defined_function_multiple_times of
+      { name: string
+      ; original_declaration: Spanned.span }
   | Return_type_mismatch of {expected: Type.t; found: Type.t}
   | Invalid_function_arguments of {expected: Type.t list; found: Type.t list}
 
@@ -33,8 +35,8 @@ let print = function
       print_string "Attempted to call a non-function type (" ;
       Type.print ty ;
       print_char ')'
-  | Defined_multiple_times {name; original_declaration} ->
-      Printf.printf "Defined %s multiple times.\n" name ;
+  | Defined_function_multiple_times {name; original_declaration} ->
+      Printf.printf "Defined function %s multiple times.\n" name ;
       print_string "  (original definition at " ;
       Spanned.print_span original_declaration ;
       print_char ')'
