@@ -1,4 +1,5 @@
-* add type definitions
+* add constructors for user defined types
+* add function types into the front-end
 * check for recursive types
 
 * names for stuff
