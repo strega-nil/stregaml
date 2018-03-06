@@ -55,6 +55,26 @@ let get_specific parser token =
       wrap_err (Error.Unexpected_token (Error.Expected_specific token, tok))
 
 
+let parse_list parser ~f ~sep ~close ~expected =
+  let rec helper parser f expected sep close expect_sep =
+    let%bind tok, _ = peek_token parser in
+    match () with
+    | () when tok = close -> wrap []
+    | () when tok = sep ->
+        if expect_sep then (
+          eat_token parser ;
+          helper parser f expected sep close false )
+        else wrap_err (Error.Unexpected_token (expected, sep))
+    | () when expect_sep ->
+        wrap_err (Error.Unexpected_token (Error.Expected_specific sep, tok))
+    | () ->
+        let%bind x, _ = f parser in
+        let%bind xs, _ = helper parser f expected sep close true in
+        wrap (x :: xs)
+  in
+  helper parser f expected sep close false
+
+
 let rec maybe_parse_expression parser =
   let initial =
     match%bind peek_token parser with
@@ -137,52 +157,27 @@ and maybe_parse_type_annotation parser =
 
 
 and parse_parameter_list parser =
-  (* TODO(ubsan): maybe abstract out list parsing? *)
-  let rec get_parms comma =
-    match%bind peek_token parser with
-    | Token.Close_paren, _ -> wrap []
-    | Token.Comma, _ ->
-        if comma then ( eat_token parser ; get_parms false )
-        else
-          wrap_err
-            (Error.Unexpected_token (Error.Expected_expression, Token.Comma))
-    | tok, _ ->
-        if comma then
-          wrap_err
-            (Error.Unexpected_token (Error.Expected_specific Token.Comma, tok))
-        else
-          let%bind name, _ = get_ident parser in
-          let%bind (), _ = get_specific parser Token.Colon in
-          let%bind ty, _ = parse_type parser in
-          let%bind tl, _ = get_parms true in
-          wrap ((name, ty) :: tl)
+  let get_parm parser =
+    let%bind name, _ = get_ident parser in
+    let%bind (), _ = get_specific parser Token.Colon in
+    let%bind ty, _ = parse_type parser in
+    wrap (name, ty)
   in
   let%bind (), _ = get_specific parser Token.Open_paren in
-  let%bind parms, _ = get_parms false in
+  let%bind parms, _ =
+    parse_list parser ~f:get_parm ~sep:Token.Comma ~close:Token.Close_paren
+      ~expected:Error.Expected_identifier_or_under
+  in
   let%bind (), _ = get_specific parser Token.Close_paren in
   wrap parms
 
 
 and parse_argument_list parser =
-  let rec get_args comma =
-    match%bind peek_token parser with
-    | Token.Close_paren, _ -> wrap []
-    | Token.Comma, _ ->
-        if comma then ( eat_token parser ; get_args false )
-        else
-          wrap_err
-            (Error.Unexpected_token (Error.Expected_expression, Token.Comma))
-    | tok, _ ->
-        if comma then
-          wrap_err
-            (Error.Unexpected_token (Error.Expected_specific Token.Comma, tok))
-        else
-          let%bind expr, _ = parse_expression parser in
-          let%bind tl, _ = get_args true in
-          wrap (expr :: tl)
-  in
   let%bind (), _ = get_specific parser Token.Open_paren in
-  let%bind args, _ = get_args false in
+  let%bind args, _ =
+    parse_list parser ~f:parse_expression ~sep:Token.Comma
+      ~close:Token.Close_paren ~expected:Error.Expected_expression
+  in
   let%bind (), _ = get_specific parser Token.Close_paren in
   wrap args
 
@@ -203,7 +198,21 @@ and parse_block parser =
 
 let parse_type_definition parser =
   match%bind peek_token parser with
-  | Token.Keyword Token.Keyword_struct, _ -> assert false
+  | Token.Keyword Token.Keyword_struct, _ ->
+      eat_token parser ;
+      let parse_member parser =
+        let%bind name, _ = get_ident parser in
+        let%bind (), _ = get_specific parser Token.Colon in
+        let%bind ty, _ = parse_type parser in
+        wrap (name, ty)
+      in
+      let%bind (), _ = get_specific parser Token.Open_brace in
+      let%bind members, _ =
+        parse_list parser ~f:parse_member ~sep:Token.Semicolon
+          ~close:Token.Close_brace ~expected:Error.Expected_identifier
+      in
+      let%bind (), _ = get_specific parser Token.Close_brace in
+      wrap (Ast.Item.Struct members)
   | _ ->
     match parse_type parser with
     | Ok (o, sp) -> Ok (Ast.Item.Alias o, sp)

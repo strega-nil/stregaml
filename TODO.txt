@@ -1,4 +1,5 @@
 * add type definitions
+* check for recursive types
 
 * names for stuff
   * tamper - build

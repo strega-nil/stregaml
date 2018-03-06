@@ -67,7 +67,9 @@ module Item = struct
     ; ret_ty: Type.t spanned option
     ; expr: Expr.t spanned }
 
-  type type_kind = Alias of Type.t spanned
+  type type_kind =
+    | Alias of Type.t spanned
+    | Struct of (string * Type.t spanned) list
 
   type type_def = {tname: string; kind: type_kind}
 
@@ -100,9 +102,22 @@ module Item = struct
   let print_type_def self =
     print_string "type " ;
     print_string self.tname ;
-    print_string " =\n" ;
-    print_indent 1 ;
-    (match self.kind with Alias (ty, _) -> Type.print ty) ;
+    print_string " = " ;
+    ( match self.kind with
+    | Alias (ty, _) -> Type.print ty
+    | Struct xs ->
+        let rec helper = function
+          | (name, (ty, _)) :: xs ->
+              print_char '\n' ;
+              print_indent 1 ;
+              print_string name ;
+              print_string ": " ;
+              Type.print ty ;
+              print_char ';' ;
+              helper xs
+          | [] -> ()
+        in
+        print_string "struct {" ; helper xs ; print_string "\n}" ) ;
     print_string ";\n"
 end
 

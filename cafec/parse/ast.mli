@@ -23,7 +23,9 @@ module Item : sig
     ; ret_ty: Type.t spanned option
     ; expr: Expr.t spanned }
 
-  type type_kind = Alias of Type.t spanned
+  type type_kind =
+    | Alias of Type.t spanned
+    | Struct of (string * Type.t spanned) list
 
   type type_def = {tname: string; kind: type_kind}
 end

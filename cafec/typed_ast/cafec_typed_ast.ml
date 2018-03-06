@@ -35,16 +35,15 @@ let type_seq ast =
   helper type_defs
 *)
 
-
 let number_of_functions {number_of_functions; _} = number_of_functions
 
 let function_seq ast =
-  let rec helper decls exprs () =
-    match (decls, exprs) with
+  let rec helper decls defs () =
+    match (decls, defs) with
     | [], [] -> Seq.Nil
-    | decl :: decls, expr :: exprs ->
-        Seq.Cons ((decl, expr), helper decls exprs)
+    | decl :: decls, def :: defs ->
+        Seq.Cons ((decl, def), helper decls defs)
     | _ -> assert false
   in
-  let {ast= {Internal.func_decls; Internal.func_exprs; _}; _} = ast in
-  helper func_decls func_exprs
+  let {ast= {Internal.func_decls; Internal.func_defs; _}; _} = ast in
+  helper func_decls func_defs

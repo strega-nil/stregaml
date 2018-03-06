@@ -1,5 +1,5 @@
-type alias = int;
+type pair = struct { x: int; y: int };
 
-func test_alias(x: alias): int = x;
+func foo(x: pair): pair = x;
 
-func main(): int = test_alias(6);
+func main(): int = 0;

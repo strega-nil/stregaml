@@ -1,14 +1,21 @@
-type t = Unit | Bool | Int | Function of {params: t list; ret_ty: t}
+type t = Builtin of builtin | User_defined of int
+
+and builtin =
+  | Builtin_unit
+  | Builtin_bool
+  | Builtin_int
+  | Builtin_function of {params: t list; ret_ty: t}
 
 let rec print = function
-  | Unit -> print_string "unit"
-  | Bool -> print_string "bool"
-  | Int -> print_string "int"
-  | Function {params; ret_ty} ->
+  | Builtin Builtin_unit -> print_string "unit"
+  | Builtin Builtin_bool -> print_string "bool"
+  | Builtin Builtin_int -> print_string "int"
+  | Builtin Builtin_function {params; ret_ty} ->
       print_string "func" ;
       print_list params ;
       print_string " -> " ;
       print ret_ty
+  | User_defined i -> assert false
 
 and print_list lst =
   print_char '(' ;
