@@ -20,6 +20,7 @@ type t =
   | Defined_function_multiple_times of
       { name: string
       ; original_declaration: Spanned.span }
+  | Defined_type_multiple_times of string
   | Return_type_mismatch of {expected: Type.t; found: Type.t}
   | Invalid_function_arguments of {expected: Type.t list; found: Type.t list}
 
@@ -58,8 +59,7 @@ let print err ctxt =
       Printf.printf "` - member `%s` initialized multiple times" member
   | Struct_access_on_non_struct_type (ty, member) ->
       Printf.printf
-        "Attempted to access the `%s` member of a non-struct type: "
-        member ;
+        "Attempted to access the `%s` member of a non-struct type: " member ;
       Type.print ty ctxt
   | Struct_access_non_member (ty, member) ->
       Printf.printf
@@ -85,6 +85,8 @@ let print err ctxt =
       print_string "  (original definition at " ;
       Spanned.print_span original_declaration ;
       print_char ')'
+  | Defined_type_multiple_times name ->
+      Printf.printf "Defined type %s multiple times." name
   | Return_type_mismatch {expected; found} ->
       print_string "Return value did not match the return type.\n" ;
       print_string "  expected: " ;

@@ -1,6 +1,6 @@
-* add constructors for user defined types
 * add function types into the front-end
 * check for recursive types
+* fix issues with incorrect spans
 
 * names for stuff
   * tamper - build

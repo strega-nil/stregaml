@@ -90,7 +90,7 @@ let run ast =
         Value_struct arr
     | Expr.Struct_access ((e, _), idx) ->
         let v = eval args ctxt e in
-        match v with 
+        match v with
         | Value_struct members -> members.(idx)
         | _ -> assert false
   in

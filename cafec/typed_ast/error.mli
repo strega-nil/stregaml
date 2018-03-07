@@ -20,6 +20,7 @@ type t =
   | Defined_function_multiple_times of
       { name: string
       ; original_declaration: span }
+  | Defined_type_multiple_times of string
   | Return_type_mismatch of {expected: Type.t; found: Type.t}
   | Invalid_function_arguments of {expected: Type.t list; found: Type.t list}
 

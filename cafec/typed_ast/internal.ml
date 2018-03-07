@@ -29,17 +29,19 @@ module Types : sig
 end = struct
   let type_untyped ctxt unt_ty =
     let Untyped_ast.Type.Named name = unt_ty in
-    match name with
-    | "unit" -> Some (Type.Builtin Type.Builtin_unit)
-    | "bool" -> Some (Type.Builtin Type.Builtin_bool)
-    | "int" -> Some (Type.Builtin Type.Builtin_int)
-    | name ->
-        let rec helper n find = function
-          | [] -> None
-          | name :: _ when find = name -> Some (Type.User_defined n)
-          | _ :: xs -> helper (n + 1) find xs
-        in
-        helper 0 name ctxt.type_decls
+    let rec helper n find = function
+      | [] -> None
+      | name :: _ when find = name -> Some (Type.User_defined n)
+      | _ :: xs -> helper (n + 1) find xs
+    in
+    match helper 0 name ctxt.type_decls with
+    | Some ty -> Some ty
+    | None ->
+      match name with
+      | "unit" -> Some (Type.Builtin Type.Builtin_unit)
+      | "bool" -> Some (Type.Builtin Type.Builtin_bool)
+      | "int" -> Some (Type.Builtin Type.Builtin_int)
+      | _ -> None
 
 
   let rec normalize ctxt = function
@@ -204,12 +206,13 @@ let rec type_of_expr ctxt decl e =
       let%bind ty, _ = type_of_expr ctxt decl expr in
       (* note: we do this twice - should be memoized *)
       match Types.definition ctxt ty with
-      | Some (Type.Def_struct members) ->
-          let (_, member_ty) = List.nth_exn idx members in
+      | Some Type.Def_struct members ->
+          let _, member_ty = List.nth_exn idx members in
           wrap member_ty
-      | Some _ | None ->
-          assert false (* this should've been caught in type_expression *)
+      | Some _ | None -> assert false
 
+
+(* this should've been caught in type_expression *)
 
 let find_parameter name lst =
   let rec helper name lst idx =
@@ -298,18 +301,18 @@ let rec type_expression decl ctxt unt_expr =
       let%bind expr = type_expression decl ctxt expr in
       let%bind ty, _ = type_of_expr ctxt decl expr in
       match Types.definition ctxt ty with
-      | Some (Type.Def_struct members) ->
+      | Some Type.Def_struct members -> (
           let rec find_idx n find = function
             | (name, _) :: _ when name = find -> Some n
             | _ :: xs -> find_idx (n + 1) find xs
             | [] -> None
           in
-          ( match find_idx 0 member members with
+          match find_idx 0 member members with
           | Some n -> wrap (Expr.Struct_access (expr, n))
           | None -> wrap_err (Error.Struct_access_non_member (ty, member)) )
-      | Some (Type.Def_alias _) -> assert false
-      | None -> 
-          wrap_err (Error.Struct_access_on_non_struct_type (ty, member))
+      | Some Type.Def_alias _ -> assert false
+      | None -> wrap_err (Error.Struct_access_on_non_struct_type (ty, member))
+
 
 (*
   NOTE(ubsan): call the declaration functions in the same order as the
@@ -327,10 +330,10 @@ let add_type_declaration unt_type ctxt =
     | name :: _ when name = search -> true
     | _ :: xs -> duplicates search xs
   in
-  let {I.tname; _}, _ = unt_type in
-  if duplicates tname ctxt then assert false
-  else if tname = "int" || tname = "unit" || tname = "bool" then assert false
-  else tname :: ctxt
+  let {I.tname; _}, sp = unt_type in
+  if duplicates tname ctxt then
+    Error (Error.Defined_type_multiple_times tname, sp)
+  else Ok (tname :: ctxt)
 
 
 let add_type_definition unt_type ctxt =
@@ -448,17 +451,23 @@ let make unt_ast =
         add_function_definitions new_ast funcs
     | [] -> wrap ast
   in
-  let rec type_declarations = function
-    | unt_type :: types ->
-        add_type_declaration unt_type (type_declarations types)
-    | [] -> []
+  let rec type_declarations lst = function
+    | unt_type :: types -> (
+      match add_type_declaration unt_type lst with
+      | Ok lst -> type_declarations lst types
+      | Error e -> Error e )
+    | [] -> Ok lst
   in
-  let type_decls = type_declarations unt_ast.U.types in
-  let ret =
-    let ret = {type_decls; func_decls= []; func_defs= []; type_defs= []} in
-    let%bind ret, _ = add_type_definitions ret unt_ast.U.types in
-    let%bind ret, _ = add_function_declarations ret unt_ast.U.funcs in
-    let%bind ret, _ = add_function_definitions ret unt_ast.U.funcs in
-    wrap ret
-  in
-  match ret with Ok o -> Ok o | Error (e, sp) -> Error ((e, type_decls), sp)
+  match type_declarations [] unt_ast.U.types with
+  | Error (e, sp) -> Error ((e, []), sp)
+  | Ok type_decls ->
+      let ret =
+        let ret = {type_decls; func_decls= []; func_defs= []; type_defs= []} in
+        let%bind ret, _ = add_type_definitions ret unt_ast.U.types in
+        let%bind ret, _ = add_function_declarations ret unt_ast.U.funcs in
+        let%bind ret, _ = add_function_definitions ret unt_ast.U.funcs in
+        wrap ret
+      in
+      match ret with
+      | Ok o -> Ok o
+      | Error (e, sp) -> Error ((e, type_decls), sp)
