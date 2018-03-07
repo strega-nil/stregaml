@@ -13,6 +13,7 @@ type value =
   | Value_bool of bool
   | Value_integer of int
   | Value_function of int
+  | Value_struct of value array
   | Value_builtin of Expr.builtin
 
 let build_context ast =
@@ -80,6 +81,14 @@ let run ast =
       | _ -> assert false )
     | Expr.Builtin b -> Value_builtin b
     | Expr.Global_function i -> Value_function i
+    | Expr.Struct_literal (_, members) ->
+        let len = List.length members in
+        let arr = Array.make len Value_unit in
+        let f (i, (e, _)) =
+          arr.(i) <- eval args ctxt e
+        in
+        Seq.for_each f (List.to_seq members) ;
+        Value_struct arr
   in
   let ctxt = build_context ast in
   match function_index_by_name ctxt "main" with
