@@ -75,6 +75,7 @@ let run ast =
             match b with
             | Expr.Builtin_add -> Value_integer (lhs + rhs)
             | Expr.Builtin_sub -> Value_integer (lhs - rhs)
+            | Expr.Builtin_mul -> Value_integer (lhs * rhs)
             | Expr.Builtin_less_eq -> Value_bool (lhs <= rhs)
           in
           ret
@@ -84,11 +85,14 @@ let run ast =
     | Expr.Struct_literal (_, members) ->
         let len = List.length members in
         let arr = Array.make len Value_unit in
-        let f (i, (e, _)) =
-          arr.(i) <- eval args ctxt e
-        in
+        let f (i, (e, _)) = arr.(i) <- eval args ctxt e in
         Seq.for_each f (List.to_seq members) ;
         Value_struct arr
+    | Expr.Struct_access ((e, _), idx) ->
+        let v = eval args ctxt e in
+        match v with 
+        | Value_struct members -> members.(idx)
+        | _ -> assert false
   in
   let ctxt = build_context ast in
   match function_index_by_name ctxt "main" with

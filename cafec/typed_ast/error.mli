@@ -12,6 +12,8 @@ type t =
       ; expected: Type.t
       ; found: Type.t }
   | Struct_literal_member_defined_multiple_times of (Type.t * string)
+  | Struct_access_on_non_struct_type of (Type.t * string)
+  | Struct_access_non_member of (Type.t * string)
   | If_on_non_bool of Type.t
   | If_branches_of_differing_type of (Type.t * Type.t)
   | Call_of_non_function of Type.t

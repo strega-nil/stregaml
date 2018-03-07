@@ -130,7 +130,7 @@ let rec type_of_expr ctxt decl e =
       | ty -> wrap_err (Error.Call_of_non_function ty) )
   | Expr.Builtin b -> (
     match b with
-    | Expr.Builtin_add | Expr.Builtin_sub ->
+    | Expr.Builtin_add | Expr.Builtin_sub | Expr.Builtin_mul ->
         wrap
           Type.(
             Builtin
@@ -200,6 +200,15 @@ let rec type_of_expr ctxt decl e =
           wrap ()
       in
       wrap ty
+  | Expr.Struct_access (expr, idx) ->
+      let%bind ty, _ = type_of_expr ctxt decl expr in
+      (* note: we do this twice - should be memoized *)
+      match Types.definition ctxt ty with
+      | Some (Type.Def_struct members) ->
+          let (_, member_ty) = List.nth_exn idx members in
+          wrap member_ty
+      | Some _ | None ->
+          assert false (* this should've been caught in type_expression *)
 
 
 let find_parameter name lst =
@@ -246,6 +255,7 @@ let rec type_expression decl ctxt unt_expr =
           | "LESS_EQ" -> wrap (T.Builtin T.Builtin_less_eq)
           | "ADD" -> wrap (T.Builtin T.Builtin_add)
           | "SUB" -> wrap (T.Builtin T.Builtin_sub)
+          | "MUL" -> wrap (T.Builtin T.Builtin_mul)
           | _ -> wrap_err (Error.Name_not_found name) )
         | Some idx -> wrap (T.Global_function idx) )
       | Some (_ty, idx) -> wrap (T.Parameter idx) )
@@ -284,7 +294,22 @@ let rec type_expression decl ctxt unt_expr =
         helper decl ctxt members
       in
       wrap (T.Struct_literal (ty, members))
-
+  | U.Struct_access (expr, member), _ ->
+      let%bind expr = type_expression decl ctxt expr in
+      let%bind ty, _ = type_of_expr ctxt decl expr in
+      match Types.definition ctxt ty with
+      | Some (Type.Def_struct members) ->
+          let rec find_idx n find = function
+            | (name, _) :: _ when name = find -> Some n
+            | _ :: xs -> find_idx (n + 1) find xs
+            | [] -> None
+          in
+          ( match find_idx 0 member members with
+          | Some n -> wrap (Expr.Struct_access (expr, n))
+          | None -> wrap_err (Error.Struct_access_non_member (ty, member)) )
+      | Some (Type.Def_alias _) -> assert false
+      | None -> 
+          wrap_err (Error.Struct_access_on_non_struct_type (ty, member))
 
 (*
   NOTE(ubsan): call the declaration functions in the same order as the

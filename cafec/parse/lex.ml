@@ -34,13 +34,13 @@ let is_ident_continue_no_prime ch = is_ident_start ch || is_number_start ch
 let is_ident_continue ch = is_ident_continue_no_prime ch || ch = '\''
 
 let is_operator_start = function
-  | '!' | '#' | '$' | '%' | '&' | '*' | '+' | '-' | '.' | '/' | ':' | '<'
-   |'=' | '>' | '?' | '@' | '\\' | '^' | '|' | '~' ->
+  | '!' | '#' | '$' | '%' | '&' | '*' | '+' | '-' | '/' | ':' | '<' | '='
+   |'>' | '?' | '@' | '\\' | '^' | '|' | '~' ->
       true
   | _ -> false
 
 
-let is_operator_continue = is_operator_start
+let is_operator_continue ch = is_operator_start ch || ch = '.'
 
 let current_span lex =
   { start_line= lex.line
@@ -212,7 +212,6 @@ let rec next_token lex =
         | "=" -> Ok (Token.Equals, sp)
         | "->" -> Ok (Token.Arrow, sp)
         | "|" as res -> Error (Error.Reserved_token res, sp)
-        | "." as res -> Error (Error.Reserved_token res, sp)
         | op when includes_operator_token op ->
             Error (Error.Operator_including_comment_token op, sp)
         | op -> Ok (Token.Operator op, sp)
@@ -229,6 +228,7 @@ let rec next_token lex =
   | Some (']', sp) -> Error (Error.Reserved_token "]", sp)
   | Some (';', sp) -> Ok (Token.Semicolon, sp)
   | Some (',', sp) -> Ok (Token.Comma, sp)
+  | Some ('.', sp) -> Ok (Token.Dot, sp)
   | Some ('\'', sp) -> Error (Error.Reserved_token "'", sp)
   | Some (ch, sp) when is_ident_start ch -> lex_ident ch sp lex
   | Some (ch, sp) when is_operator_start ch -> lex_operator ch sp lex

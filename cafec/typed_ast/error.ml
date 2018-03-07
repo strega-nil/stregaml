@@ -12,6 +12,8 @@ type t =
       ; expected: Type.t
       ; found: Type.t }
   | Struct_literal_member_defined_multiple_times of (Type.t * string)
+  | Struct_access_on_non_struct_type of (Type.t * string)
+  | Struct_access_non_member of (Type.t * string)
   | If_on_non_bool of Type.t
   | If_branches_of_differing_type of (Type.t * Type.t)
   | Call_of_non_function of Type.t
@@ -37,7 +39,7 @@ let print err ctxt =
   | Struct_literal_with_unknown_member_name (ty, name) ->
       print_string "Struct literal of type `" ;
       Type.print ty ctxt ;
-      Printf.printf "` has an extra initializer, for `%s`" name
+      Printf.printf "` has an unknown initializer `%s`" name
   | Struct_literal_without_member (ty, name) ->
       print_string "Struct literal of type `" ;
       Type.print ty ctxt ;
@@ -54,6 +56,16 @@ let print err ctxt =
       print_string "Struct literal of type `" ;
       Type.print ty ctxt ;
       Printf.printf "` - member `%s` initialized multiple times" member
+  | Struct_access_on_non_struct_type (ty, member) ->
+      Printf.printf
+        "Attempted to access the `%s` member of a non-struct type: "
+        member ;
+      Type.print ty ctxt
+  | Struct_access_non_member (ty, member) ->
+      Printf.printf
+        "Attempted to access the `%s` member of a type without that member: "
+        member ;
+      Type.print ty ctxt
   | If_on_non_bool ty ->
       print_string "Attempted to `if` on an expression of non-boolean type (" ;
       Type.print ty ctxt ;

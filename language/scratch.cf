@@ -1,5 +1,9 @@
-type pair = struct { x: int; y: int };
+type vec2 = struct { x0: int; x1: int };
 
-func foo(x: pair): int = 0;
+func dot(lhs: vec2, rhs: vec2): int =
+  ADD(MUL(lhs.x0, rhs.x0), MUL(lhs.x1, rhs.x1));
 
-func main(): int = foo(pair { x = 0; y = 1 });
+func main(): int =
+  dot(
+    vec2 { x0 = 3; x1 = 9 },
+    vec2 { x0 = 5; x1 = 7 });

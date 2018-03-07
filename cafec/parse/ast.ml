@@ -27,6 +27,7 @@ module Expr = struct
     | Variable of string
     | Call of (t spanned * t spanned list)
     | Struct_literal of (Type.t * (string * t spanned) spanned list)
+    | Struct_access of (t spanned * string)
 
   let rec print indent e =
     let rec print_args ?start = function
@@ -79,6 +80,10 @@ module Expr = struct
             print (indent + 1) expr ;
             helper xs ) ;
         print_string " }"
+    | Struct_access ((e, _), member) ->
+        print (indent + 1) e ;
+        print_char '.' ;
+        print_string member
 end
 
 module Item = struct

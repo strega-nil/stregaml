@@ -24,6 +24,7 @@ module Prelude = struct
     | Colon
     | Equals
     | Semicolon
+    | Dot
     | Comma
     | Eof
 end
@@ -61,6 +62,7 @@ let print = function
   | Equals -> print_string "equals `=`"
   | Semicolon -> print_string "semicolon `;`"
   | Comma -> print_string "comma `,`"
+  | Dot -> print_string "dot `.`"
   | Eof -> print_string "end of file"
 
 

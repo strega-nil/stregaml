@@ -129,6 +129,10 @@ and parse_follow parser (initial, sp) =
     | _, Token.Open_paren ->
         let%bind args, _ = parse_argument_list parser in
         wrap (Ast.Expr.Call ((initial, sp), args), true)
+    | _, Token.Dot ->
+        eat_token parser ;
+        let%bind member, _ = get_ident parser in
+        wrap ((Ast.Expr.Struct_access ((initial, sp), member)), true)
     | Ast.Expr.Variable name, Token.Open_brace ->
         let parse_member_initializer parser =
           let%bind name, name_sp = get_ident parser in

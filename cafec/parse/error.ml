@@ -30,7 +30,8 @@ let print_expected = function
   | Expected_identifier_or_under -> print_string "an identifier or `_`"
   | Expected_expression -> print_string "the start of an expression"
   | Expected_expression_follow ->
-      print_string "an operator, semicolon, comma, or closing brace (`}`, `)`)"
+      print_string
+        "an operator, semicolon, comma, dot, or closing brace (`}`, `)`)"
 
 
 let print = function

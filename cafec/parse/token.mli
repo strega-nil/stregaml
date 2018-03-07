@@ -22,6 +22,7 @@ module Prelude : sig
     | Colon
     | Equals
     | Semicolon
+    | Dot
     | Comma
     | Eof
 end

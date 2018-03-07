@@ -15,6 +15,7 @@ module Expr : sig
     | Variable of string
     | Call of (t spanned * t spanned list)
     | Struct_literal of (Type.t * (string * t spanned) spanned list)
+    | Struct_access of (t spanned * string)
 end
 
 module Item : sig
