@@ -3,6 +3,15 @@ open Cafec_spanned.Prelude
 type t =
   | Name_not_found of string
   | Type_not_found of Cafec_parse.Ast.Type.t
+  | Struct_literal_of_non_struct_type of Type.t
+  | Struct_literal_with_unknown_member_name of (Type.t * string)
+  | Struct_literal_without_member of (Type.t * string)
+  | Struct_literal_incorrect_member_type of
+      { ty: Type.t
+      ; member: string
+      ; expected: Type.t
+      ; found: Type.t }
+  | Struct_literal_member_defined_multiple_times of (Type.t * string)
   | If_on_non_bool of Type.t
   | If_branches_of_differing_type of (Type.t * Type.t)
   | Call_of_non_function of Type.t
@@ -15,6 +24,6 @@ type t =
 module Monad_spanned : module type of Cafec_spanned.Monad (struct
   type nonrec t = t end)
 
-val print : t -> unit
+val print : t -> Type.context -> unit
 
-val print_spanned : t spanned -> unit
+val print_spanned : t spanned -> Type.context -> unit

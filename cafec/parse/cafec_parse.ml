@@ -123,24 +123,34 @@ and parse_expression parser =
 
 
 and parse_follow parser (initial, sp) =
-  (* this function deals with spans weirdly *)
-  let module M = Result.Monad (struct
-    type t = Error.t spanned
-  end) in
-  let open! M in
   let%bind tok, tok_sp = peek_token parser in
-  let%bind initial, cont, sp =
-    match tok with
-    | Token.Open_paren ->
-        let%bind args, sp' = parse_argument_list parser in
-        wrap (Ast.Expr.Call ((initial, sp), args), true, Spanned.union sp sp')
-    | tok when is_expression_end tok -> wrap (initial, false, sp)
-    | tok ->
-        wrap_err
+  let%bind (initial, cont), sp =
+    match (initial, tok) with
+    | _, Token.Open_paren ->
+        let%bind args, _ = parse_argument_list parser in
+        wrap (Ast.Expr.Call ((initial, sp), args), true)
+    | Ast.Expr.Variable name, Token.Open_brace ->
+        let parse_member_initializer parser =
+          let%bind name, name_sp = get_ident parser in
+          let%bind (), _ = get_specific parser Token.Equals in
+          let%bind expr, expr_sp = parse_expression parser in
+          wrap ((name, expr), Spanned.union name_sp expr_sp)
+        in
+        eat_token parser ;
+        let%bind members, _ =
+          parse_list parser ~f:parse_member_initializer ~sep:Token.Semicolon
+            ~close:Token.Close_brace ~expected:Error.Expected_identifier
+        in
+        let%bind (), _ = get_specific parser Token.Close_brace in
+        let ty = Ast.Type.Named name in
+        wrap (Ast.Expr.Struct_literal (ty, members), true)
+    | _, tok when is_expression_end tok -> Ok ((initial, false), sp)
+    | _, tok ->
+        Error
           ( Error.Unexpected_token (Error.Expected_expression_follow, tok)
           , tok_sp )
   in
-  if cont then parse_follow parser (initial, sp) else wrap ((initial, sp), sp)
+  if cont then parse_follow parser (initial, sp) else wrap (initial, sp)
 
 
 and parse_type parser =

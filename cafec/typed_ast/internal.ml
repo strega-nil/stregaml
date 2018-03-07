@@ -9,13 +9,9 @@ type 'a monad = 'a Error.Monad_spanned.t
 
 type func_decl = {fname: string; params: (string * Type.t) list; ret_ty: Type.t}
 
-type type_def =
-  | Type_alias of Type.t
-  | Type_struct of (string * Type.t) list
-
 type t =
   { type_decls: string list
-  ; type_defs: type_def list
+  ; type_defs: Type.definition list
   ; func_decls: func_decl spanned list (* note(ubsan): always normalized *)
   ; func_defs: Expr.t spanned list }
 
@@ -23,6 +19,13 @@ module Types : sig
   val type_untyped : t -> Untyped_ast.Type.t -> Type.t option
 
   val normalize : t -> Type.t -> Type.t
+
+  val definition : t -> Type.t -> Type.definition option
+  (**
+    only works for user-defined types;
+    definition . normalize will *always* return (Some Struct) or None,
+    never (Some Alias)
+  *)
 end = struct
   let type_untyped ctxt unt_ty =
     let Untyped_ast.Type.Named name = unt_ty in
@@ -43,8 +46,13 @@ end = struct
     | Type.Builtin b -> Type.Builtin b
     | Type.User_defined i ->
       match List.nth_exn i ctxt.type_defs with
-      | Type_alias t -> normalize ctxt t
-      | Type_struct _ -> Type.User_defined i
+      | Type.Def_alias t -> normalize ctxt t
+      | Type.Def_struct _ -> Type.User_defined i
+
+
+  let definition ctxt = function
+    | Type.Builtin _ -> None
+    | Type.User_defined i -> Some (List.nth_exn i ctxt.type_defs)
 end
 
 module Functions : sig
@@ -81,7 +89,10 @@ end = struct
     if idx < 0 then assert false else helper (idx, func_defs)
 end
 
-(* NOTE(ubsan): returns a normalized type *)
+(*
+  NOTE(ubsan): returns a normalized type
+  also, typechecks
+*)
 let rec type_of_expr ctxt decl e =
   let e, sp = e in
   let%bind (), _ = with_span sp in
@@ -141,6 +152,54 @@ let rec type_of_expr ctxt decl e =
   | Expr.Parameter p ->
       let _, ty = List.nth_exn p decl.params in
       wrap ty
+  | Expr.Struct_literal (ty, members) ->
+      let rec check_for_extra_members ty ty_members n = function
+        | [] -> wrap ()
+        | (m, _) :: _ when m = n ->
+            let name, _ = List.nth_exn n ty_members in
+            wrap_err
+              (Error.Struct_literal_member_defined_multiple_times (ty, name))
+        | _ :: xs -> check_for_extra_members ty ty_members n xs
+      in
+      let rec check_for_specific_member ty ty_members n = function
+        | [] ->
+            print_string "\n\n  number of members: " ;
+            print_int (List.length ty_members) ;
+            print_string ", n: " ;
+            print_int n ;
+            print_string "\n\n" ;
+            let name, _ = List.nth_exn n ty_members in
+            wrap_err (Error.Struct_literal_without_member (ty, name))
+        | (m, init) :: xs when n = m ->
+            let%bind (), _ = check_for_extra_members ty ty_members n xs in
+            let%bind init_ty, _ = type_of_expr ctxt decl init in
+            let name, member_ty = List.nth_exn n ty_members in
+            if init_ty = member_ty then wrap ()
+            else
+              wrap_err
+                (Error.Struct_literal_incorrect_member_type
+                   {ty; member= name; expected= member_ty; found= init_ty})
+        | _ :: xs -> check_for_specific_member ty ty_members n xs
+      in
+      let rec check_for_all_members ty ty_members n members =
+        let%bind (), _ = check_for_specific_member ty ty_members n members in
+        if n > 0 then check_for_all_members ty ty_members (n - 1) members
+        else wrap ()
+      in
+      let ty_members =
+        match Types.definition ctxt ty with
+        | Some Type.Def_struct members -> members
+        | _ -> assert false
+      in
+      let number_of_members = List.length ty_members in
+      let%bind (), _ =
+        if number_of_members > 0 then
+          check_for_all_members ty ty_members (number_of_members - 1) members
+        else
+          (* already did the checking for unknown members in type_expression *)
+          wrap ()
+      in
+      wrap ty
 
 
 let find_parameter name lst =
@@ -153,7 +212,8 @@ let find_parameter name lst =
   helper name lst 0
 
 
-let rec type_expression decl ast unt_expr =
+(* NOTE(ubsan): this does *not* typecheck *)
+let rec type_expression decl ctxt unt_expr =
   let module U = Untyped_ast.Expr in
   let module T = Expr in
   match%bind Ok unt_expr with
@@ -161,26 +221,26 @@ let rec type_expression decl ast unt_expr =
   | U.Bool_literal b, _ -> wrap (T.Bool_literal b)
   | U.Integer_literal i, _ -> wrap (T.Integer_literal i)
   | U.If_else (cond, thn, els), _ ->
-      let%bind cond = type_expression decl ast cond in
-      let%bind thn = type_expression decl ast thn in
-      let%bind els = type_expression decl ast els in
+      let%bind cond = type_expression decl ctxt cond in
+      let%bind thn = type_expression decl ctxt thn in
+      let%bind els = type_expression decl ctxt els in
       wrap (T.If_else (cond, thn, els))
   | U.Call (callee, args), _ ->
-      let%bind callee = type_expression decl ast callee in
+      let%bind callee = type_expression decl ctxt callee in
       let rec helper = function
         | [] -> wrap []
         | x :: xs ->
-            let%bind x = type_expression decl ast x in
+            let%bind x = type_expression decl ctxt x in
             let%bind xs, _ = helper xs in
             wrap (x :: xs)
       in
       let%bind args, _ = helper args in
       wrap (T.Call (callee, args))
-  | U.Variable name, _ ->
+  | U.Variable name, _ -> (
       let {params; _} = decl in
       match find_parameter name params with
       | None -> (
-        match Functions.index_by_name ast name with
+        match Functions.index_by_name ctxt name with
         | None -> (
           match name with
           | "LESS_EQ" -> wrap (T.Builtin T.Builtin_less_eq)
@@ -188,11 +248,50 @@ let rec type_expression decl ast unt_expr =
           | "SUB" -> wrap (T.Builtin T.Builtin_sub)
           | _ -> wrap_err (Error.Name_not_found name) )
         | Some idx -> wrap (T.Global_function idx) )
-      | Some (_ty, idx) -> wrap (T.Parameter idx)
+      | Some (_ty, idx) -> wrap (T.Parameter idx) )
+  | U.Struct_literal (ty, members), _ ->
+      let%bind ty, _ =
+        match Types.type_untyped ctxt ty with
+        | Some ty -> wrap (Types.normalize ctxt ty)
+        | None -> wrap_err (Error.Type_not_found ty)
+      in
+      let%bind type_members, _ =
+        match Types.definition ctxt ty with
+        | Some Type.Def_struct members -> wrap members
+        | Some Type.Def_alias _ -> assert false
+        | None -> wrap_err (Error.Struct_literal_of_non_struct_type ty)
+      in
+      let%bind members, _ =
+        let rec find_member find n = function
+          | [] -> None
+          | (name, _) :: _ when name = find -> Some n
+          | _ :: xs -> find_member find (n + 1) xs
+        in
+        let rec helper decl ctxt = function
+          | [] -> wrap []
+          | ((name, expr), _) :: xs ->
+              let%bind idx, _ =
+                match find_member name 0 type_members with
+                | Some i -> wrap i
+                | None ->
+                    wrap_err
+                      (Error.Struct_literal_with_unknown_member_name (ty, name))
+              in
+              let%bind expr = type_expression decl ctxt expr in
+              let%bind rest, _ = helper decl ctxt xs in
+              wrap ((idx, expr) :: rest)
+        in
+        helper decl ctxt members
+      in
+      wrap (T.Struct_literal (ty, members))
+
 
 (*
   NOTE(ubsan): call the declaration functions in the same order as the
   definition functions
+
+  NOTE(ubsan): type_declaration doesn't work on the AST,
+  it just works on a list of strings
 *)
 
 let add_type_declaration unt_type ctxt =
@@ -203,12 +302,11 @@ let add_type_declaration unt_type ctxt =
     | name :: _ when name = search -> true
     | _ :: xs -> duplicates search xs
   in
-  let {I.tname; _}, sp = unt_type in
-  let%bind (), _ = with_span sp in
-  if duplicates tname ctxt.type_decls then assert false
-  else if tname = "int" || tname = "unit" || tname = "bool" then
-    assert false
-  else wrap {ctxt with type_decls= tname :: ctxt.type_decls}
+  let {I.tname; _}, _ = unt_type in
+  if duplicates tname ctxt then assert false
+  else if tname = "int" || tname = "unit" || tname = "bool" then assert false
+  else tname :: ctxt
+
 
 let add_type_definition unt_type ctxt =
   let module T = Untyped_ast.Type in
@@ -222,10 +320,10 @@ let add_type_definition unt_type ctxt =
   in
   let%bind def, _ =
     match unt_type.I.kind with
-    | I.Alias (unt_ty, _) ->
-        ( match Types.type_untyped ctxt unt_ty with
-        | Some t -> wrap (Type_alias t)
-        | None -> wrap_err (Error.Type_not_found unt_ty) )
+    | I.Alias (unt_ty, _) -> (
+      match Types.type_untyped ctxt unt_ty with
+      | Some t -> wrap (Type.Def_alias t)
+      | None -> wrap_err (Error.Type_not_found unt_ty) )
     | I.Struct members ->
         let rec helper ctxt = function
           | [] -> wrap []
@@ -240,7 +338,7 @@ let add_type_definition unt_type ctxt =
               wrap ((name, x) :: xs)
         in
         let%bind members, _ = helper ctxt members in
-        wrap (Type_struct members)
+        wrap (Type.Def_struct members)
   in
   wrap {ctxt with type_defs= def :: ctxt.type_defs}
 
@@ -253,21 +351,21 @@ let add_function_declaration unt_func (ctxt: t) : t monad =
     let rec helper ctxt = function
       | [] -> wrap []
       | (name, (x, _)) :: xs ->
-          match Types.type_untyped ctxt x with
-          | Some ty ->
-              let ty = Types.normalize ctxt ty in
-              let%bind tys, _ = helper ctxt xs in
-              wrap ((name, ty) :: tys)
-          | None -> wrap_err (Error.Type_not_found x)
+        match Types.type_untyped ctxt x with
+        | Some ty ->
+            let ty = Types.normalize ctxt ty in
+            let%bind tys, _ = helper ctxt xs in
+            wrap ((name, ty) :: tys)
+        | None -> wrap_err (Error.Type_not_found x)
     in
     helper ctxt params
   in
   let%bind ret_ty, rty_sp =
     match ret_ty with
-    | Some (ret_ty, _) ->
-        ( match Types.type_untyped ctxt ret_ty with
-        | Some ty -> wrap (Types.normalize ctxt ty)
-        | None -> wrap_err (Error.Type_not_found ret_ty) )
+    | Some (ret_ty, _) -> (
+      match Types.type_untyped ctxt ret_ty with
+      | Some ty -> wrap (Types.normalize ctxt ty)
+      | None -> wrap_err (Error.Type_not_found ret_ty) )
     | None -> wrap (Type.Builtin Type.Builtin_unit)
   in
   (* check for duplicates *)
@@ -307,12 +405,6 @@ let add_function_definition unt_func (ctxt: t) : t monad =
 
 let make unt_ast =
   let module U = Untyped_ast in
-  let rec add_type_declarations ast = function
-    | unt_type :: types ->
-        let%bind new_ast, _ = add_type_declaration unt_type ast in
-        add_type_declarations new_ast types
-    | [] -> wrap ast
-  in
   let rec add_type_definitions ast = function
     | unt_type :: types ->
         let%bind new_ast, _ = add_type_definition unt_type ast in
@@ -331,9 +423,17 @@ let make unt_ast =
         add_function_definitions new_ast funcs
     | [] -> wrap ast
   in
-  let ret = {type_decls= []; func_decls= []; func_defs= []; type_defs= []} in
-  let%bind ret, _ = add_type_declarations ret unt_ast.U.types in
-  let%bind ret, _ = add_type_definitions ret unt_ast.U.types in
-  let%bind ret, _ = add_function_declarations ret unt_ast.U.funcs in
-  let%bind ret, _ = add_function_definitions ret unt_ast.U.funcs in
-  wrap ret
+  let rec type_declarations = function
+    | unt_type :: types ->
+        add_type_declaration unt_type (type_declarations types)
+    | [] -> []
+  in
+  let type_decls = type_declarations unt_ast.U.types in
+  let ret =
+    let ret = {type_decls; func_decls= []; func_defs= []; type_defs= []} in
+    let%bind ret, _ = add_type_definitions ret unt_ast.U.types in
+    let%bind ret, _ = add_function_declarations ret unt_ast.U.funcs in
+    let%bind ret, _ = add_function_definitions ret unt_ast.U.funcs in
+    wrap ret
+  in
+  match ret with Ok o -> Ok o | Error (e, sp) -> Error ((e, type_decls), sp)

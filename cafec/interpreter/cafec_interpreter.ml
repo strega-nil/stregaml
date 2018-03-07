@@ -1,6 +1,11 @@
 module Ast = Cafec_typed_ast
 module Expr = Ast.Expr
 
+(*
+  NOTE(ubsan): NEVER modify these arrays.
+  They should be immutable,
+  but ocaml doesn't have immutable arrays
+*)
 type context = {funcs: (string * Expr.t) array}
 
 type value =

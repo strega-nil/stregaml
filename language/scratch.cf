@@ -1,5 +1,5 @@
 type pair = struct { x: int; y: int };
 
-func foo(x: pair): pair = x;
+func foo(x: pair): int = 0;
 
-func main(): int = 0;
+func main(): int = foo(pair { x = 0; y = 1 });

@@ -41,8 +41,7 @@ let function_seq ast =
   let rec helper decls defs () =
     match (decls, defs) with
     | [], [] -> Seq.Nil
-    | decl :: decls, def :: defs ->
-        Seq.Cons ((decl, def), helper decls defs)
+    | decl :: decls, def :: defs -> Seq.Cons ((decl, def), helper decls defs)
     | _ -> assert false
   in
   let {ast= {Internal.func_decls; Internal.func_defs; _}; _} = ast in

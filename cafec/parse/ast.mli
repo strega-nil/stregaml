@@ -14,6 +14,7 @@ module Expr : sig
     | If_else of (t spanned * t spanned * t spanned)
     | Variable of string
     | Call of (t spanned * t spanned list)
+    | Struct_literal of (Type.t * (string * t spanned) spanned list)
 end
 
 module Item : sig

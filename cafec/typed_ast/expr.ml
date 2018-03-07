@@ -8,6 +8,7 @@ type t =
   | Integer_literal of int
   | If_else of (t spanned * t spanned * t spanned)
   | Call of (t spanned * t spanned list)
+  | Struct_literal of (Type.t * (int * t spanned) list)
   | Builtin of builtin
   | Global_function of int
   | Parameter of int

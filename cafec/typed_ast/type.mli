@@ -6,6 +6,10 @@ and builtin =
   | Builtin_int
   | Builtin_function of {params: t list; ret_ty: t}
 
-val print_list : t list -> unit
+type definition = Def_alias of t | Def_struct of (string * t) list
 
-val print : t -> unit
+type context = string list
+
+val print_list : t list -> context -> unit
+
+val print : t -> context -> unit

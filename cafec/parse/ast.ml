@@ -12,6 +12,12 @@ let print_indent indent =
   else helper indent
 
 
+module Type = struct
+  type t = Named of string
+
+  let print (Named self) = print_string self
+end
+
 module Expr = struct
   type t =
     | Unit_literal
@@ -20,6 +26,7 @@ module Expr = struct
     | If_else of (t spanned * t spanned * t spanned)
     | Variable of string
     | Call of (t spanned * t spanned list)
+    | Struct_literal of (Type.t * (string * t spanned) spanned list)
 
   let rec print indent e =
     let rec print_args ?start = function
@@ -52,12 +59,26 @@ module Expr = struct
     | Variable s -> print_string s
     | Call ((e, _), args) ->
         print indent e ; print_char '(' ; print_args args ; print_char ')'
-end
-
-module Type = struct
-  type t = Named of string
-
-  let print (Named self) = print_string self
+    | Struct_literal (ty, members) ->
+        let rec helper = function
+          | ((name, (expr, _)), _) :: xs ->
+              print_string "; " ;
+              print_string name ;
+              print_string " = " ;
+              print (indent + 1) expr ;
+              helper xs
+          | [] -> ()
+        in
+        Type.print ty ;
+        print_string " { " ;
+        ( match members with
+        | [] -> ()
+        | ((name, (expr, _)), _) :: xs ->
+            print_string name ;
+            print_string " = " ;
+            print (indent + 1) expr ;
+            helper xs ) ;
+        print_string " }"
 end
 
 module Item = struct

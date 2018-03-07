@@ -57,9 +57,9 @@ let main () =
       Parse.Ast.print unt_ast ;
       flush stdout ;
       match Typed_ast.make unt_ast with
-      | Error e ->
+      | Error ((e, context), sp) ->
           print_string "Error: " ;
-          Typed_ast.Error.print_spanned e ;
+          Typed_ast.Error.print_spanned (e, sp) context ;
           print_newline ()
       | Ok (ty_ast, _) -> Interpreter.run ty_ast
 
