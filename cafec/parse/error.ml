@@ -7,6 +7,7 @@ type expected_token =
   | Expected_type_definition
   | Expected_identifier_or_under
   | Expected_identifier
+  | Expected_type
   | Expected_expression
   | Expected_expression_follow
 
@@ -28,6 +29,7 @@ let print_expected = function
   | Expected_type_definition -> print_string "`struct`, `variant`, or a type"
   | Expected_identifier -> print_string "an identifier"
   | Expected_identifier_or_under -> print_string "an identifier or `_`"
+  | Expected_type -> print_string "the start of a type"
   | Expected_expression -> print_string "the start of an expression"
   | Expected_expression_follow ->
       print_string

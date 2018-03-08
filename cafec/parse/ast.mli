@@ -1,7 +1,7 @@
 open Cafec_spanned.Prelude
 
 module Type : sig
-  type t = Named of string
+  type t = Named of string | Function of (t spanned list * t spanned option)
 
   val print : t -> unit
 end

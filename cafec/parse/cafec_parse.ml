@@ -158,8 +158,23 @@ and parse_follow parser (initial, sp) =
 
 
 and parse_type parser =
-  let%bind name, sp = get_ident parser in
-  wrap (Ast.Type.Named name, sp)
+  let%bind tok, sp = next_token parser in
+  match tok with
+  | Token.Identifier id -> wrap (Ast.Type.Named id, sp)
+  | Token.Keyword Token.Keyword_func -> (
+      let%bind (), _ = get_specific parser Token.Open_paren in
+      let%bind params, _ =
+        parse_list parser ~f:parse_type ~sep:Token.Comma
+          ~close:Token.Close_paren ~expected:Error.Expected_type
+      in
+      let%bind (), spp = get_specific parser Token.Close_paren in
+      match%bind maybe_get_specific parser Token.Arrow with
+      | Some (), _ ->
+          let%bind ret_ty, spr = parse_type parser in
+          wrap (Ast.Type.Function (params, Some ret_ty), Spanned.union sp spr)
+      | None, _ -> wrap (Ast.Type.Function (params, None), Spanned.union sp spp)
+      )
+  | tok -> wrap_err (Error.Unexpected_token (Error.Expected_type, tok))
 
 
 and maybe_parse_type_annotation parser =

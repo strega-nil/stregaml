@@ -39,6 +39,32 @@ let function_index_by_name ctxt find =
   | None -> None
   | Some (n, _) -> Some n
 
+let rec print_value = function
+  | Value_unit -> print_string "()"
+  | Value_integer n -> print_int n 
+  | Value_bool true -> print_string "true"
+  | Value_bool false -> print_string "false"
+  | Value_struct arr ->
+      let rec print_values = function
+        | Seq.Nil -> ()
+        | Seq.Cons (x, xs) ->
+            print_string "; " ;
+            print_value x ;
+            print_values (xs ())
+      in
+      print_string "{" ;
+      ( match (Array.to_seq arr) () with 
+      | Seq.Nil -> ()
+      | Seq.Cons (x, xs) ->
+          print_char ' ' ;
+          print_value x ;
+          print_values (xs ()) ) ;
+      print_string " }" ;
+  | Value_function n -> Printf.printf "<function %d>" n
+  | Value_builtin Expr.Builtin_add -> print_string "<builtin add>"
+  | Value_builtin Expr.Builtin_sub -> print_string "<builtin sub>"
+  | Value_builtin Expr.Builtin_mul -> print_string "<builtin mul>"
+  | Value_builtin Expr.Builtin_less_eq -> print_string "<builtin less_eq>"
 
 let run ast =
   let rec eval args ctxt = function
@@ -79,7 +105,10 @@ let run ast =
             | Expr.Builtin_less_eq -> Value_bool (lhs <= rhs)
           in
           ret
-      | _ -> assert false )
+      | v ->
+          print_string "\n\nattempted to call a non-function: " ;
+          print_value v ;
+          assert false )
     | Expr.Builtin b -> Value_builtin b
     | Expr.Global_function i -> Value_function i
     | Expr.Struct_literal (_, members) ->
@@ -99,8 +128,6 @@ let run ast =
   | None -> print_endline "main not defined"
   | Some idx ->
       let main_expr = function_expression_by_index ctxt idx in
-      match eval [] ctxt main_expr with
-      | Value_integer n -> Printf.printf "main returned %d\n" n
-      | Value_bool true -> print_endline "main returned true"
-      | Value_bool false -> print_endline "main returned false"
-      | _ -> assert false
+      print_string "main returned " ;
+      print_value (eval [] ctxt main_expr) ;
+      print_char '\n'

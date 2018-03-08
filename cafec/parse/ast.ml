@@ -13,9 +13,21 @@ let print_indent indent =
 
 
 module Type = struct
-  type t = Named of string
+  type t = Named of string | Function of (t spanned list * t spanned option)
 
-  let print (Named self) = print_string self
+  let rec print = function
+    | Named s -> print_string s
+    | Function (parms, ret) ->
+        let rec print_list = function
+          | (x, _) :: xs -> print_string ", " ; print x ; print_list xs
+          | [] -> ()
+        in
+        print_string "func(" ;
+        (match parms with (x, _) :: xs -> print x ; print_list xs | [] -> ()) ;
+        print_string ")" ;
+        match ret with
+        | Some (ret, _) -> print_string " -> " ; print ret
+        | None -> ()
 end
 
 module Expr = struct

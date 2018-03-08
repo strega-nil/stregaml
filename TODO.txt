@@ -1,5 +1,8 @@
 * add function types into the front-end
 * check for recursive types
+  - add structural types into the middle end
+* ADTs
+* add tests >.<
 * fix issues with incorrect spans
 
 * names for stuff

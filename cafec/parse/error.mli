@@ -6,6 +6,7 @@ type expected_token =
   | Expected_type_definition
   | Expected_identifier_or_under
   | Expected_identifier
+  | Expected_type
   | Expected_expression
   | Expected_expression_follow
 
