@@ -1,9 +1,11 @@
-* add function types into the front-end
+* add tests >.<
 * check for recursive types
   - add structural types into the middle end
-* ADTs
-* add tests >.<
+* LLVM backend
 * fix issues with incorrect spans
+* ADTs + pattern matching
+* linearity
+* externals
 
 * names for stuff
   * tamper - build
