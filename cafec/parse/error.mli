@@ -18,9 +18,6 @@ type t =
   | Unrecognized_character of char
   | Unexpected_token of (expected_token * Token.t)
 
-module Monad_spanned : module type of Cafec_spanned.Monad (struct
-  type nonrec t = t end)
+val output : Stdio.Out_channel.t -> t -> unit
 
-val print : t -> unit
-
-val print_spanned : t spanned -> unit
+val output_spanned : Stdio.Out_channel.t -> t spanned -> unit

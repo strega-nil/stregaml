@@ -4,7 +4,7 @@ module Prelude : sig
 
   type 't spanned = 't * span
 
-  type ('o, 'e) spanned_result = ('o spanned, 'e spanned) result
+  type ('o, 'e) spanned_result = ('o, 'e) Result.t spanned
 end
 
 include module type of struct
@@ -17,13 +17,20 @@ val is_made_up : span -> bool
 
 val union : span -> span -> span
 
-val print_span : span -> unit
+val output_span : Stdio.Out_channel.t -> span -> unit
 
-module Monad (E : Interfaces.Type) : sig
-  include Interfaces.Result_monad.Interface
-          with type 'o t = ('o, E.t) spanned_result
-           and type error = E.t
-           and type 'a comonad = 'a spanned
+module Monad_implementation : sig
+  include Monad.S2 with type ('o, 'e) t := ('o, 'e) spanned_result
+end
 
-  val with_span : span -> unit t
+module Monad : sig
+  include module type of Monad_implementation.Let_syntax
+
+  val spanned_bind : ('o, 'e) spanned_result -> ('o spanned, 'e) spanned_result
+
+  val return_err : 'e -> (_, 'e) spanned_result
+
+  val with_span : span -> (unit, _) spanned_result
+
+  val span_of : (_, _) spanned_result -> span
 end

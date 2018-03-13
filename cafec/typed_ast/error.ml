@@ -24,82 +24,86 @@ type t =
   | Return_type_mismatch of {expected: Type.t; found: Type.t}
   | Invalid_function_arguments of {expected: Type.t list; found: Type.t list}
 
-module Monad_spanned = Spanned.Monad (struct
-  type nonrec t = t
-end)
+module Out = Stdio.Out_channel
 
-let print err ctxt =
+let output f err ctxt =
   match err with
-  | Name_not_found name -> Printf.printf "Name not found: %s" name
+  | Name_not_found name -> Out.fprintf f "Name not found: %s" name
   | Type_not_found ty ->
-      print_string "Type not found: " ;
-      Cafec_parse.Ast.Type.print ty
+      Out.output_string f "Type not found: " ;
+      Cafec_parse.Ast.Type.output f ty
   | Struct_literal_of_non_struct_type ty ->
-      print_string "Attempted to create a struct literal of non-struct type: " ;
-      Type.print ty ctxt
+      Out.output_string f
+        "Attempted to create a struct literal of non-struct type: " ;
+      Type.output f ty ctxt
   | Struct_literal_with_unknown_member_name (ty, name) ->
-      print_string "Struct literal of type `" ;
-      Type.print ty ctxt ;
-      Printf.printf "` has an unknown initializer `%s`" name
+      Out.output_string f "Struct literal of type `" ;
+      Type.output f ty ctxt ;
+      Out.fprintf f "` has an unknown initializer `%s`" name
   | Struct_literal_without_member (ty, name) ->
-      print_string "Struct literal of type `" ;
-      Type.print ty ctxt ;
-      Printf.printf "` has no initializer for member `%s`" name
+      Out.output_string f "Struct literal of type `" ;
+      Type.output f ty ctxt ;
+      Out.fprintf f "` has no initializer for member `%s`" name
   | Struct_literal_incorrect_member_type {ty; member; expected; found} ->
-      print_string "Struct literal of type `" ;
-      Type.print ty ctxt ;
-      Printf.printf "` - mismatched member `%s` type:" member ;
-      print_string "\n  expected: " ;
-      Type.print expected ctxt ;
-      print_string "\n  found: " ;
-      Type.print found ctxt
+      Out.output_string f "Struct literal of type `" ;
+      Type.output f ty ctxt ;
+      Out.fprintf f "` - mismatched member `%s` type:" member ;
+      Out.output_string f "\n  expected: " ;
+      Type.output f expected ctxt ;
+      Out.output_string f "\n  found: " ;
+      Type.output f found ctxt
   | Struct_literal_member_defined_multiple_times (ty, member) ->
-      print_string "Struct literal of type `" ;
-      Type.print ty ctxt ;
-      Printf.printf "` - member `%s` initialized multiple times" member
+      Out.output_string f "Struct literal of type `" ;
+      Type.output f ty ctxt ;
+      Out.fprintf f "` - member `%s` initialized multiple times" member
   | Struct_access_on_non_struct_type (ty, member) ->
-      Printf.printf
+      Out.fprintf f
         "Attempted to access the `%s` member of a non-struct type: " member ;
-      Type.print ty ctxt
+      Type.output f ty ctxt
   | Struct_access_non_member (ty, member) ->
-      Printf.printf
+      Out.fprintf f
         "Attempted to access the `%s` member of a type without that member: "
         member ;
-      Type.print ty ctxt
+      Type.output f ty ctxt
   | If_on_non_bool ty ->
-      print_string "Attempted to `if` on an expression of non-boolean type (" ;
-      Type.print ty ctxt ;
-      print_char ')'
+      Out.output_string f
+        "Attempted to `if` on an expression of non-boolean type (" ;
+      Type.output f ty ctxt ;
+      Out.output_char f ')'
   | If_branches_of_differing_type (t1, t2) ->
-      print_string "`if-else` expression had branches of differing types:" ;
-      print_string "\n  1st branch: " ;
-      Type.print t1 ctxt ;
-      print_string "\n  2nd branch: " ;
-      Type.print t2 ctxt
+      Out.output_string f
+        "`if-else` expression had branches of differing types:" ;
+      Out.output_string f "\n  1st branch: " ;
+      Type.output f t1 ctxt ;
+      Out.output_string f "\n  2nd branch: " ;
+      Type.output f t2 ctxt
   | Call_of_non_function ty ->
-      print_string "Attempted to call a non-function type (" ;
-      Type.print ty ctxt ;
-      print_char ')'
+      Out.output_string f "Attempted to call a non-function type (" ;
+      Type.output f ty ctxt ;
+      Out.output_char f ')'
   | Defined_function_multiple_times {name; original_declaration} ->
-      Printf.printf "Defined function %s multiple times.\n" name ;
-      print_string "  (original definition at " ;
-      Spanned.print_span original_declaration ;
-      print_char ')'
+      Out.fprintf f "Defined function %s multiple times.\n" name ;
+      Out.output_string f "  (original definition at " ;
+      Spanned.output_span f original_declaration ;
+      Out.output_char f ')'
   | Defined_type_multiple_times name ->
-      Printf.printf "Defined type %s multiple times." name
+      Out.fprintf f "Defined type %s multiple times." name
   | Return_type_mismatch {expected; found} ->
-      print_string "Return value did not match the return type.\n" ;
-      print_string "  expected: " ;
-      Type.print expected ctxt ;
-      print_string ", found: " ;
-      Type.print found ctxt
+      Out.output_string f "Return value did not match the return type.\n" ;
+      Out.output_string f "  expected: " ;
+      Type.output f expected ctxt ;
+      Out.output_string f ", found: " ;
+      Type.output f found ctxt
   | Invalid_function_arguments {expected; found} ->
-      print_string "Function arguments did not match the parameter types.\n" ;
-      print_string "  expected: " ;
-      Type.print_list expected ctxt ;
-      print_string ", found: " ;
-      Type.print_list found ctxt
+      Out.output_string f
+        "Function arguments did not match the parameter types.\n" ;
+      Out.output_string f "  expected: " ;
+      Type.output_list f expected ctxt ;
+      Out.output_string f ", found: " ;
+      Type.output_list f found ctxt
 
 
-let print_spanned (e, sp) ctxt =
-  print e ctxt ; print_string "\n  at " ; Spanned.print_span sp
+let output_spanned f (e, sp) ctxt =
+  output f e ctxt ;
+  Out.output_string f "\n  at " ;
+  Spanned.output_span f sp

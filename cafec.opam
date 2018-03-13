@@ -12,7 +12,7 @@ build: [
 ]
 depends: [
   "jbuilder" {build}
-  "pred"
+  "batteries"
   "ppx_let"
 ]
 available: [ ocaml-version >= "4.03" ]

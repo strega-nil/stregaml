@@ -31,6 +31,8 @@ include module type of struct
     include Prelude
 end
 
-val print : t -> unit
+val output : Stdio.Out_channel.t -> t -> unit
 
-val print_spanned : t Cafec_spanned.spanned -> unit
+val output_spanned : Stdio.Out_channel.t -> t Cafec_spanned.spanned -> unit
+
+val equal : t -> t -> bool

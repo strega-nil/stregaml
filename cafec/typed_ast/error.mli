@@ -24,9 +24,6 @@ type t =
   | Return_type_mismatch of {expected: Type.t; found: Type.t}
   | Invalid_function_arguments of {expected: Type.t list; found: Type.t list}
 
-module Monad_spanned : module type of Cafec_spanned.Monad (struct
-  type nonrec t = t end)
+val output : Stdio.Out_channel.t -> t -> Type.context -> unit
 
-val print : t -> Type.context -> unit
-
-val print_spanned : t spanned -> Type.context -> unit
+val output_spanned : Stdio.Out_channel.t -> t spanned -> Type.context -> unit

@@ -1,4 +1,4 @@
-open Cafec_spanned.Prelude
+module Spanned = Cafec_spanned
 
 module Prelude = struct
   type keyword =
@@ -30,43 +30,77 @@ module Prelude = struct
 end
 
 include Prelude
+module Out = Stdio.Out_channel
 
-let print_keyword = function
-  | Keyword_true -> print_string "true"
-  | Keyword_false -> print_string "false"
-  | Keyword_if -> print_string "if"
-  | Keyword_else -> print_string "else"
-  | Keyword_func -> print_string "func"
-  | Keyword_type -> print_string "type"
-  | Keyword_struct -> print_string "struct"
-  | Keyword_underscore -> print_char '_'
+let output_keyword f = function
+  | Keyword_true -> Out.output_string f "true"
+  | Keyword_false -> Out.output_string f "false"
+  | Keyword_if -> Out.output_string f "if"
+  | Keyword_else -> Out.output_string f "else"
+  | Keyword_func -> Out.output_string f "func"
+  | Keyword_type -> Out.output_string f "type"
+  | Keyword_struct -> Out.output_string f "struct"
+  | Keyword_underscore -> Out.output_char f '_'
 
 
-let print = function
-  | Open_paren -> print_string "open paren `(`"
-  | Close_paren -> print_string "close paren `)`"
-  | Open_brace -> print_string "open brace `{`"
-  | Close_brace -> print_string "close brace `}`"
-  | Keyword kw -> print_string "keyword: `" ; print_keyword kw ; print_char '`'
+let output f = function
+  | Open_paren -> Out.output_string f "open paren `(`"
+  | Close_paren -> Out.output_string f "close paren `)`"
+  | Open_brace -> Out.output_string f "open brace `{`"
+  | Close_brace -> Out.output_string f "close brace `}`"
+  | Keyword kw ->
+      Out.output_string f "keyword: `" ;
+      output_keyword f kw ;
+      Out.output_char f '`'
   | Operator op ->
-      print_string "operator: `" ; print_string op ; print_char '`'
+      Out.output_string f "operator: `" ;
+      Out.output_string f op ;
+      Out.output_char f '`'
   | Identifier id ->
-      print_string "identifier: `" ;
-      print_string id ;
-      print_char '`'
+      Out.output_string f "identifier: `" ;
+      Out.output_string f id ;
+      Out.output_char f '`'
   | Integer_literal i ->
-      print_string "int literal: " ;
-      print_int i
-  | Arrow -> print_string "arrow `->`"
-  | Colon -> print_string "colon `:`"
-  | Equals -> print_string "equals `=`"
-  | Semicolon -> print_string "semicolon `;`"
-  | Comma -> print_string "comma `,`"
-  | Dot -> print_string "dot `.`"
-  | Eof -> print_string "end of file"
+      Out.output_string f "int literal: " ;
+      Out.fprintf f "%d" i
+  | Arrow -> Out.output_string f "arrow `->`"
+  | Colon -> Out.output_string f "colon `:`"
+  | Equals -> Out.output_string f "equals `=`"
+  | Semicolon -> Out.output_string f "semicolon `;`"
+  | Comma -> Out.output_string f "comma `,`"
+  | Dot -> Out.output_string f "dot `.`"
+  | Eof -> Out.output_string f "end of file"
 
 
-let print_spanned (tok, sp) =
-  print tok ;
-  Printf.printf " from (%d, %d) to (%d, %d)" sp.start_line sp.start_column
-    sp.end_line sp.end_column
+let output_spanned f (tok, sp) =
+  output f tok ; Out.output_string f " at " ; Spanned.output_span f sp
+
+
+let equal lhs rhs =
+  match (lhs, rhs) with
+  | Open_paren, Open_paren -> true
+  | Close_paren, Close_paren -> true
+  | Open_brace, Open_brace -> true
+  | Close_brace, Close_brace -> true
+  | Keyword kw1, Keyword kw2 -> (
+    match (kw1, kw2) with
+    | Keyword_true, Keyword_true -> true
+    | Keyword_false, Keyword_false -> true
+    | Keyword_if, Keyword_if -> true
+    | Keyword_else, Keyword_else -> true
+    | Keyword_func, Keyword_func -> true
+    | Keyword_type, Keyword_type -> true
+    | Keyword_struct, Keyword_struct -> true
+    | Keyword_underscore, Keyword_underscore -> true
+    | _ -> false )
+  | Identifier id1, Identifier id2 -> String.equal id1 id2
+  | Operator op1, Operator op2 -> String.equal op1 op2
+  | Integer_literal i1, Integer_literal i2 -> i1 = i2
+  | Arrow, Arrow -> true
+  | Colon, Colon -> true
+  | Equals, Equals -> true
+  | Semicolon, Semicolon -> true
+  | Dot, Dot -> true
+  | Comma, Comma -> true
+  | Eof, Eof -> true
+  | _ -> false

@@ -19,39 +19,38 @@ type t =
   | Unrecognized_character of char
   | Unexpected_token of (expected_token * Token.t)
 
-module Monad_spanned = Spanned.Monad (struct
-  type nonrec t = t
-end)
+module Out = Stdio.Out_channel
 
-let print_expected = function
-  | Expected_specific tok -> Token.print tok
-  | Expected_item_declarator -> print_string "either `func` or `type`"
-  | Expected_type_definition -> print_string "`struct`, `variant`, or a type"
-  | Expected_identifier -> print_string "an identifier"
-  | Expected_identifier_or_under -> print_string "an identifier or `_`"
-  | Expected_type -> print_string "the start of a type"
-  | Expected_expression -> print_string "the start of an expression"
+let output_expected f = function
+  | Expected_specific tok -> Token.output f tok
+  | Expected_item_declarator -> Out.output_string f "either `func` or `type`"
+  | Expected_type_definition ->
+      Out.output_string f "`struct`, `variant`, or a type"
+  | Expected_identifier -> Out.output_string f "an identifier"
+  | Expected_identifier_or_under -> Out.output_string f "an identifier or `_`"
+  | Expected_type -> Out.output_string f "the start of a type"
+  | Expected_expression -> Out.output_string f "the start of an expression"
   | Expected_expression_follow ->
-      print_string
+      Out.output_string f
         "an operator, semicolon, comma, dot, or closing brace (`}`, `)`)"
 
 
-let print = function
-  | Malformed_number_literal -> print_string "malformed number literal"
+let output f = function
+  | Malformed_number_literal -> Out.output_string f "malformed number literal"
   | Operator_including_comment_token s ->
-      Printf.printf "operator %s includes a sequence of comment characters" s
-  | Reserved_token tok -> Printf.printf "reserved token: %s" tok
+      Out.fprintf f "operator %s includes a sequence of comment characters" s
+  | Reserved_token tok -> Out.fprintf f "reserved token: %s" tok
   | Unrecognized_character ch ->
-      Printf.printf "unrecognized character: `%c` (%d)" ch (Char.code ch)
-  | Unclosed_comment -> print_string "unclosed comment"
+      Out.fprintf f "unrecognized character: `%c` (%d)" ch (Char.to_int ch)
+  | Unclosed_comment -> Out.output_string f "unclosed comment"
   | Unexpected_token (exp, tok) ->
-      print_string "expected: " ;
-      print_expected exp ;
-      print_string ", found: " ;
-      Token.print tok
+      Out.output_string f "expected: " ;
+      output_expected f exp ;
+      Out.output_string f ", found: " ;
+      Token.output f tok
 
 
-let print_spanned (err, sp) =
-  print err ;
-  Printf.printf "\n  from (%d, %d) to (%d, %d)" sp.start_line sp.start_column
+let output_spanned f (err, sp) =
+  output f err ;
+  Out.fprintf f "\n  from (%d, %d) to (%d, %d)" sp.start_line sp.start_column
     sp.end_line sp.end_column

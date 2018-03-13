@@ -17,16 +17,15 @@ type value =
   | Value_builtin of Expr.builtin
 
 let build_context ast =
-  let seq = ref (Ast.function_seq ast) in
+  let lst = ref (Ast.functions ast) in
   let helper _ =
-    match !seq () with
-    | Seq.Nil -> assert false
-    | Seq.Cons ((({Ast.fname; _}, _), (expr, _)), xs) ->
-        seq := xs ;
+    match !lst with
+    | [] -> assert false
+    | (({Ast.fname; _}, _), (expr, _)) :: xs ->
+        lst := xs ;
         (fname, expr)
   in
-  let ret = {funcs= Array.init (Ast.number_of_functions ast) helper} in
-  match !seq () with Seq.Cons _ -> assert false | Seq.Nil -> ret
+  {funcs= Array.init (List.length !lst) ~f:helper}
 
 
 let function_expression_by_index ctxt idx =
@@ -35,36 +34,35 @@ let function_expression_by_index ctxt idx =
 
 
 let function_index_by_name ctxt find =
-  match Array.find (fun (name, _) -> name = find) ctxt.funcs with
+  match
+    Array.findi ctxt.funcs ~f:(fun _ (name, _) -> String.equal name find)
+  with
   | None -> None
   | Some (n, _) -> Some n
 
-let rec print_value = function
-  | Value_unit -> print_string "()"
-  | Value_integer n -> print_int n 
-  | Value_bool true -> print_string "true"
-  | Value_bool false -> print_string "false"
+
+module Out = Stdio.Out_channel
+
+let rec output_value f ctxt = function
+  | Value_unit -> Out.output_string f "()"
+  | Value_integer n -> Out.fprintf f "%d" n
+  | Value_bool true -> Out.output_string f "true"
+  | Value_bool false -> Out.output_string f "false"
   | Value_struct arr ->
-      let rec print_values = function
-        | Seq.Nil -> ()
-        | Seq.Cons (x, xs) ->
-            print_string "; " ;
-            print_value x ;
-            print_values (xs ())
-      in
-      print_string "{" ;
-      ( match (Array.to_seq arr) () with 
-      | Seq.Nil -> ()
-      | Seq.Cons (x, xs) ->
-          print_char ' ' ;
-          print_value x ;
-          print_values (xs ()) ) ;
-      print_string " }" ;
-  | Value_function n -> Printf.printf "<function %d>" n
-  | Value_builtin Expr.Builtin_add -> print_string "<builtin add>"
-  | Value_builtin Expr.Builtin_sub -> print_string "<builtin sub>"
-  | Value_builtin Expr.Builtin_mul -> print_string "<builtin mul>"
-  | Value_builtin Expr.Builtin_less_eq -> print_string "<builtin less_eq>"
+      Out.output_string f "{" ;
+      if not (Array.is_empty arr) then
+        Array.iter arr ~f:(fun el ->
+            Out.output_string f "; " ; output_value f ctxt el ) ;
+      Out.output_string f " }"
+  | Value_function n ->
+      let name, _ = (ctxt.funcs).(n) in
+      Out.fprintf f "<function %s>" name
+  | Value_builtin Expr.Builtin_add -> Out.output_string f "<builtin add>"
+  | Value_builtin Expr.Builtin_sub -> Out.output_string f "<builtin sub>"
+  | Value_builtin Expr.Builtin_mul -> Out.output_string f "<builtin mul>"
+  | Value_builtin Expr.Builtin_less_eq ->
+      Out.output_string f "<builtin less_eq>"
+
 
 let run ast =
   let rec eval args ctxt = function
@@ -76,12 +74,12 @@ let run ast =
       | Value_bool true -> eval args ctxt thn
       | Value_bool false -> eval args ctxt els
       | _ -> assert false )
-    | Expr.Parameter i -> List.nth_exn i args
+    | Expr.Parameter i -> List.nth_exn args i
     | Expr.Call ((e, _), args') -> (
       match eval args ctxt e with
       | Value_function func ->
           let expr = function_expression_by_index ctxt func in
-          let args' = List.map (fun (e, _) -> eval args ctxt e) args' in
+          let args' = List.map args' ~f:(fun (e, _) -> eval args ctxt e) in
           eval args' ctxt expr
       | Value_builtin b ->
           let (lhs, _), (rhs, _) =
@@ -106,17 +104,16 @@ let run ast =
           in
           ret
       | v ->
-          print_string "\n\nattempted to call a non-function: " ;
-          print_value v ;
+          Out.output_string Out.stderr "\n\nattempted to call a non-function: " ;
+          output_value Out.stderr ctxt v ;
           assert false )
     | Expr.Builtin b -> Value_builtin b
     | Expr.Global_function i -> Value_function i
     | Expr.Struct_literal (_, members) ->
         let len = List.length members in
-        let arr = Array.make len Value_unit in
+        let arr = Array.create ~len Value_unit in
         let f (i, (e, _)) = arr.(i) <- eval args ctxt e in
-        Seq.for_each f (List.to_seq members) ;
-        Value_struct arr
+        List.iter ~f members ; Value_struct arr
     | Expr.Struct_access ((e, _), idx) ->
         let v = eval args ctxt e in
         match v with
@@ -125,9 +122,9 @@ let run ast =
   in
   let ctxt = build_context ast in
   match function_index_by_name ctxt "main" with
-  | None -> print_endline "main not defined"
+  | None -> Out.output_string Out.stdout "main not defined\n"
   | Some idx ->
       let main_expr = function_expression_by_index ctxt idx in
-      print_string "main returned " ;
-      print_value (eval [] ctxt main_expr) ;
-      print_char '\n'
+      Out.output_string Out.stdout "main returned " ;
+      output_value Out.stdout ctxt (eval [] ctxt main_expr) ;
+      Out.newline Out.stdout

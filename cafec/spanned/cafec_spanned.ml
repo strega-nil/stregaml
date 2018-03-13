@@ -4,14 +4,14 @@ module Prelude = struct
 
   type 't spanned = 't * span
 
-  type ('o, 'e) spanned_result = ('o spanned, 'e spanned) result
+  type ('o, 'e) spanned_result = ('o, 'e) Result.t spanned
 end
 
 include Prelude
 
 let made_up = {start_line= 0; start_column= 0; end_line= 0; end_column= 0}
 
-let is_made_up sp = sp = made_up
+let is_made_up sp = Polymorphic_compare.equal sp made_up
 
 let union fst snd =
   if is_made_up fst then snd
@@ -23,32 +23,40 @@ let union fst snd =
     ; end_column= snd.end_column }
 
 
-let print_span {start_line; start_column; end_line; end_column} =
-  Printf.printf "(%d, %d) to (%d, %d)" start_line start_column end_line
-    end_column
+let output_span f {start_line; start_column; end_line; end_column} =
+  Stdio.Out_channel.fprintf f "(%d, %d) to (%d, %d)" start_line start_column
+    end_line end_column
 
 
-module Monad (E : Interfaces.Type) = struct
-  include Interfaces.Result_monad.Make (struct
-    type error = E.t
+module Monad_implementation = struct
+  include Monad.Make2 (struct
+    type ('o, 'e) t = ('o, 'e) spanned_result
 
-    type 'o t = ('o, E.t) spanned_result
-
-    type 'a comonad = 'a spanned
-
-    let ( >>= ) self f =
+    let bind (self, sp) ~f =
       match self with
-      | Error e -> Error e
-      | Ok (o, sp) ->
-        match f (o, sp) with
-        | Ok (o', sp') -> Ok (o', union sp sp')
-        | Error (e', sp') -> Error (e', if is_made_up sp' then sp else sp')
+      | Error e -> (Error e, sp)
+      | Ok o ->
+        match f o with
+        | Ok o', sp' -> (Ok o', union sp sp')
+        | Error e', sp' -> (Error e', if is_made_up sp' then sp else sp')
 
 
-    let wrap o = Ok (o, made_up)
+    let map = `Define_using_bind
 
-    let wrap_err e = Error (e, made_up)
+    let return o = (Ok o, made_up)
   end)
+end
 
-  let with_span sp = Ok ((), sp)
+module Monad = struct
+  include Monad_implementation.Let_syntax
+
+  let spanned_bind (t, sp) =
+    match t with Error e -> (Error e, sp) | Ok o -> (Ok (o, sp), sp)
+
+
+  let return_err e = (Error e, made_up)
+
+  let with_span sp = (Ok (), sp)
+
+  let span_of (_, sp) = sp
 end

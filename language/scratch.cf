@@ -6,4 +6,4 @@ func map(p: vec2, f: func(int) -> int): vec2 =
 func double(i: int): int = MUL(i, 2);
 
 func main(): vec2 =
-  map(vec2 { x0 = 3; x1 = 9 }, double);
+  map(vec2 { x0 = 2014; x1 = 9 }, double);

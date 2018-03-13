@@ -2,6 +2,6 @@
 
 (library
   ((name cafec_interpreter)
-  (libraries (pred ppx_let cafec_typed_ast))
+  (libraries (base ppx_let cafec_typed_ast))
   (preprocess (pps (ppx_let)))
-  (flags (:standard -w +a-4 -open Pred))))
+  (flags (:standard -w +a-4 -open Base))))

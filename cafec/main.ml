@@ -1,10 +1,12 @@
 module Parse = Cafec_parse
 module Typed_ast = Cafec_typed_ast
 module Interpreter = Cafec_interpreter
+module Out = Stdio.Out_channel
+module In = Stdio.In_channel
 
 type command_line_arguments = {filename: string; print_parse_ast: bool}
 
-let parse_command_line () : (command_line_arguments, string) result =
+let parse_command_line () : (command_line_arguments, string) Result.t =
   let print_parse_ast = ref false in
   let error = ref None in
   let filename = ref None in
@@ -14,12 +16,12 @@ let parse_command_line () : (command_line_arguments, string) result =
     | None -> filename := Some name
   in
   let cmd_options =
-    let open Arg in
+    let open Caml.Arg in
     [ ( "--print-parse-ast"
       , Set print_parse_ast
       , "print the (untyped) parsed ast" ) ]
   in
-  Arg.parse cmd_options get_filename "cafec [filename]" ;
+  Caml.Arg.parse cmd_options get_filename "cafec [filename]" ;
   match !error with
   | Some err -> Error err
   | None ->
@@ -33,35 +35,25 @@ let main () =
     match parse_command_line () with
     | Ok args -> args
     | Error e ->
-        Printf.printf "error while parsing command line arguments: %s" e ;
-        exit 1
+        Out.fprintf Out.stderr "error while parsing command line arguments: %s"
+          e ;
+        Caml.exit 1
   in
-  let program =
-    let file = open_in args.filename in
-    let buffer = String_buffer.with_capacity (in_channel_length file) in
-    (* yes this is ugly. I need to write a good I/O library, I think *)
-    let rec loop () =
-      String_buffer.push (input_char file) buffer ;
-      loop ()
-    in
-    (try loop () with _ -> ()) ;
-    close_in file ;
-    String_buffer.to_string buffer
-  in
+  let program = In.with_file args.filename ~f:In.input_all in
   match Parse.parse program with
-  | Error e ->
-      print_string "Error: " ;
-      Parse.Error.print_spanned e ;
-      print_newline ()
-  | Ok (unt_ast, _) ->
-      Parse.Ast.print unt_ast ;
-      flush stdout ;
+  | Error e, sp ->
+      Out.output_string Out.stderr "Error: " ;
+      Parse.Error.output_spanned Out.stderr (e, sp) ;
+      Out.newline Out.stderr
+  | Ok unt_ast, _ ->
+      Parse.Ast.output Out.stdout unt_ast ;
+      Out.flush Out.stdout ;
       match Typed_ast.make unt_ast with
-      | Error ((e, context), sp) ->
-          print_string "Error: " ;
-          Typed_ast.Error.print_spanned (e, sp) context ;
-          print_newline ()
-      | Ok (ty_ast, _) -> Interpreter.run ty_ast
+      | Error (e, context), sp ->
+          Out.output_string Out.stderr "Error: " ;
+          Typed_ast.Error.output_spanned Out.stderr (e, sp) context ;
+          Out.newline Out.stderr
+      | Ok ty_ast, _ -> Interpreter.run ty_ast
 
 
 let () = main ()

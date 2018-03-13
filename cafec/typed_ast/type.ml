@@ -10,26 +10,43 @@ type definition = Def_alias of t | Def_struct of (string * t) list
 
 type context = string list
 
-let rec print ty (ctxt: string list) =
-  match ty with
-  | Builtin Builtin_unit -> print_string "unit"
-  | Builtin Builtin_bool -> print_string "bool"
-  | Builtin Builtin_int -> print_string "int"
-  | Builtin Builtin_function {params; ret_ty} ->
-      print_string "func" ;
-      print_list params ctxt ;
-      print_string " -> " ;
-      print ret_ty ctxt
-  | User_defined i -> print_string (List.nth_exn i ctxt)
+module Out = Stdio.Out_channel
 
-and print_list lst ctxt =
-  print_char '(' ;
+let rec output f ty ctxt =
+  match ty with
+  | Builtin Builtin_unit -> Out.output_string f "unit"
+  | Builtin Builtin_bool -> Out.output_string f "bool"
+  | Builtin Builtin_int -> Out.output_string f "int"
+  | Builtin Builtin_function {params; ret_ty} ->
+      Out.output_string f "func" ;
+      output_list f params ctxt ;
+      Out.output_string f " -> " ;
+      output f ret_ty ctxt
+  | User_defined i -> Out.output_string f (List.nth_exn ctxt i)
+
+
+and output_list f lst ctxt =
+  Out.output_char f '(' ;
   ( match lst with
   | x :: xs ->
       let rec helper = function
-        | x :: xs -> print_string ", " ; print x ctxt ; helper xs
+        | x :: xs -> Out.output_string f ", " ; output f x ctxt ; helper xs
         | [] -> ()
       in
-      print x ctxt ; helper xs
+      output f x ctxt ; helper xs
   | [] -> () ) ;
-  print_char ')'
+  Out.output_char f ')'
+
+
+let rec equal l r =
+  match (l, r) with
+  | Builtin bl, Builtin br -> (
+    match (bl, br) with
+    | Builtin_unit, Builtin_unit -> true
+    | Builtin_bool, Builtin_bool -> true
+    | Builtin_int, Builtin_int -> true
+    | Builtin_function fl, Builtin_function fr ->
+        equal fl.ret_ty fr.ret_ty && List.equal fl.params fr.params ~equal
+    | _ -> false )
+  | User_defined l, User_defined r -> l = r
+  | _ -> false
