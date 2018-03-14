@@ -39,7 +39,7 @@ let number_of_functions {number_of_functions; _} = number_of_functions
 
 let function_seq ast =
   let {ast= {Internal.func_decls; Internal.func_defs; _}; _} = ast in
-  let init = func_decls, func_defs in
+  let init = (func_decls, func_defs) in
   let f = function
     | [], [] -> None
     | decl :: decls, def :: defs -> Some ((decl, def), (decls, defs))

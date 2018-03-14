@@ -1,6 +1,4 @@
-module Parse = Cafec_parse
-module Typed_ast = Cafec_typed_ast
-module Interpreter = Cafec_interpreter
+open Cafec
 module Out = Stdio.Out_channel
 module In = Stdio.In_channel
 
@@ -53,7 +51,15 @@ let main () =
           Out.output_string Out.stderr "Error: " ;
           Typed_ast.Error.output_spanned Out.stderr (e, sp) context ;
           Out.newline Out.stderr
-      | Ok ty_ast, _ -> Interpreter.run ty_ast
+      | Ok ty_ast, _ ->
+          let ctxt = Interpreter.make ty_ast in
+          match Interpreter.get_function ctxt ~name:"main" with
+          | Some f ->
+              let v = Interpreter.call ctxt f [] in
+              Out.output_string Out.stdout "main returned: " ;
+              Interpreter.Value.output Out.stdout v ctxt ;
+              Out.newline Out.stdout
+          | None -> Out.output_string Out.stderr "no main was found\n"
 
 
 let () = main ()
