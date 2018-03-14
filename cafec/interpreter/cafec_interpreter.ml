@@ -17,15 +17,15 @@ type value =
   | Value_builtin of Expr.builtin
 
 let build_context ast =
-  let lst = ref (Ast.functions ast) in
+  let seq = ref (Ast.function_seq ast) in
   let helper _ =
-    match !lst with
-    | [] -> assert false
-    | (({Ast.fname; _}, _), (expr, _)) :: xs ->
-        lst := xs ;
+    match Sequence.next !seq with
+    | None -> assert false
+    | Some ((({Ast.fname; _}, _), (expr, _)), rest) ->
+        seq := rest ;
         (fname, expr)
   in
-  {funcs= Array.init (List.length !lst) ~f:helper}
+  {funcs= Array.init (Ast.number_of_functions ast) ~f:helper}
 
 
 let function_expression_by_index ctxt idx =

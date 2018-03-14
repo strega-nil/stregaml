@@ -22,6 +22,7 @@ val number_of_types : t -> int
 
 val type_seq : t -> type_def spanned seq
 *)
-(* NOTE(ubsan): this likely should use an iterator type, but... meh *)
 
-val functions : t -> (func_decl spanned * Expr.t spanned) list
+val number_of_functions : t -> int
+
+val function_seq : t -> (func_decl spanned * Expr.t spanned) Sequence.t
