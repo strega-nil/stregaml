@@ -1,4 +1,4 @@
-open OUnit
+open OUnit2
 
 exception Parser_error of Cafec.Parse.Error.t
 
@@ -23,19 +23,15 @@ let call program name args =
     | Error e, _ -> raise (Type_error e)
     | Ok ty_ast, _ ->
         let ctxt = Cafec.Interpreter.make ty_ast in
-        match Cafec.Interpreter.get_function ctxt ~name:"main" with
+        match Cafec.Interpreter.get_function ctxt ~name with
         | Some f -> Cafec.Interpreter.call ctxt f args
         | None -> raise (Function_not_found name)
 
 
 let _ =
   let module Value = Cafec.Interpreter.Value in
-  run_test_tt_main
-    ( "Tests"
-    >::: [ ( "Higher order functions, structs"
-           >:: fun _ ->
-           let program =
-             {|
+  let program =
+    {|
 type vec2 = struct { x0: int; x1: int };
 
 func map(p: vec2, f: func(int) -> int): vec2 =
@@ -45,8 +41,17 @@ func double(i: int): int = MUL(i, 2);
 
 func main(): vec2 =
   map(vec2 { x0 = 2014; x1 = 9 }, double); |}
-           in
-           let expected =
-             Value.Struct [|Value.Integer 4028; Value.Integer 18|]
-           in
-           assert (Value.equal (call program "main" []) expected) ) ] )
+  in
+  let tests =
+    [ ( "calling non-existent function"
+      >:: fun _ ->
+      ( match call program "foo" [] with
+      | exception Function_not_found "foo" -> ()
+      | exception _ -> assert_failure "threw the wrong exception"
+      | _ -> assert_failure "should have thrown function not found") )
+    ; ( "higher order function, struct"
+      >:: fun _ ->
+      let expected = Value.Struct [|Value.Integer 4028; Value.Integer 18|] in
+      assert (Value.equal (call program "main" []) expected) ) ]
+  in
+  run_test_tt_main ("Tests" >::: tests)
