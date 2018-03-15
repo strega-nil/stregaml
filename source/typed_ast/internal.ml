@@ -147,14 +147,14 @@ let rec type_of_expr ctxt decl e =
       | ty -> return_err (Error.Call_of_non_function ty) )
   | Expr.Builtin b -> (
     match b with
-    | Expr.Builtin_add | Expr.Builtin_sub | Expr.Builtin_mul ->
+    | Expr.Builtin.Add | Expr.Builtin.Sub | Expr.Builtin.Mul ->
         return
           Type.(
             Builtin
               (Builtin_function
                  { params= [Builtin Builtin_int; Builtin Builtin_int]
                  ; ret_ty= Builtin Builtin_int }))
-    | Expr.Builtin_less_eq ->
+    | Expr.Builtin.Less_eq ->
         return
           Type.(
             Builtin
@@ -270,10 +270,10 @@ let rec type_expression decl ctxt unt_expr =
         match Functions.index_by_name ctxt name with
         | None -> (
           match name with
-          | "LESS_EQ" -> return (T.Builtin T.Builtin_less_eq)
-          | "ADD" -> return (T.Builtin T.Builtin_add)
-          | "SUB" -> return (T.Builtin T.Builtin_sub)
-          | "MUL" -> return (T.Builtin T.Builtin_mul)
+          | "LESS_EQ" -> return (T.Builtin T.Builtin.Less_eq)
+          | "ADD" -> return (T.Builtin T.Builtin.Add)
+          | "SUB" -> return (T.Builtin T.Builtin.Sub)
+          | "MUL" -> return (T.Builtin T.Builtin.Mul)
           | _ -> return_err (Error.Name_not_found name) )
         | Some idx -> return (T.Global_function idx) )
       | Some (_ty, idx) -> return (T.Parameter idx) )

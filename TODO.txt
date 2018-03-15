@@ -1,4 +1,3 @@
-* add tests >.<
 * check for recursive types
   - add structural types into the middle end
 * LLVM backend

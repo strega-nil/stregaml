@@ -2,6 +2,7 @@ type t
 
 module Value : sig
   type ctxt = t
+
   type function_index
 
   type t =
@@ -10,7 +11,9 @@ module Value : sig
     | Integer of int
     | Function of function_index
     | Struct of t array
-    | Builtin of Cafec_typed_ast.Expr.builtin
+    | Builtin of Cafec_typed_ast.Expr.Builtin.t
+
+  val equal : t -> t -> bool
 
   val output : Stdio.Out_channel.t -> t -> ctxt -> unit
 end

@@ -19,7 +19,18 @@ module Value = struct
     | Integer of int
     | Function of int
     | Struct of t array
-    | Builtin of Expr.builtin
+    | Builtin of Expr.Builtin.t
+
+  let rec equal lhs rhs =
+    match (lhs, rhs) with
+    | Unit, Unit -> true
+    | Bool b1, Bool b2 -> Bool.equal b1 b2
+    | Integer i1, Integer i2 -> i1 = i2
+    | Function f1, Function f2 -> f1 = f2
+    | Struct lhs, Struct rhs -> Array.equal ~equal lhs rhs
+    | Builtin b1, Builtin b2 -> Expr.Builtin.equal b1 b2
+    | _ -> false
+
 
   let rec output f v ctxt =
     let module Out = Stdio.Out_channel in
@@ -37,11 +48,10 @@ module Value = struct
     | Function n ->
         let name, _ = (ctxt.funcs).(n) in
         Out.fprintf f "<function %s>" name
-    | Builtin Expr.Builtin_add -> Out.output_string f "<builtin add>"
-    | Builtin Expr.Builtin_sub -> Out.output_string f "<builtin sub>"
-    | Builtin Expr.Builtin_mul -> Out.output_string f "<builtin mul>"
-    | Builtin Expr.Builtin_less_eq ->
-        Out.output_string f "<builtin less_eq>"
+    | Builtin Expr.Builtin.Add -> Out.output_string f "<builtin add>"
+    | Builtin Expr.Builtin.Sub -> Out.output_string f "<builtin sub>"
+    | Builtin Expr.Builtin.Mul -> Out.output_string f "<builtin mul>"
+    | Builtin Expr.Builtin.Less_eq -> Out.output_string f "<builtin less_eq>"
 end
 
 let make ast =
@@ -54,7 +64,6 @@ let make ast =
         (fname, expr)
   in
   {funcs= Array.init (Ast.number_of_functions ast) ~f:helper}
-
 
 
 let get_function ctxt ~name =
@@ -98,10 +107,10 @@ let call ctxt idx args =
           in
           let ret =
             match b with
-            | Expr.Builtin_add -> Value.Integer (lhs + rhs)
-            | Expr.Builtin_sub -> Value.Integer (lhs - rhs)
-            | Expr.Builtin_mul -> Value.Integer (lhs * rhs)
-            | Expr.Builtin_less_eq -> Value.Bool (lhs <= rhs)
+            | Expr.Builtin.Add -> Value.Integer (lhs + rhs)
+            | Expr.Builtin.Sub -> Value.Integer (lhs - rhs)
+            | Expr.Builtin.Mul -> Value.Integer (lhs * rhs)
+            | Expr.Builtin.Less_eq -> Value.Bool (lhs <= rhs)
           in
           ret
       | _ -> assert false )

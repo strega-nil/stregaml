@@ -15,5 +15,5 @@ clean:
 format:
 	ocamlformat --inplace \
 	  test/*.ml \
-	  cafec/*.ml cafec/*.mli \
-	  cafec/*/*.ml cafec/*/*.mli
+	  source/*.ml source/*.mli \
+	  source/*/*.ml source/*/*.mli

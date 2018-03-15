@@ -1,5 +1,6 @@
 module Error = Error
 module Expr = Expr
+module Type = Type
 module Internal = Internal
 
 type func_decl = Internal.func_decl =

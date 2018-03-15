@@ -12,6 +12,7 @@ build: [
 ]
 depends: [
   "jbuilder" {build}
+  "oUnit" {test}
   "base"
   "ppx_let"
 ]
