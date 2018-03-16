@@ -40,10 +40,23 @@ module Value = struct
     | Bool true -> Out.output_string f "true"
     | Bool false -> Out.output_string f "false"
     | Struct arr ->
+        let rec output_rest seq =
+          match Sequence.next seq with
+          | Some (x, xs) -> 
+              Out.output_string f "; " ;
+              output f x ctxt ;
+              output_rest xs
+          | None -> ()
+        in
         Out.output_string f "{" ;
-        if not (Array.is_empty arr) then
-          Array.iter arr ~f:(fun el ->
-              Out.output_string f "; " ; output f el ctxt ) ;
+        let () =
+          match Sequence.next (Array.to_sequence_mutable arr) with
+          | Some (x, xs) ->
+              Out.output_char f ' ' ;
+              output f x ctxt ;
+              output_rest xs
+          | None -> ()
+        in
         Out.output_string f " }"
     | Function n ->
         let name, _ = (ctxt.funcs).(n) in
