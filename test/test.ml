@@ -45,10 +45,16 @@ func main(): vec2 =
   let tests =
     [ ( "calling non-existent function"
       >:: fun _ ->
-      ( match call program "foo" [] with
+      match call program "foo" [] with
       | exception Function_not_found "foo" -> ()
       | exception _ -> assert_failure "threw the wrong exception"
-      | _ -> assert_failure "should have thrown function not found") )
+      | _ -> assert_failure "should have thrown function not found" )
+    ; ( "calling a function incorrectly"
+      >:: fun _ ->
+      match call program "main" [Value.Integer 0] with
+      | exception Invalid_argument _ -> ()
+      | exception _ -> assert_failure "threw the wrong exception"
+      | _ -> assert_failure "should have thrown invalid argument" )
     ; ( "higher order function, struct"
       >:: fun _ ->
       let expected = Value.Struct [|Value.Integer 4028; Value.Integer 18|] in
