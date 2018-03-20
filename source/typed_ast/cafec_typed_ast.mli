@@ -1,7 +1,7 @@
 module Error = Error
 module Expr = Expr
 module Type = Type
-open Cafec_spanned.Prelude
+open Cafec_containers.Spanned.Prelude
 
 type func_decl = Internal.func_decl =
   {fname: string; params: (string * Type.t) list; ret_ty: Type.t}

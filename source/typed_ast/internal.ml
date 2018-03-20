@@ -1,4 +1,4 @@
-module Spanned = Cafec_spanned
+module Spanned = Cafec_containers.Spanned
 module Untyped_ast = Cafec_parse.Ast
 module Error = Error
 module Expr = Expr

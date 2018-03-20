@@ -1,4 +1,4 @@
-module Spanned = Cafec_spanned
+module Spanned = Cafec_containers.Spanned
 open Spanned.Prelude
 module Out = Stdio.Out_channel
 

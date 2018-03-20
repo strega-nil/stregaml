@@ -33,6 +33,6 @@ end
 
 val output : Stdio.Out_channel.t -> t -> unit
 
-val output_spanned : Stdio.Out_channel.t -> t Cafec_spanned.spanned -> unit
+val output_spanned : Stdio.Out_channel.t -> t Cafec_containers.Spanned.spanned -> unit
 
 val equal : t -> t -> bool

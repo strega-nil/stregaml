@@ -1,4 +1,4 @@
-open Cafec_spanned.Prelude
+open Cafec_containers.Spanned.Prelude
 
 module Ast : module type of Ast
 

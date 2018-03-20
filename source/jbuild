@@ -3,7 +3,8 @@
 (library (
   (name cafec)
   (modules (cafec))
-  (libraries (base cafec_parse cafec_spanned cafec_typed_ast cafec_interpreter))
+  (libraries (
+    base cafec_parse cafec_containers cafec_typed_ast cafec_interpreter))
   (flags (:standard -safe-string -w +a-4 -open Base))))
 
 (executables (

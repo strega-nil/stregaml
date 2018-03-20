@@ -1,4 +1,4 @@
-open Cafec_spanned.Prelude
+open Cafec_containers.Spanned.Prelude
 
 module Type : sig
   type t = Named of string | Function of (t spanned list * t spanned option)

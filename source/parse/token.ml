@@ -1,4 +1,4 @@
-module Spanned = Cafec_spanned
+module Spanned = Cafec_containers.Spanned
 
 module Prelude = struct
   type keyword =

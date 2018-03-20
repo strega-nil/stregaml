@@ -1,4 +1,4 @@
-module Spanned = Cafec_spanned
+module Spanned = Cafec_containers.Spanned
 module Error = Error
 module Ast = Ast
 open Spanned.Prelude
