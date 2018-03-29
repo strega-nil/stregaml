@@ -1,14 +1,16 @@
-open Cafec_containers.Spanned.Prelude
+module Expected : sig
+  type t =
+    | Specific of Token.t
+    | Item_declarator
+    | Type_definition
+    | Identifier_or_under
+    | Identifier
+    | Type
+    | Expression
+    | Expression_follow
 
-type expected_token =
-  | Expected_specific of Token.t
-  | Expected_item_declarator
-  | Expected_type_definition
-  | Expected_identifier_or_under
-  | Expected_identifier
-  | Expected_type
-  | Expected_expression
-  | Expected_expression_follow
+  val to_string : t -> string
+end
 
 type t =
   | Unclosed_comment
@@ -16,8 +18,6 @@ type t =
   | Malformed_number_literal
   | Reserved_token of string
   | Unrecognized_character of char
-  | Unexpected_token of (expected_token * Token.t)
+  | Unexpected_token of (Expected.t * Token.t)
 
-val output : Stdio.Out_channel.t -> t -> unit
-
-val output_spanned : Stdio.Out_channel.t -> t spanned -> unit
+val to_string : t -> string

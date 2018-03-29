@@ -2,5 +2,5 @@
 
 (library
   ((name cafec_containers)
-  (libraries (base stdio))
+  (libraries (base))
   (flags (:standard -w +a-4 -open Base))))

@@ -42,19 +42,15 @@ module Value = struct
     | Struct arr ->
         let rec output_rest seq =
           match Sequence.next seq with
-          | Some (x, xs) -> 
-              Out.output_string f "; " ;
-              output f x ctxt ;
-              output_rest xs
+          | Some (x, xs) ->
+              Out.output_string f "; " ; output f x ctxt ; output_rest xs
           | None -> ()
         in
         Out.output_string f "{" ;
         let () =
           match Sequence.next (Array.to_sequence_mutable arr) with
           | Some (x, xs) ->
-              Out.output_char f ' ' ;
-              output f x ctxt ;
-              output_rest xs
+              Out.output_char f ' ' ; output f x ctxt ; output_rest xs
           | None -> ()
         in
         Out.output_string f " }"

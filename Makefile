@@ -3,8 +3,12 @@
 build:
 	jbuilder build
 
-scratch: build
-	jbuilder exec cafec -- language/scratch.cf
+scratchi: build
+	jbuilder exec cafec -- \
+	  --interpret --print-parse-ast language/scratch.cf
+
+scratchc: build
+	jbuilder exec cafec -- --print-parse-ast language/scratch.cf
 
 test: build
 	jbuilder runtest

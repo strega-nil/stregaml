@@ -1,6 +1,6 @@
+* LLVM backend
 * check for recursive types
   - add structural types into the middle end
-* LLVM backend
 * fix issues with incorrect spans
 * ADTs + pattern matching
 * linearity

@@ -1,21 +1,20 @@
-module Spanned = Cafec_containers.Spanned
+module Span = Spanned.Span
 module Untyped_ast = Cafec_parse.Ast
 module Error = Error
 module Expr = Expr
-open Spanned.Prelude
-open Spanned.Monad
+open Spanned.Result.Monad
 
 type func_decl = {fname: string; params: (string * Type.t) list; ret_ty: Type.t}
 
 type t =
   { type_decls: string list
   ; type_defs: Type.definition list
-  ; func_decls: func_decl spanned list (* note(ubsan): always normalized *)
-  ; func_defs: Expr.t spanned list }
+  ; func_decls: func_decl Spanned.t list (* note(ubsan): always normalized *)
+  ; func_defs: Expr.t Spanned.t list }
 
 module Types : sig
   val type_untyped :
-    t -> Untyped_ast.Type.t -> (Type.t, Error.t) spanned_result
+    t -> Untyped_ast.Type.t -> (Type.t, Error.t) Spanned.Result.t
 
   val normalize : t -> Type.t -> Type.t
 
@@ -75,9 +74,9 @@ end
 module Functions : sig
   val index_by_name : t -> string -> int option
 
-  val decl_by_index : t -> int -> func_decl spanned
+  val decl_by_index : t -> int -> func_decl Spanned.t
 
-  val expr_by_index : t -> int -> Expr.t spanned
+  val expr_by_index : t -> int -> Expr.t Spanned.t
 end = struct
   let index_by_name {func_decls; _} search =
     let rec helper n = function
@@ -403,7 +402,7 @@ let add_function_declaration unt_func ctxt =
     | Some (ret_ty, _) ->
         let%bind ty, sp = spanned_bind (Types.type_untyped ctxt ret_ty) in
         return (Types.normalize ctxt ty, sp)
-    | None -> return (Type.Builtin Type.Builtin_unit, Spanned.made_up)
+    | None -> return (Type.Builtin Type.Builtin_unit, Span.made_up)
   in
   (* check for duplicates *)
   let rec check_for_duplicates search = function
@@ -417,7 +416,7 @@ let add_function_declaration unt_func ctxt =
         (Error.Defined_function_multiple_times
            {name= fname; original_declaration= sp})
   | None ->
-      let decl = ({fname; params; ret_ty}, Spanned.union parm_sp rty_sp) in
+      let decl = ({fname; params; ret_ty}, Span.union parm_sp rty_sp) in
       return {ctxt with func_decls= decl :: ctxt.func_decls}
 
 

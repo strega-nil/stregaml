@@ -1,36 +1,37 @@
-module Prelude : sig
-  type span =
-    {start_line: int; start_column: int; end_line: int; end_column: int}
+module Span : sig
+  type t = {start_line: int; start_column: int; end_line: int; end_column: int}
 
-  type 't spanned = 't * span
+  val equal : t -> t -> bool
 
-  type ('o, 'e) spanned_result = ('o, 'e) Result.t spanned
+  val union : t -> t -> t
+
+  val made_up : t
+
+  val is_made_up : t -> bool
+
+  val to_string : t -> string
 end
 
-include module type of struct
-    include Prelude
-end
+type 'a t = 'a * Span.t
 
-val made_up : span
+val to_string : 'a t -> f:('a -> string) -> string
 
-val is_made_up : span -> bool
+module Result : sig
+  type nonrec ('o, 'e) t = ('o, 'e) Result.t t
 
-val union : span -> span -> span
+  module Monad_implementation : sig
+    include Monad.S2 with type ('o, 'e) t := ('o, 'e) t
+  end
 
-val output_span : Stdio.Out_channel.t -> span -> unit
+  module Monad : sig
+    include module type of Monad_implementation.Let_syntax
 
-module Monad_implementation : sig
-  include Monad.S2 with type ('o, 'e) t := ('o, 'e) spanned_result
-end
+    val spanned_bind : ('o, 'e) t -> ('o * Span.t, 'e) t
 
-module Monad : sig
-  include module type of Monad_implementation.Let_syntax
+    val return_err : 'e -> (_, 'e) t
 
-  val spanned_bind : ('o, 'e) spanned_result -> ('o spanned, 'e) spanned_result
+    val with_span : Span.t -> (unit, _) t
 
-  val return_err : 'e -> (_, 'e) spanned_result
-
-  val with_span : span -> (unit, _) spanned_result
-
-  val span_of : (_, _) spanned_result -> span
+    val span_of : (_, _) t -> Span.t
+  end
 end

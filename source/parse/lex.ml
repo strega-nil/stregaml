@@ -1,7 +1,5 @@
-module Spanned = Cafec_containers.Spanned
 module Error = Error
-open Spanned.Prelude
-open Spanned.Monad
+open Spanned.Result.Monad
 
 exception Bug_lexer of string
 
@@ -49,6 +47,7 @@ let is_operator_start = function
 let is_operator_continue ch = is_operator_start ch || Char.equal ch '.'
 
 let current_span lex =
+  let open Spanned.Span in
   { start_line= lex.line
   ; start_column= lex.column
   ; end_line= lex.line
@@ -87,18 +86,18 @@ let lex_ident fst sp lex =
     | Some (ch, sp') when is_ident_continue ch ->
         eat_ch lex ;
         buff := ch :: !buff ;
-        helper (Spanned.union sp sp')
+        helper (Spanned.Span.union sp sp')
     | Some _ | None ->
         let kw k = (Ok (Token.Keyword k), sp) in
         match String.of_char_list (List.rev !buff) with
-        | "true" -> kw Token.Keyword_true
-        | "false" -> kw Token.Keyword_false
-        | "if" -> kw Token.Keyword_if
-        | "else" -> kw Token.Keyword_else
-        | "func" -> kw Token.Keyword_func
-        | "type" -> kw Token.Keyword_type
-        | "struct" -> kw Token.Keyword_struct
-        | "_" -> kw Token.Keyword_underscore
+        | "true" -> kw Token.Keyword.True
+        | "false" -> kw Token.Keyword.False
+        | "if" -> kw Token.Keyword.If
+        | "else" -> kw Token.Keyword.Else
+        | "func" -> kw Token.Keyword.Func
+        | "type" -> kw Token.Keyword.Type
+        | "struct" -> kw Token.Keyword.Struct
+        | "_" -> kw Token.Keyword.Underscore
         | "let" as res -> (Error (Error.Reserved_token res), sp)
         | "variant" as res -> (Error (Error.Reserved_token res), sp)
         | id -> (Ok (Token.Identifier id), sp)
@@ -112,9 +111,9 @@ let lex_number fst sp lex =
   let base, sp =
     if fst = '0' then
       match peek_ch lex with
-      | Some ('x', sp') -> eat_ch lex ; (16, Spanned.union sp sp')
-      | Some ('o', sp') -> eat_ch lex ; (8, Spanned.union sp sp')
-      | Some ('b', sp') -> eat_ch lex ; (2, Spanned.union sp sp')
+      | Some ('x', sp') -> eat_ch lex ; (16, Spanned.Span.union sp sp')
+      | Some ('o', sp') -> eat_ch lex ; (8, Spanned.Span.union sp sp')
+      | Some ('b', sp') -> eat_ch lex ; (2, Spanned.Span.union sp sp')
       | Some _ | None ->
           buff := [fst] ;
           (10, sp)
@@ -127,16 +126,16 @@ let lex_number fst sp lex =
     | Some (ch, sp') when is_number_continue ch base ->
         eat_ch lex ;
         buff := ch :: !buff ;
-        helper (Spanned.union sp sp') true
+        helper (Spanned.Span.union sp sp') true
     | Some (' ', sp') ->
         eat_ch lex ;
         buff := ' ' :: !buff ;
-        helper (Spanned.union sp sp') false
+        helper (Spanned.Span.union sp sp') false
     | Some (ch, sp')
       when space_allowed && (is_number_continue ch 10 || is_ident_continue ch) ->
         eat_ch lex ;
         buff := ' ' :: !buff ;
-        (Error Error.Malformed_number_literal, Spanned.union sp sp')
+        (Error Error.Malformed_number_literal, Spanned.Span.union sp sp')
     | Some _ | None ->
         let char_to_int ch =
           if ch >= '0' && ch <= '9' then Char.to_int ch - Char.to_int '0'
@@ -176,7 +175,8 @@ let rec next_token lex =
           | _ -> eat_the_things () )
         | Some _ -> eat_the_things ()
         | None ->
-            (Error Error.Unclosed_comment, Spanned.union sp (current_span lex))
+            ( Error Error.Unclosed_comment
+            , Spanned.Span.union sp (current_span lex) )
       in
       eat_the_things ()
     in
@@ -209,7 +209,7 @@ let rec next_token lex =
       | Some (ch, sp') when is_operator_continue ch ->
           eat_ch lex ;
           buff := ch :: !buff ;
-          helper (Spanned.union sp sp')
+          helper (Spanned.Span.union sp sp')
       | Some _ | None ->
         match String.of_char_list (List.rev !buff) with
         | "/*" -> (

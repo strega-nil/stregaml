@@ -10,34 +10,6 @@ type definition = Def_alias of t | Def_struct of (string * t) list
 
 type context = string list
 
-module Out = Stdio.Out_channel
-
-let rec output f ty ctxt =
-  match ty with
-  | Builtin Builtin_unit -> Out.output_string f "unit"
-  | Builtin Builtin_bool -> Out.output_string f "bool"
-  | Builtin Builtin_int -> Out.output_string f "int"
-  | Builtin Builtin_function {params; ret_ty} ->
-      Out.output_string f "func" ;
-      output_list f params ctxt ;
-      Out.output_string f " -> " ;
-      output f ret_ty ctxt
-  | User_defined i -> Out.output_string f (List.nth_exn ctxt i)
-
-
-and output_list f lst ctxt =
-  Out.output_char f '(' ;
-  ( match lst with
-  | x :: xs ->
-      let rec helper = function
-        | x :: xs -> Out.output_string f ", " ; output f x ctxt ; helper xs
-        | [] -> ()
-      in
-      output f x ctxt ; helper xs
-  | [] -> () ) ;
-  Out.output_char f ')'
-
-
 let rec equal l r =
   match (l, r) with
   | Builtin bl, Builtin br -> (
@@ -50,3 +22,17 @@ let rec equal l r =
     | _ -> false )
   | User_defined l, User_defined r -> l = r
   | _ -> false
+
+
+let rec to_string ty ~ctxt =
+  match ty with
+  | Builtin Builtin_unit -> "unit"
+  | Builtin Builtin_bool -> "bool"
+  | Builtin Builtin_int -> "int"
+  | Builtin Builtin_function {params; ret_ty} ->
+      let params =
+        let f ty = to_string ty ~ctxt in
+        String.concat ~sep:", " (List.map ~f params)
+      in
+      String.concat ["func"; params; " -> "; to_string ret_ty ~ctxt]
+  | User_defined i -> List.nth_exn ctxt i

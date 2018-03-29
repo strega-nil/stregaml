@@ -1,4 +1,4 @@
-open Cafec_containers.Spanned.Prelude
+module Spanned = Cafec_containers.Spanned
 
 module Builtin : sig
   type t = Less_eq | Add | Sub | Mul
@@ -20,10 +20,10 @@ type t =
   | Unit_literal
   | Bool_literal of bool
   | Integer_literal of int
-  | If_else of (t spanned * t spanned * t spanned)
-  | Call of (t spanned * t spanned list)
-  | Struct_literal of (Type.t * (int * t spanned) list)
-  | Struct_access of (t spanned * int)
+  | If_else of (t Spanned.t * t Spanned.t * t Spanned.t)
+  | Call of (t Spanned.t * t Spanned.t list)
+  | Struct_literal of (Type.t * (int * t Spanned.t) list)
+  | Struct_access of (t Spanned.t * int)
   | Builtin of Builtin.t
   | Global_function of int
   | Parameter of int

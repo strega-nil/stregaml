@@ -1,38 +1,28 @@
-module Prelude : sig
-  type keyword =
-    | Keyword_true
-    | Keyword_false
-    | Keyword_if
-    | Keyword_else
-    | Keyword_func
-    | Keyword_type
-    | Keyword_struct
-    | Keyword_underscore
+module Keyword : sig
+  type t = True | False | If | Else | Func | Type | Struct | Underscore
 
-  type t =
-    | Open_paren
-    | Close_paren
-    | Open_brace
-    | Close_brace
-    | Keyword of keyword
-    | Identifier of string
-    | Operator of string
-    | Integer_literal of int
-    | Arrow
-    | Colon
-    | Equals
-    | Semicolon
-    | Dot
-    | Comma
-    | Eof
+  val equal : t -> t -> bool
+
+  val to_string : t -> string
 end
 
-include module type of struct
-    include Prelude
-end
-
-val output : Stdio.Out_channel.t -> t -> unit
-
-val output_spanned : Stdio.Out_channel.t -> t Cafec_containers.Spanned.spanned -> unit
+type t =
+  | Open_paren
+  | Close_paren
+  | Open_brace
+  | Close_brace
+  | Keyword of Keyword.t
+  | Identifier of string
+  | Operator of string
+  | Integer_literal of int
+  | Arrow
+  | Colon
+  | Equals
+  | Semicolon
+  | Dot
+  | Comma
+  | Eof
 
 val equal : t -> t -> bool
+
+val to_string : t -> string

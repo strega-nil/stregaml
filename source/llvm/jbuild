@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(library
+  ((name cafec_llvm)
+  (libraries (base ollvm ppx_let stdio cafec_containers cafec_typed_ast))
+  (preprocess (pps (ppx_let)))
+  (flags (:standard -w +a-4 -open Base))))

@@ -10,8 +10,6 @@ type definition = Def_alias of t | Def_struct of (string * t) list
 
 type context = string list
 
-val output : Stdio.Out_channel.t -> t -> context -> unit
-
-val output_list : Stdio.Out_channel.t -> t list -> context -> unit
-
 val equal : t -> t -> bool
+
+val to_string : t -> ctxt:context -> string

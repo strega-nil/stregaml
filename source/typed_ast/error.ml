@@ -19,91 +19,83 @@ type t =
   | Call_of_non_function of Type.t
   | Defined_function_multiple_times of
       { name: string
-      ; original_declaration: Spanned.span }
+      ; original_declaration: Spanned.Span.t }
   | Defined_type_multiple_times of string
   | Return_type_mismatch of {expected: Type.t; found: Type.t}
   | Invalid_function_arguments of {expected: Type.t list; found: Type.t list}
 
-module Out = Stdio.Out_channel
-
-let output f err ctxt =
+let to_string err ~ctxt =
   match err with
-  | Name_not_found name -> Out.fprintf f "Name not found: %s" name
+  | Name_not_found name -> Printf.sprintf "Name not found: %s" name
   | Type_not_found ty ->
-      Out.output_string f "Type not found: " ;
-      Cafec_parse.Ast.Type.output f ty
+      Printf.sprintf "Type not found: %s" (Cafec_parse.Ast.Type.to_string ty)
   | Struct_literal_of_non_struct_type ty ->
-      Out.output_string f
-        "Attempted to create a struct literal of non-struct type: " ;
-      Type.output f ty ctxt
+      Printf.sprintf
+        "Attempted to create a struct literal of non-struct type: %s"
+        (Type.to_string ty ~ctxt)
   | Struct_literal_with_unknown_member_name (ty, name) ->
-      Out.output_string f "Struct literal of type `" ;
-      Type.output f ty ctxt ;
-      Out.fprintf f "` has an unknown initializer `%s`" name
+      Printf.sprintf
+        "Struct literal of type `%s` has an unknown initializer `%s`"
+        (Type.to_string ty ~ctxt) name
   | Struct_literal_without_member (ty, name) ->
-      Out.output_string f "Struct literal of type `" ;
-      Type.output f ty ctxt ;
-      Out.fprintf f "` has no initializer for member `%s`" name
+      Printf.sprintf
+        "Struct literal of type `%s` has no initializer for member `%s`"
+        (Type.to_string ty ~ctxt) name
   | Struct_literal_incorrect_member_type {ty; member; expected; found} ->
-      Out.output_string f "Struct literal of type `" ;
-      Type.output f ty ctxt ;
-      Out.fprintf f "` - mismatched member `%s` type:" member ;
-      Out.output_string f "\n  expected: " ;
-      Type.output f expected ctxt ;
-      Out.output_string f "\n  found: " ;
-      Type.output f found ctxt
+      Printf.sprintf
+        {|Struct literal of type `%s` - mismatched member `%s` type:
+  expected: %s
+  found: %s|}
+        (Type.to_string ty ~ctxt) member
+        (Type.to_string expected ~ctxt)
+        (Type.to_string found ~ctxt)
   | Struct_literal_member_defined_multiple_times (ty, member) ->
-      Out.output_string f "Struct literal of type `" ;
-      Type.output f ty ctxt ;
-      Out.fprintf f "` - member `%s` initialized multiple times" member
+      Printf.sprintf
+        "Struct literal of type `%s` - member `%s` initialized multiple times"
+        (Type.to_string ty ~ctxt) member
   | Struct_access_on_non_struct_type (ty, member) ->
-      Out.fprintf f
-        "Attempted to access the `%s` member of a non-struct type: " member ;
-      Type.output f ty ctxt
+      Printf.sprintf
+        "Attempted to access the `%s` member of a non-struct type: `%s`" member
+        (Type.to_string ty ~ctxt)
   | Struct_access_non_member (ty, member) ->
-      Out.fprintf f
-        "Attempted to access the `%s` member of a type without that member: "
-        member ;
-      Type.output f ty ctxt
+      Printf.sprintf
+        "Attempted to access the `%s` member of a type without that member: `%s`"
+        member (Type.to_string ty ~ctxt)
   | If_on_non_bool ty ->
-      Out.output_string f
-        "Attempted to `if` on an expression of non-boolean type (" ;
-      Type.output f ty ctxt ;
-      Out.output_char f ')'
+      Printf.sprintf
+        "Attempted to `if` on an expression of non-boolean type `%s`"
+        (Type.to_string ty ~ctxt)
   | If_branches_of_differing_type (t1, t2) ->
-      Out.output_string f
-        "`if-else` expression had branches of differing types:" ;
-      Out.output_string f "\n  1st branch: " ;
-      Type.output f t1 ctxt ;
-      Out.output_string f "\n  2nd branch: " ;
-      Type.output f t2 ctxt
+      Printf.sprintf
+        {|`if-else` expression had branches of differing types:
+  1st branch: `%s`
+  2nd branch: `%s`|}
+        (Type.to_string t1 ~ctxt) (Type.to_string t2 ~ctxt)
   | Call_of_non_function ty ->
-      Out.output_string f "Attempted to call a non-function type (" ;
-      Type.output f ty ctxt ;
-      Out.output_char f ')'
+      Printf.sprintf "Attempted to call a non-function type `%s`"
+        (Type.to_string ty ~ctxt)
   | Defined_function_multiple_times {name; original_declaration} ->
-      Out.fprintf f "Defined function %s multiple times.\n" name ;
-      Out.output_string f "  (original definition at " ;
-      Spanned.output_span f original_declaration ;
-      Out.output_char f ')'
+      Printf.sprintf
+        {|Defined function `%s` multiple times
+  (original declaration at %s)|}
+        name
+        (Spanned.Span.to_string original_declaration)
   | Defined_type_multiple_times name ->
-      Out.fprintf f "Defined type %s multiple times." name
+      Printf.sprintf "Defined type `%s` multiple times" name
   | Return_type_mismatch {expected; found} ->
-      Out.output_string f "Return value did not match the return type.\n" ;
-      Out.output_string f "  expected: " ;
-      Type.output f expected ctxt ;
-      Out.output_string f ", found: " ;
-      Type.output f found ctxt
+      Printf.sprintf
+        {|Return value did not match the return type.
+  expected: `%s`
+  found: `%s`|}
+        (Type.to_string expected ~ctxt)
+        (Type.to_string found ~ctxt)
   | Invalid_function_arguments {expected; found} ->
-      Out.output_string f
-        "Function arguments did not match the parameter types.\n" ;
-      Out.output_string f "  expected: " ;
-      Type.output_list f expected ctxt ;
-      Out.output_string f ", found: " ;
-      Type.output_list f found ctxt
-
-
-let output_spanned f (e, sp) ctxt =
-  output f e ctxt ;
-  Out.output_string f "\n  at " ;
-  Spanned.output_span f sp
+      let helper tys =
+        let f ty = Type.to_string ty ~ctxt in
+        String.concat ~sep:", " (List.map ~f tys)
+      in
+      Printf.sprintf
+        {|Function arguments did not match the parameter types:
+  expected: `(%s)`
+  found: `(%s)`|}
+        (helper expected) (helper found)
