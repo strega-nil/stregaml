@@ -1,12 +1,17 @@
-type t = Builtin of builtin | User_defined of int
+type t =
+  | User_defined of int
+  | Unit
+  | Bool
+  | Int
+  | Function of {params: t list; ret_ty: t}
 
-and builtin =
-  | Builtin_unit
-  | Builtin_bool
-  | Builtin_int
-  | Builtin_function of {params: t list; ret_ty: t}
+module Definition :
+  sig
+    type typ
 
-type definition = Def_alias of t | Def_struct of (string * t) list
+    type t = Alias of typ | Struct of (string * typ) list
+  end
+  with type typ := t
 
 type context = string list
 

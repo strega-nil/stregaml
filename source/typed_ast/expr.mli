@@ -1,15 +1,9 @@
 open Cafec_containers
 
-module Builtin = struct
+module Builtin : sig
   type t = Less_eq | Add | Sub | Mul
 
-  let equal lhs rhs =
-    match (lhs, rhs) with
-    | Less_eq, Less_eq -> true
-    | Add, Add -> true
-    | Sub, Sub -> true
-    | Mul, Mul -> true
-    | _ -> false
+  val equal : t -> t -> bool
 end
 
 type t =

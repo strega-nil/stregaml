@@ -1,35 +1,35 @@
-type t = Builtin of builtin | User_defined of int
+type t =
+  | User_defined of int
+  | Unit
+  | Bool
+  | Int
+  | Function of {params: t list; ret_ty: t}
 
-and builtin =
-  | Builtin_unit
-  | Builtin_bool
-  | Builtin_int
-  | Builtin_function of {params: t list; ret_ty: t}
+module Definition = struct
+  type typ = t
 
-type definition = Def_alias of t | Def_struct of (string * t) list
+  type t = Alias of typ | Struct of (string * typ) list
+end
 
 type context = string list
 
 let rec equal l r =
   match (l, r) with
-  | Builtin bl, Builtin br -> (
-    match (bl, br) with
-    | Builtin_unit, Builtin_unit -> true
-    | Builtin_bool, Builtin_bool -> true
-    | Builtin_int, Builtin_int -> true
-    | Builtin_function fl, Builtin_function fr ->
-        equal fl.ret_ty fr.ret_ty && List.equal fl.params fr.params ~equal
-    | _ -> false )
+  | Unit, Unit -> true
+  | Bool, Bool -> true
+  | Int, Int -> true
+  | Function fl, Function fr ->
+      equal fl.ret_ty fr.ret_ty && List.equal fl.params fr.params ~equal
   | User_defined l, User_defined r -> l = r
   | _ -> false
 
 
 let rec to_string ty ~ctxt =
   match ty with
-  | Builtin Builtin_unit -> "unit"
-  | Builtin Builtin_bool -> "bool"
-  | Builtin Builtin_int -> "int"
-  | Builtin Builtin_function {params; ret_ty} ->
+  | Unit -> "unit"
+  | Bool -> "bool"
+  | Int -> "int"
+  | Function {params; ret_ty} ->
       let params =
         let f ty = to_string ty ~ctxt in
         String.concat ~sep:", " (List.map ~f params)

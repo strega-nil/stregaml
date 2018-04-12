@@ -2,13 +2,13 @@ module Error = Error
 module Ast = Ast
 open Spanned.Result.Monad
 
-type t = {lexer: Lex.t; mutable peek: Token.t Spanned.t option}
+type t = {lexer: Lexer.t; mutable peek: Token.t Spanned.t option}
 
 let peek_token parser =
   match parser.peek with
   | Some (pk, sp) -> (Ok pk, sp)
   | None ->
-    match Lex.next_token parser.lexer with
+    match Lexer.next_token parser.lexer with
     | Ok ret, sp ->
         parser.peek <- Some (ret, sp) ;
         (Ok ret, sp)
@@ -31,7 +31,9 @@ let is_expression_end = function
   | _ -> false
 
 
-type item = Item_func of Ast.Item.func | Item_type of Ast.Item.type_def
+module Item = struct
+  type t = Func of Ast.Func.t | Type of Ast.Type_definition.t
+end
 
 let get_ident parser =
   match%bind next_token parser with
@@ -244,34 +246,34 @@ let parse_type_definition parser =
           ~close:Token.Close_brace ~expected:Error.Expected.Identifier
       in
       let%bind () = get_specific parser Token.Close_brace in
-      return (Ast.Item.Struct members)
+      return (Ast.Type_definition.Kind.Struct members)
   | _ ->
     match parse_type parser with
-    | Ok o, sp -> (Ok (Ast.Item.Alias o), sp)
+    | Ok o, sp -> (Ok (Ast.Type_definition.Kind.Alias o), sp)
     | Error Error.Unexpected_token (_, tok), sp ->
         ( Error (Error.Unexpected_token (Error.Expected.Type_definition, tok))
         , sp )
     | Error e, sp -> (Error e, sp)
 
 
-let parse_item (parser: t) : (item option, Error.t) Spanned.Result.t =
+let parse_item (parser: t) : (Item.t option, Error.t) Spanned.Result.t =
   match%bind next_token parser with
   | Token.Keyword Token.Keyword.Func ->
-      let%bind fname = get_ident parser in
+      let%bind name = get_ident parser in
       let%bind params = parse_parameter_list parser in
       let%bind ret_ty = maybe_parse_type_annotation parser in
       let%bind () = get_specific parser Token.Equals in
       let%bind expr = parse_expression parser in
       let%bind () = get_specific parser Token.Semicolon in
-      let func = Ast.Item.{fname; params; ret_ty; expr} in
-      return (Some (Item_func func))
+      let func = Ast.Func.{name; params; ret_ty; expr} in
+      return (Some (Item.Func func))
   | Token.Keyword Token.Keyword.Type ->
-      let%bind tname = get_ident parser in
+      let%bind name = get_ident parser in
       let%bind () = get_specific parser Token.Equals in
       let%bind kind = parse_type_definition parser in
       let%bind () = get_specific parser Token.Semicolon in
-      let ty = Ast.Item.{tname; kind} in
-      return (Some (Item_type ty))
+      let ty = Ast.Type_definition.{name; kind} in
+      return (Some (Item.Type ty))
   | Token.Eof -> return None
   | tok ->
       return_err (Error.Unexpected_token (Error.Expected.Item_declarator, tok))
@@ -281,10 +283,10 @@ let parse_program (parser: t) : (Ast.t, Error.t) Spanned.Result.t =
   let rec helper parser =
     let%bind item, sp = spanned_bind (parse_item parser) in
     match item with
-    | Some Item_func func ->
+    | Some Item.Func func ->
         let%bind ftl, ttl = helper parser in
         return ((func, sp) :: ftl, ttl)
-    | Some Item_type ty ->
+    | Some Item.Type ty ->
         let%bind ftl, ttl = helper parser in
         return (ftl, (ty, sp) :: ttl)
     | None -> return ([], [])
@@ -294,6 +296,6 @@ let parse_program (parser: t) : (Ast.t, Error.t) Spanned.Result.t =
 
 
 let parse program =
-  let lexer = Lex.lexer program in
+  let lexer = Lexer.make program in
   let parser = {lexer; peek= None} in
   parse_program parser

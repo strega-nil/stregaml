@@ -1,5 +1,5 @@
-module Ast : module type of Ast
+module Ast = Ast
 
-module Error : module type of Error
+module Error = Error
 
 val parse : string -> (Ast.t, Error.t) Spanned.Result.t

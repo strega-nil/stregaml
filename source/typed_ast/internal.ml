@@ -4,11 +4,11 @@ module Error = Error
 module Expr = Expr
 open Spanned.Result.Monad
 
-type func_decl = {fname: string; params: (string * Type.t) list; ret_ty: Type.t}
+type func_decl = {name: string; params: (string * Type.t) list; ret_ty: Type.t}
 
 type t =
   { type_decls: string list
-  ; type_defs: Type.definition list
+  ; type_defs: Type.Definition.t list
   ; func_decls: func_decl Spanned.t list (* note(ubsan): always normalized *)
   ; func_defs: Expr.t Spanned.t list }
 
@@ -18,7 +18,7 @@ module Types : sig
 
   val normalize : t -> Type.t -> Type.t
 
-  val definition : t -> Type.t -> Type.definition option
+  val definition : t -> Type.t -> Type.Definition.t option
   (**
     only works for user-defined types;
     [definition . normalize] will *always* return (Some Struct) or None,
@@ -37,9 +37,9 @@ end = struct
         | Some ty -> return ty
         | None ->
           match name with
-          | "unit" -> return (Type.Builtin Type.Builtin_unit)
-          | "bool" -> return (Type.Builtin Type.Builtin_bool)
-          | "int" -> return (Type.Builtin Type.Builtin_int)
+          | "unit" -> return Type.Unit
+          | "bool" -> return Type.Bool
+          | "int" -> return Type.Int
           | _ -> return_err (Error.Type_not_found unt_ty) )
     | Untyped_ast.Type.Function (params, ret_ty) ->
         let rec type_params ctxt = function
@@ -53,22 +53,22 @@ end = struct
         let%bind ret_ty =
           match ret_ty with
           | Some (ret_ty, _) -> type_untyped ctxt ret_ty
-          | None -> return (Type.Builtin Type.Builtin_unit)
+          | None -> return Type.Unit
         in
-        return (Type.Builtin (Type.Builtin_function {params; ret_ty}))
+        return (Type.Function {params; ret_ty})
 
 
   let rec normalize ctxt = function
-    | Type.Builtin b -> Type.Builtin b
-    | Type.User_defined i ->
+    | Type.User_defined i -> (
       match List.nth_exn ctxt.type_defs i with
-      | Type.Def_alias t -> normalize ctxt t
-      | Type.Def_struct _ -> Type.User_defined i
+      | Type.Definition.Alias t -> normalize ctxt t
+      | Type.Definition.Struct _ -> Type.User_defined i )
+    | els -> els
 
 
   let definition ctxt = function
-    | Type.Builtin _ -> None
     | Type.User_defined i -> Some (List.nth_exn ctxt.type_defs i)
+    | _ -> None
 end
 
 module Functions : sig
@@ -80,7 +80,7 @@ module Functions : sig
 end = struct
   let index_by_name {func_decls; _} search =
     let rec helper n = function
-      | ({fname; _}, _) :: _ when String.equal fname search -> Some n
+      | ({name; _}, _) :: _ when String.equal name search -> Some n
       | _ :: names -> helper (n + 1) names
       | [] -> None
     in
@@ -113,12 +113,12 @@ let rec type_of_expr ctxt decl e =
   let e, sp = e in
   let%bind () = with_span sp in
   match e with
-  | Expr.Unit_literal -> return (Type.Builtin Type.Builtin_unit)
-  | Expr.Bool_literal _ -> return (Type.Builtin Type.Builtin_bool)
-  | Expr.Integer_literal _ -> return (Type.Builtin Type.Builtin_int)
+  | Expr.Unit_literal -> return Type.Unit
+  | Expr.Bool_literal _ -> return Type.Bool
+  | Expr.Integer_literal _ -> return Type.Int
   | Expr.If_else (cond, e1, e2) -> (
       match%bind type_of_expr ctxt decl cond with
-      | Type.Builtin Type.Builtin_bool ->
+      | Type.Bool ->
           let%bind t1 = type_of_expr ctxt decl e1 in
           let%bind t2 = type_of_expr ctxt decl e2 in
           if Type.equal t1 t2 then return t1
@@ -127,7 +127,7 @@ let rec type_of_expr ctxt decl e =
   | Expr.Call (callee, args) -> (
       let%bind ty_callee = type_of_expr ctxt decl callee in
       match ty_callee with
-      | Type.(Builtin Builtin_function {params; ret_ty}) ->
+      | Type.Function {params; ret_ty} ->
           let%bind ty_args =
             let rec helper = function
               | [] -> return []
@@ -147,19 +147,9 @@ let rec type_of_expr ctxt decl e =
   | Expr.Builtin b -> (
     match b with
     | Expr.Builtin.Add | Expr.Builtin.Sub | Expr.Builtin.Mul ->
-        return
-          Type.(
-            Builtin
-              (Builtin_function
-                 { params= [Builtin Builtin_int; Builtin Builtin_int]
-                 ; ret_ty= Builtin Builtin_int }))
+        return Type.(Function {params= [Int; Int]; ret_ty= Int})
     | Expr.Builtin.Less_eq ->
-        return
-          Type.(
-            Builtin
-              (Builtin_function
-                 { params= [Builtin Builtin_int; Builtin Builtin_int]
-                 ; ret_ty= Builtin Builtin_bool })) )
+        return Type.(Function {params= [Int; Int]; ret_ty= Bool}) )
   | Expr.Global_function f ->
       let decl, _ = Functions.decl_by_index ctxt f in
       let rec get_params = function
@@ -168,7 +158,7 @@ let rec type_of_expr ctxt decl e =
       in
       let params = get_params decl.params in
       let ret_ty = decl.ret_ty in
-      return Type.(Builtin (Builtin_function {params; ret_ty}))
+      return (Type.Function {params; ret_ty})
   | Expr.Parameter p ->
       let _, ty = List.nth_exn decl.params p in
       return ty
@@ -203,7 +193,7 @@ let rec type_of_expr ctxt decl e =
       in
       let ty_members =
         match Types.definition ctxt ty with
-        | Some Type.Def_struct members -> members
+        | Some Type.Definition.Struct members -> members
         | _ -> assert false
       in
       let number_of_members = List.length ty_members in
@@ -219,7 +209,7 @@ let rec type_of_expr ctxt decl e =
       let%bind ty = type_of_expr ctxt decl expr in
       (* note: we do this twice - should be memoized *)
       match Types.definition ctxt ty with
-      | Some Type.Def_struct members ->
+      | Some Type.Definition.Struct members ->
           let _, member_ty = List.nth_exn members idx in
           return member_ty
       (* this should've been caught in type_expression *)
@@ -283,8 +273,8 @@ let rec type_expression decl ctxt unt_expr =
       in
       let%bind type_members =
         match Types.definition ctxt ty with
-        | Some Type.Def_struct members -> return members
-        | Some Type.Def_alias _ -> assert false
+        | Some Type.Definition.Struct members -> return members
+        | Some Type.Definition.Alias _ -> assert false
         | None -> return_err (Error.Struct_literal_of_non_struct_type ty)
       in
       let%bind members =
@@ -314,7 +304,7 @@ let rec type_expression decl ctxt unt_expr =
       let%bind expr = spanned_bind (type_expression decl ctxt expr) in
       let%bind ty = type_of_expr ctxt decl expr in
       match Types.definition ctxt ty with
-      | Some Type.Def_struct members -> (
+      | Some Type.Definition.Struct members -> (
           let rec find_idx n find = function
             | (name, _) :: _ when String.equal name find -> Some n
             | _ :: xs -> find_idx (n + 1) find xs
@@ -323,7 +313,7 @@ let rec type_expression decl ctxt unt_expr =
           match find_idx 0 member members with
           | Some n -> return (Expr.Struct_access (expr, n))
           | None -> return_err (Error.Struct_access_non_member (ty, member)) )
-      | Some Type.Def_alias _ -> assert false
+      | Some Type.Definition.Alias _ -> assert false
       | None ->
           return_err (Error.Struct_access_on_non_struct_type (ty, member))
 
@@ -338,34 +328,34 @@ let rec type_expression decl ctxt unt_expr =
 
 let type_declaration unt_type ctxt =
   let module T = Untyped_ast.Type in
-  let module I = Untyped_ast.Item in
+  let module D = Untyped_ast.Type_definition in
   let rec duplicates search = function
     | [] -> false
     | name :: _ when String.equal name search -> true
     | _ :: xs -> duplicates search xs
   in
-  let {I.tname; _}, sp = unt_type in
-  if duplicates tname ctxt then
-    Error (Error.Defined_type_multiple_times tname, sp)
-  else Ok (tname :: ctxt)
+  let {D.name; _}, sp = unt_type in
+  if duplicates name ctxt then
+    Error (Error.Defined_type_multiple_times name, sp)
+  else Ok (name :: ctxt)
 
 
 let add_type_definition unt_type ctxt =
   let module T = Untyped_ast.Type in
-  let module I = Untyped_ast.Item in
+  let module D = Untyped_ast.Type_definition in
   let unt_type, _ = unt_type in
   let () =
     let num_types = List.length ctxt.type_decls in
     let idx = num_types - 1 - List.length ctxt.type_defs in
     let name = List.nth_exn ctxt.type_decls idx in
-    assert (String.equal name unt_type.I.tname)
+    assert (String.equal name unt_type.D.name)
   in
   let%bind def =
-    match unt_type.I.kind with
-    | I.Alias (unt_ty, _) ->
+    match unt_type.D.kind with
+    | D.Kind.Alias (unt_ty, _) ->
         let%bind t = Types.type_untyped ctxt unt_ty in
-        return (Type.Def_alias t)
-    | I.Struct members ->
+        return (Type.Definition.Alias t)
+    | D.Kind.Struct members ->
         let rec helper ctxt = function
           | [] -> return []
           | (name, (x, sp)) :: xs ->
@@ -375,15 +365,15 @@ let add_type_definition unt_type ctxt =
               return ((name, x) :: xs)
         in
         let%bind members = helper ctxt members in
-        return (Type.Def_struct members)
+        return (Type.Definition.Struct members)
   in
   return {ctxt with type_defs= def :: ctxt.type_defs}
 
 
 let add_function_declaration unt_func ctxt =
-  let module U = Untyped_ast.Item in
+  let module F = Untyped_ast.Func in
   let unt_func, _ = unt_func in
-  let {U.fname; U.params; U.ret_ty; _} = unt_func in
+  let {F.name; F.params; F.ret_ty; _} = unt_func in
   let%bind params, parm_sp =
     let rec helper ctxt = function
       | [] -> return []
@@ -402,35 +392,34 @@ let add_function_declaration unt_func ctxt =
     | Some (ret_ty, _) ->
         let%bind ty, sp = spanned_bind (Types.type_untyped ctxt ret_ty) in
         return (Types.normalize ctxt ty, sp)
-    | None -> return (Type.Builtin Type.Builtin_unit, Span.made_up)
+    | None -> return (Type.Unit, Span.made_up)
   in
   (* check for duplicates *)
   let rec check_for_duplicates search = function
     | [] -> None
-    | (f, sp) :: _ when String.equal f.fname search -> Some (f, sp)
+    | (f, sp) :: _ when String.equal f.name search -> Some (f, sp)
     | _ :: xs -> check_for_duplicates search xs
   in
-  match check_for_duplicates fname ctxt.func_decls with
+  match check_for_duplicates name ctxt.func_decls with
   | Some (_, sp) ->
       return_err
-        (Error.Defined_function_multiple_times
-           {name= fname; original_declaration= sp})
+        (Error.Defined_function_multiple_times {name; original_declaration= sp})
   | None ->
-      let decl = ({fname; params; ret_ty}, Span.union parm_sp rty_sp) in
+      let decl = ({name; params; ret_ty}, Span.union parm_sp rty_sp) in
       return {ctxt with func_decls= decl :: ctxt.func_decls}
 
 
 let add_function_definition unt_func ctxt =
-  let module U = Untyped_ast.Item in
+  let module F = Untyped_ast.Func in
   let unt_func, _ = unt_func in
   let decl =
     let num_funcs = List.length ctxt.func_decls in
     let idx = num_funcs - 1 - List.length ctxt.func_defs in
     let decl, _ = Functions.decl_by_index ctxt idx in
-    assert (String.equal decl.fname unt_func.U.fname) ;
+    assert (String.equal decl.name unt_func.F.name) ;
     decl
   in
-  let%bind expr = spanned_bind (type_expression decl ctxt unt_func.U.expr) in
+  let%bind expr = spanned_bind (type_expression decl ctxt unt_func.F.expr) in
   let%bind expr_ty = type_of_expr ctxt decl expr in
   if Type.equal expr_ty decl.ret_ty then
     return {ctxt with func_defs= expr :: ctxt.func_defs}

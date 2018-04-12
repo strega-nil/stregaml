@@ -22,20 +22,30 @@ module Expr : sig
   val to_string : t -> indent:int -> string
 end
 
-module Item : sig
-  type func =
-    { fname: string
+module Func : sig
+  type t =
+    { name: string
     ; params: (string * Type.t Spanned.t) list
     ; ret_ty: Type.t Spanned.t option
     ; expr: Expr.t Spanned.t }
 
-  type type_kind =
-    | Alias of Type.t Spanned.t
-    | Struct of (string * Type.t Spanned.t) list
-
-  type type_def = {tname: string; kind: type_kind}
+  val to_string : t -> string
 end
 
-type t = {funcs: Item.func Spanned.t list; types: Item.type_def Spanned.t list}
+module Type_definition : sig
+  module Kind : sig
+    type t =
+      | Alias of Type.t Spanned.t
+      | Struct of (string * Type.t Spanned.t) list
+
+    val to_string : t -> string
+  end
+
+  type t = {name: string; kind: Kind.t}
+
+  val to_string : t -> string
+end
+
+type t = {funcs: Func.t Spanned.t list; types: Type_definition.t Spanned.t list}
 
 val to_string : t -> string

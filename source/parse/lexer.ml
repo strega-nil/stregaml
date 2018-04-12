@@ -6,7 +6,7 @@ exception Bug_lexer of string
 type t =
   {buffer: string; mutable index: int; mutable line: int; mutable column: int}
 
-let lexer s = {buffer= s; index= 0; line= 1; column= 1}
+let make s = {buffer= s; index= 0; line= 1; column= 1}
 
 (* the actual lexer functions *)
 let is_whitespace ch =
@@ -109,14 +109,14 @@ let lex_number fst sp lex =
   let open! Char.O in
   let buff = ref [] in
   let base, sp =
-    if fst = '0' then
+    if fst = '0' then (
       match peek_ch lex with
       | Some ('x', sp') -> eat_ch lex ; (16, Spanned.Span.union sp sp')
       | Some ('o', sp') -> eat_ch lex ; (8, Spanned.Span.union sp sp')
       | Some ('b', sp') -> eat_ch lex ; (2, Spanned.Span.union sp sp')
       | Some _ | None ->
           buff := [fst] ;
-          (10, sp)
+          (10, sp) )
     else (
       buff := [fst] ;
       (10, sp) )

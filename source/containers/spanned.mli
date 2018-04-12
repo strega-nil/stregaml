@@ -16,22 +16,26 @@ type 'a t = 'a * Span.t
 
 val to_string : 'a t -> f:('a -> string) -> string
 
-module Result : sig
-  type nonrec ('o, 'e) t = ('o, 'e) Result.t t
+module Result :
+  sig
+    type 'a spanned
 
-  module Monad_implementation : sig
-    include Monad.S2 with type ('o, 'e) t := ('o, 'e) t
+    type ('o, 'e) t = ('o, 'e) Result.t spanned
+
+    module Monad_implementation : sig
+      include Monad.S2 with type ('o, 'e) t := ('o, 'e) t
+    end
+
+    module Monad : sig
+      include module type of Monad_implementation.Let_syntax
+
+      val spanned_bind : ('o, 'e) t -> ('o spanned, 'e) t
+
+      val return_err : 'e -> (_, 'e) t
+
+      val with_span : Span.t -> (unit, _) t
+
+      val span_of : (_, _) t -> Span.t
+    end
   end
-
-  module Monad : sig
-    include module type of Monad_implementation.Let_syntax
-
-    val spanned_bind : ('o, 'e) t -> ('o * Span.t, 'e) t
-
-    val return_err : 'e -> (_, 'e) t
-
-    val with_span : Span.t -> (unit, _) t
-
-    val span_of : (_, _) t -> Span.t
-  end
-end
+  with type 'a spanned := 'a t

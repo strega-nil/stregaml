@@ -59,8 +59,8 @@ let to_string err ~ctxt =
         (Type.to_string ty ~ctxt)
   | Struct_access_non_member (ty, member) ->
       Printf.sprintf
-        "Attempted to access the `%s` member of a type without that member: `%s`"
-        member (Type.to_string ty ~ctxt)
+        "Attempted to access the `%s` member of a type without that member: \
+         `%s`" member (Type.to_string ty ~ctxt)
   | If_on_non_bool ty ->
       Printf.sprintf
         "Attempted to `if` on an expression of non-boolean type `%s`"

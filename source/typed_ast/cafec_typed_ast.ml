@@ -3,8 +3,10 @@ module Expr = Expr
 module Type = Type
 module Internal = Internal
 
-type func_decl = Internal.func_decl =
-  {fname: string; params: (string * Type.t) list; ret_ty: Type.t}
+module Function = struct
+  type t = Internal.func_decl =
+    {name: string; params: (string * Type.t) list; ret_ty: Type.t}
+end
 
 (*
 type type_kind = Internal.type_kind = Type_alias of Type.t

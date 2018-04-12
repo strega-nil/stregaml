@@ -68,9 +68,9 @@ let make ast =
   let helper _ =
     match Sequence.next !seq with
     | None -> assert false
-    | Some ((({Ast.fname; _}, _), (expr, _)), rest) ->
+    | Some ((({Ast.name; _}, _), (expr, _)), rest) ->
         seq := rest ;
-        (fname, expr)
+        (name, expr)
   in
   {funcs= Array.init (Ast.number_of_functions ast) ~f:helper}
 

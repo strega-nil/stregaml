@@ -32,7 +32,9 @@ let to_string (el, sp) ~f =
 
 
 module Result = struct
-  type nonrec ('o, 'e) t = ('o, 'e) Result.t t
+  type 'a spanned = 'a t
+
+  type ('o, 'e) t = ('o, 'e) Result.t spanned
 
   module Monad_implementation = struct
     include Monad.Make2 (struct
