@@ -22,8 +22,8 @@ end
 
 type t =
   { type_context: Type_context.t
-  ; func_context: Function_context.t
-  ; func_definitions: Function_definitions.t }
+  ; function_context: Function_context.t
+  ; function_definitions: Function_definitions.t }
 
 type 'a result = ('a, Error.t) Spanned.Result.t
 
@@ -69,10 +69,7 @@ end = struct
     if idx < 0 then assert false else helper (idx, func_defs)
 end
 
-(*
-  NOTE(ubsan): returns a normalized type
-  also, typechecks
-*)
+(* also typechecks *)
 let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
     (e: Expr.t Spanned.t) : Type.t result =
   let e, sp = e in
@@ -88,7 +85,7 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
           let%bind t2 = type_of_expr ctxt decl e2 in
           if Type.equal t1 t2 then return t1
           else return_err (Error.If_branches_of_differing_type (t1, t2))
-      | ty -> return_err (Error.If_on_non_bool ty) )
+      | ty -> return_err (Error.If_non_bool ty) )
   | Expr.Call (callee, args) -> (
       let%bind ty_callee = type_of_expr ctxt decl callee in
       match ty_callee with
@@ -116,7 +113,7 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
     | Expr.Builtin.Less_eq ->
         return Type.(Function {params= [Int; Int]; ret_ty= Bool}) )
   | Expr.Global_function f ->
-      let decl, _ = Functions.decl_by_index ctxt.func_context f in
+      let decl, _ = Functions.decl_by_index ctxt.function_context f in
       let rec get_params = function
         | (_, x) :: xs -> x :: get_params xs
         | [] -> []
@@ -150,14 +147,13 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
           return (Type.Record members) )
   | Expr.Record_access (expr, name) ->
       let%bind ty = type_of_expr ctxt decl expr in
-      (* note: we do this twice - should be memoized *)
-      (* note: any type errors should be caught in type_expression *)
       match ty with
-      | Type.Record members ->
-          let f (n, ty) = String.equal n name in
-          let _, member_ty = List.find_exn ~f members in
-          return member_ty
-      | _ -> assert false
+      | Type.Record members -> (
+          let f (n, _) = String.equal n name in
+          match List.find ~f members with
+          | Some (_, ty) -> return ty
+          | None -> return_err (Error.Record_access_non_member (ty, name)) )
+      | ty -> return_err (Error.Record_access_non_record_type (ty, name))
 
 
 let find_parameter name lst =
@@ -197,7 +193,7 @@ let rec type_expression decl ctxt unt_expr =
       let%bind args = helper args in
       return (T.Call (callee, args))
   | U.Variable name -> (
-      let {params; _} = decl in
+      let {Function_declaration.params; _} = decl in
       match find_parameter name params with
       | None -> (
         match Functions.index_by_name ctxt name with
@@ -210,112 +206,40 @@ let rec type_expression decl ctxt unt_expr =
           | _ -> return_err (Error.Name_not_found name) )
         | Some idx -> return (T.Global_function idx) )
       | Some (_ty, idx) -> return (T.Parameter idx) )
-  (* TODO: finish the rest of the file *)
-  | U.Struct_literal (ty, members) ->
-      let%bind ty =
-        let%bind ty = Types.type_untyped ctxt ty in
-        return (Types.normalize ctxt ty)
-      in
-      let%bind type_members =
-        match Types.definition ctxt ty with
-        | Some Type.Definition.Struct members -> return members
-        | Some Type.Definition.Alias _ -> assert false
-        | None -> return_err (Error.Struct_literal_of_non_struct_type ty)
-      in
+  | U.Record_literal members ->
       let%bind members =
-        let rec find_member find n = function
-          | [] -> None
-          | (name, _) :: _ when String.equal name find -> Some n
-          | _ :: xs -> find_member find (n + 1) xs
-        in
-        let rec helper decl ctxt = function
+        let rec map (xs: (string * U.t Spanned.t) Spanned.t list) =
+          match xs with
           | [] -> return []
-          | ((name, expr), _) :: xs ->
-              let%bind idx =
-                match find_member name 0 type_members with
-                | Some i -> return i
-                | None ->
-                    return_err
-                      (Error.Struct_literal_with_unknown_member_name (ty, name))
-              in
+          | ((name, expr), sp) :: xs ->
               let%bind expr = spanned_bind (type_expression decl ctxt expr) in
-              let%bind rest = helper decl ctxt xs in
-              return ((idx, expr) :: rest)
+              let%bind xs = map xs in
+              return (((name, expr), sp) :: xs)
         in
-        helper decl ctxt members
+        map members
       in
-      return (T.Struct_literal (ty, members))
-  | U.Struct_access (expr, member) ->
+      return (T.Record_literal members)
+  | U.Record_access (expr, member) ->
       let%bind expr = spanned_bind (type_expression decl ctxt expr) in
-      let%bind ty = type_of_expr ctxt decl expr in
-      match Types.definition ctxt ty with
-      | Some Type.Definition.Struct members -> (
-          let rec find_idx n find = function
-            | (name, _) :: _ when String.equal name find -> Some n
-            | _ :: xs -> find_idx (n + 1) find xs
-            | [] -> None
-          in
-          match find_idx 0 member members with
-          | Some n -> return (Expr.Struct_access (expr, n))
-          | None -> return_err (Error.Struct_access_non_member (ty, member)) )
-      | Some Type.Definition.Alias _ -> assert false
-      | None ->
-          return_err (Error.Struct_access_on_non_struct_type (ty, member))
+      return (T.Record_access (expr, member))
 
 
-(*
-  NOTE(ubsan): call the declaration functions in the same order as the
-  definition functions
-
-  NOTE(ubsan): type_declaration doesn't work on the AST,
-  it just works on a list of strings
-*)
-
-let type_declaration unt_type ctxt =
+let add_alias_to_context (ctxt: t)
+    (unt_type: (string * Untyped_ast.Type.t) Spanned.t) : t result =
   let module T = Untyped_ast.Type in
-  let module D = Untyped_ast.Type_definition in
   let rec duplicates search = function
     | [] -> false
-    | name :: _ when String.equal name search -> true
+    | (name, _) :: _ when String.equal name search -> true
     | _ :: xs -> duplicates search xs
   in
-  let {D.name; _}, sp = unt_type in
-  if duplicates name ctxt then
-    Error (Error.Defined_type_multiple_times name, sp)
-  else Ok (name :: ctxt)
+  let (name, uty), sp = unt_type in
+  let%bind () = with_span sp in
+  if duplicates name ctxt.type_context then
+    return_err (Error.Defined_type_multiple_times name)
+  else return { ctxt with type_context= ((name, uty) :: ctxt.type_context) }
 
-
-let add_type_definition unt_type ctxt =
-  let module T = Untyped_ast.Type in
-  let module D = Untyped_ast.Type_definition in
-  let unt_type, _ = unt_type in
-  let () =
-    let num_types = List.length ctxt.type_decls in
-    let idx = num_types - 1 - List.length ctxt.type_defs in
-    let name = List.nth_exn ctxt.type_decls idx in
-    assert (String.equal name unt_type.D.name)
-  in
-  let%bind def =
-    match unt_type.D.kind with
-    | D.Kind.Alias (unt_ty, _) ->
-        let%bind t = Types.type_untyped ctxt unt_ty in
-        return (Type.Definition.Alias t)
-    | D.Kind.Struct members ->
-        let rec helper ctxt = function
-          | [] -> return []
-          | (name, (x, sp)) :: xs ->
-              let%bind () = with_span sp in
-              let%bind x = Types.type_untyped ctxt x in
-              let%bind xs = helper ctxt xs in
-              return ((name, x) :: xs)
-        in
-        let%bind members = helper ctxt members in
-        return (Type.Definition.Struct members)
-  in
-  return {ctxt with type_defs= def :: ctxt.type_defs}
-
-
-let add_function_declaration unt_func ctxt =
+(* this is the point which we still need to work on after *)
+let add_function_to_context (ctxt: t) (unt_func: Untyped_ast.Func.t) : t result =
   let module F = Untyped_ast.Func in
   let unt_func, _ = unt_func in
   let {F.name; F.params; F.ret_ty; _} = unt_func in
@@ -345,20 +269,20 @@ let add_function_declaration unt_func ctxt =
     | (f, sp) :: _ when String.equal f.name search -> Some (f, sp)
     | _ :: xs -> check_for_duplicates search xs
   in
-  match check_for_duplicates name ctxt.func_context with
+  match check_for_duplicates name ctxt.function_context with
   | Some (_, sp) ->
       return_err
         (Error.Defined_function_multiple_times {name; original_declaration= sp})
   | None ->
       let decl = ({name; params; ret_ty}, Span.union parm_sp rty_sp) in
-      return {ctxt with func_context= decl :: ctxt.func_context}
+      return {ctxt with function_context= decl :: ctxt.function_context}
 
 
 let add_function_definition unt_func ctxt =
   let module F = Untyped_ast.Func in
   let unt_func, _ = unt_func in
   let decl =
-    let num_funcs = List.length ctxt.func_context in
+    let num_funcs = List.length ctxt.function_context in
     let idx = num_funcs - 1 - List.length ctxt.func_defs in
     let decl, _ = Functions.decl_by_index ctxt idx in
     assert (String.equal decl.name unt_func.F.name) ;
@@ -404,7 +328,9 @@ let make unt_ast =
   | Error (e, sp) -> (Error (e, []), sp)
   | Ok type_context ->
       let ret =
-        let ret = {type_context; func_context= []; func_definitions= []} in
+        let ret =
+          {type_context; function_context= []; function_definitions= []}
+        in
         let%bind ret = add_type_definitions ret unt_ast.U.types in
         let%bind ret = add_function_declarations ret unt_ast.U.funcs in
         let%bind ret = add_function_definitions ret unt_ast.U.funcs in

@@ -4,9 +4,9 @@ type t =
   | Name_not_found of string
   | Type_not_found of Cafec_parse.Ast.Type.t
   | Record_literal_duplicate_members of string
-  | Record_access_on_non_record_type of Type.t * string
+  | Record_access_non_record_type of Type.t * string
   | Record_access_non_member of Type.t * string
-  | If_on_non_bool of Type.t
+  | If_non_bool of Type.t
   | If_branches_of_differing_type of Type.t * Type.t
   | Call_of_non_function of Type.t
   | Defined_function_multiple_times of
@@ -24,7 +24,7 @@ let to_string err =
   | Record_literal_duplicate_members member ->
       Printf.sprintf "Record literal - member `%s` initialized multiple times"
         member
-  | Record_access_on_non_record_type (ty, member) ->
+  | Record_access_non_record_type (ty, member) ->
       Printf.sprintf
         "Attempted to access the `%s` member of a non-struct type: `%s`" member
         (Type.to_string ty)
@@ -32,7 +32,7 @@ let to_string err =
       Printf.sprintf
         "Attempted to access the `%s` member of a type without that member: \
          `%s`" member (Type.to_string ty)
-  | If_on_non_bool ty ->
+  | If_non_bool ty ->
       Printf.sprintf
         "Attempted to `if` on an expression of non-boolean type `%s`"
         (Type.to_string ty)
