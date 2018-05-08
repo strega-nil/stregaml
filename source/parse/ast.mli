@@ -14,11 +14,11 @@ module Expr : sig
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
-    | If_else of (t Spanned.t * t Spanned.t * t Spanned.t)
+    | If_else of t Spanned.t * t Spanned.t * t Spanned.t
     | Variable of string
-    | Call of (t Spanned.t * t Spanned.t list)
-    | Struct_literal of (Type.t * (string * t Spanned.t) Spanned.t list)
-    | Struct_access of (t Spanned.t * string)
+    | Call of t Spanned.t * t Spanned.t list
+    | Record_literal of (string * t Spanned.t) Spanned.t list
+    | Record_access of t Spanned.t * string
 
   val to_string : t -> indent:int -> string
 end

@@ -58,7 +58,7 @@ let get_specific (parser: t) (token: Token.t) : unit result =
 
 
 let parse_list (parser: t) ~(f: t -> 'a result) ~(sep: Token.t)
-    ~(close: Token.t) ~(expected: Error.Expected.t) : 'a list result =
+    ~(close: Token.t) ~(expected: Error.Expected.t) : 'a Spanned.t list result =
   let rec helper parser f expected sep close expect_sep =
     let%bind tok = peek_token parser in
     match () with
@@ -71,14 +71,15 @@ let parse_list (parser: t) ~(f: t -> 'a result) ~(sep: Token.t)
     | () when expect_sep ->
         return_err (Error.Unexpected_token (Error.Expected.Specific sep, tok))
     | () ->
-        let%bind x = f parser in
+        let%bind x = spanned_bind (f parser) in
         let%bind xs = helper parser f expected sep close true in
         return (x :: xs)
   in
   helper parser f expected sep close false
 
 
-let rec maybe_parse_expression (parser: t) : Ast.Expr.t option result =
+let rec maybe_parse_expression ?(gt_ends: bool option) (parser: t)
+    : Ast.Expr.t option result =
   let initial =
     match%bind peek_token parser with
     | Token.Keyword Token.Keyword.True ->
@@ -106,25 +107,41 @@ let rec maybe_parse_expression (parser: t) : Ast.Expr.t option result =
     | Token.Identifier s ->
         eat_token parser ;
         return (Some (Ast.Expr.Variable s))
+    | Token.Operator "<" ->
+        let f parser =
+          let%bind name = get_ident parser in
+          let%bind () = get_specific parser Token.Equals in
+          let%bind expr =
+            spanned_bind (parse_expression ~gt_ends:true parser)
+          in
+          return (name, expr)
+        in
+        eat_token parser ;
+        let%bind members =
+          parse_list parser ~f ~sep:Token.Semicolon ~close:(Token.Operator ">")
+            ~expected:Error.Expected.Variable_decl
+        in
+        let%bind () = get_specific parser (Token.Operator ">") in
+        return (Some (Ast.Expr.Record_literal members))
     | _ -> return None
   in
   match%bind spanned_bind initial with
   | Some i, sp ->
-      let%bind x = parse_follow parser (i, sp) in
+      let%bind x = parse_follow ?gt_ends parser (i, sp) in
       return (Some x)
   | None, _ -> return None
 
 
-and parse_expression (parser: t) : Ast.Expr.t result =
-  match%bind maybe_parse_expression parser with
+and parse_expression ?(gt_ends: bool option) (parser: t) : Ast.Expr.t result =
+  match%bind maybe_parse_expression ?gt_ends parser with
   | Some expr -> return expr
   | None ->
       let%bind tok = next_token parser in
       return_err (Error.Unexpected_token (Error.Expected.Expression, tok))
 
 
-and parse_follow (parser: t) ((initial, sp): Ast.Expr.t Spanned.t)
-    : Ast.Expr.t result =
+and parse_follow ?gt_ends:((gt_ends: bool) = false) (parser: t)
+    ((initial, sp): Ast.Expr.t Spanned.t) : Ast.Expr.t result =
   let%bind tok, tok_sp = spanned_bind (peek_token parser) in
   let%bind total, cont =
     match tok with
@@ -134,13 +151,14 @@ and parse_follow (parser: t) ((initial, sp): Ast.Expr.t Spanned.t)
     | Token.Dot ->
         eat_token parser ;
         let%bind member = get_ident parser in
-        return (Ast.Expr.Struct_access ((initial, sp), member), true)
+        return (Ast.Expr.Record_access ((initial, sp), member), true)
+    | Token.Operator ">" when gt_ends -> (Ok (initial, false), sp)
     | tok when is_expression_end tok -> (Ok (initial, false), sp)
     | tok ->
         ( Error (Error.Unexpected_token (Error.Expected.Expression_follow, tok))
         , tok_sp )
   in
-  if cont then parse_follow parser (total, sp) else return total
+  if cont then parse_follow ~gt_ends parser (total, sp) else return total
 
 
 and parse_type (parser: t) : Ast.Type.t result =
@@ -150,10 +168,10 @@ and parse_type (parser: t) : Ast.Type.t result =
   | Token.Operator "<" ->
       let%bind members =
         let f parser =
-          let%bind name, nsp = spanned_bind (get_ident parser) in
+          let%bind name = get_ident parser in
           let%bind () = get_specific parser Token.Colon in
-          let%bind ty, tsp = spanned_bind (parse_type parser) in
-          return ((name, ty), Spanned.Span.union nsp tsp)
+          let%bind ty = parse_type parser in
+          return (name, ty)
         in
         parse_list parser ~f ~sep:Token.Semicolon ~close:(Token.Operator ">")
           ~expected:Error.Expected.Variable_decl
@@ -163,9 +181,8 @@ and parse_type (parser: t) : Ast.Type.t result =
   | Token.Keyword Token.Keyword.Func -> (
       let%bind () = get_specific parser Token.Open_paren in
       let%bind params =
-        let f parser = spanned_bind (parse_type parser) in
-        parse_list parser ~f ~sep:Token.Comma ~close:Token.Close_paren
-          ~expected:Error.Expected.Type
+        parse_list parser ~f:parse_type ~sep:Token.Comma
+          ~close:Token.Close_paren ~expected:Error.Expected.Type
       in
       let%bind () = get_specific parser Token.Close_paren in
       match%bind maybe_get_specific parser Token.Arrow with
@@ -186,15 +203,15 @@ and maybe_parse_type_annotation (parser: t) : Ast.Type.t option result =
 
 and parse_parameter_list (parser: t)
     : (string * Ast.Type.t) Spanned.t list result =
-  let get_parm parser =
-    let%bind name, nsp = spanned_bind (get_ident parser) in
+  let f parser =
+    let%bind name = get_ident parser in
     let%bind () = get_specific parser Token.Colon in
-    let%bind ty, tsp = spanned_bind (parse_type parser) in
-    return ((name, ty), Spanned.Span.union nsp tsp)
+    let%bind ty = parse_type parser in
+    return (name, ty)
   in
   let%bind () = get_specific parser Token.Open_paren in
   let%bind parms =
-    parse_list parser ~f:get_parm ~sep:Token.Comma ~close:Token.Close_paren
+    parse_list parser ~f ~sep:Token.Comma ~close:Token.Close_paren
       ~expected:Error.Expected.Variable_decl
   in
   let%bind () = get_specific parser Token.Close_paren in
@@ -202,9 +219,9 @@ and parse_parameter_list (parser: t)
 
 
 and parse_argument_list (parser: t) : Ast.Expr.t Spanned.t list result =
-  let f parser = spanned_bind (parse_expression parser) in
   let%bind () = get_specific parser Token.Open_paren in
   let%bind args =
+    let f parser = parse_expression parser in
     parse_list parser ~f ~sep:Token.Comma ~close:Token.Close_paren
       ~expected:Error.Expected.Expression
   in

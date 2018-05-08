@@ -10,7 +10,10 @@ module Type = struct
 
   let rec to_string = function
     | Named s -> s
-    | Record _ -> "some-record-type-here"
+    | Record members ->
+        let f ((name, ty), _) = String.concat [name; ": "; to_string ty] in
+        let members = String.concat ~sep:"; " (List.map members ~f) in
+        String.concat ["< "; members; " >"]
     | Function (parms, ret) ->
         let f (x, _) = to_string x in
         let ret = match ret with Some x -> ") -> " ^ f x | None -> ")" in
@@ -23,11 +26,11 @@ module Expr = struct
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
-    | If_else of (t Spanned.t * t Spanned.t * t Spanned.t)
+    | If_else of t Spanned.t * t Spanned.t * t Spanned.t
     | Variable of string
-    | Call of (t Spanned.t * t Spanned.t list)
-    | Struct_literal of (Type.t * (string * t Spanned.t) Spanned.t list)
-    | Struct_access of (t Spanned.t * string)
+    | Call of t Spanned.t * t Spanned.t list
+    | Record_literal of (string * t Spanned.t) Spanned.t list
+    | Record_access of t Spanned.t * string
 
   let rec to_string e ~indent =
     match e with
@@ -58,15 +61,15 @@ module Expr = struct
           String.concat ~sep:", " (List.map args ~f)
         in
         String.concat [to_string ~indent e; "("; args; ")"]
-    | Struct_literal (ty, members) ->
+    | Record_literal members ->
         let members =
           let f ((name, (expr, _)), _) =
             String.concat [name; " = "; to_string expr ~indent:(indent + 1)]
           in
           String.concat ~sep:"; " (List.map ~f members)
         in
-        String.concat [Type.to_string ty; " { "; members; " }"]
-    | Struct_access ((e, _), member) ->
+        String.concat ["< "; members; " >"]
+    | Record_access ((e, _), member) ->
         String.concat [to_string ~indent:(indent + 1) e; "."; member]
 end
 
@@ -107,7 +110,7 @@ type t =
 let to_string self =
   let types =
     let f ((name, def), _) =
-      String.concat ["type "; name; " = "; Type.to_string def]
+      String.concat ["type "; name; " = "; Type.to_string def; ";"]
     in
     String.concat ~sep:"\n" (List.map ~f self.aliases)
   in
