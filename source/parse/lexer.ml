@@ -197,9 +197,8 @@ let rec next_token lex =
       in
       let rec helper s idx =
         if String.length s > idx + 1 then
-          if not (is_invalid (s.[idx], s.[idx + 1])) then false
-          else helper s (idx + 1)
-        else true
+          if is_invalid (s.[idx], s.[idx + 1]) then true else helper s (idx + 1)
+        else false
       in
       helper s 0
     in

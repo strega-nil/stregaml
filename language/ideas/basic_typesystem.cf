@@ -1,0 +1,12 @@
+structure Vec2 = {
+  transparent data = < x0: int; x1: int >
+
+  public func zero(): Self = <x0 = 0; x1 = 0>;
+};
+
+type V2 = Vec2;
+
+func main(): int {
+  let v: Vec2 = Vec2.<x0 = 0; x1 = 0>;
+  let v2: V2 = V2.zero();
+}

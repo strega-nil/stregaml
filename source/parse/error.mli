@@ -2,9 +2,8 @@ module Expected : sig
   type t =
     | Specific of Token.t
     | Item_declarator
-    | Type_definition
-    | Identifier_or_under
     | Identifier
+    | Variable_decl
     | Type
     | Expression
     | Expression_follow

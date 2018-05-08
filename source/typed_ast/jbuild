@@ -1,7 +1,0 @@
-(jbuild_version 1)
-
-(library
-  ((name cafec_typed_ast)
-  (libraries (base ppx_let cafec_containers cafec_parse))
-  (preprocess (pps (ppx_let)))
-  (flags (:standard -w +a-4 -open Base -open Cafec_containers))))

@@ -5,10 +5,12 @@ let indent_to_string indent = String.make (indent * 2) ' '
 module Type = struct
   type t =
     | Named of string
+    | Record of (string * t) Spanned.t list
     | Function of (t Spanned.t list * t Spanned.t option)
 
   let rec to_string = function
     | Named s -> s
+    | Record _ -> "some-record-type-here"
     | Function (parms, ret) ->
         let f (x, _) = to_string x in
         let ret = match ret with Some x -> ") -> " ^ f x | None -> ")" in
@@ -71,13 +73,13 @@ end
 module Func = struct
   type t =
     { name: string
-    ; params: (string * Type.t Spanned.t) list
+    ; params: (string * Type.t) Spanned.t list
     ; ret_ty: Type.t Spanned.t option
     ; expr: Expr.t Spanned.t }
 
   let to_string self =
     let parameters =
-      let f (name, (ty, _)) = String.concat [name; ": "; Type.to_string ty] in
+      let f ((name, ty), _) = String.concat [name; ": "; Type.to_string ty] in
       String.concat ~sep:", " (List.map ~f self.params)
     in
     let ret_ty =
@@ -99,36 +101,15 @@ module Func = struct
       ; ";\n" ]
 end
 
-module Type_definition = struct
-  module Kind = struct
-    type t =
-      | Alias of Type.t Spanned.t
-      | Struct of (string * Type.t Spanned.t) list
-
-    let to_string = function
-      | Alias (ty, _) -> Type.to_string ty
-      | Struct xs ->
-          let f (name, (ty, _)) =
-            String.concat [name; ": "; Type.to_string ty]
-          in
-          let sep = ";\n" ^ indent_to_string 1 in
-          let members = String.concat ~sep (List.map ~f xs) in
-          String.concat ["struct {\n"; members; "\n}"]
-  end
-
-  type t = {name: string; kind: Kind.t}
-
-  let to_string self =
-    let rhs = Kind.to_string self.kind in
-    String.concat ["type "; self.name; " = "; rhs; ";"]
-end
-
-type t = {funcs: Func.t Spanned.t list; types: Type_definition.t Spanned.t list}
+type t =
+  {funcs: Func.t Spanned.t list; aliases: (string * Type.t) Spanned.t list}
 
 let to_string self =
   let types =
-    let f (ty, _) = Type_definition.to_string ty in
-    String.concat ~sep:"\n" (List.map ~f self.types)
+    let f ((name, def), _) =
+      String.concat ["type "; name; " = "; Type.to_string def]
+    in
+    String.concat ~sep:"\n" (List.map ~f self.aliases)
   in
   let funcs =
     let f (func, _) = Func.to_string func in

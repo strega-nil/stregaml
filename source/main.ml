@@ -1,7 +1,6 @@
 open Cafec
 module Out = Stdio.Out_channel
 module In = Stdio.In_channel
-open Cafec_containers
 
 type command_line_arguments =
   {filename: string; print_parse_ast: bool; interpreted: bool}
@@ -38,6 +37,20 @@ let parse_command_line () : (command_line_arguments, string) Result.t =
     | None -> Error "no filename specified"
 
 
+let get_parse_ast args =
+  let program = In.with_file args.filename ~f:In.input_all in
+  match Parse.parse program with
+  | Error e, sp ->
+      Out.eprintf "Error: %s\n"
+        (Spanned.to_string ~f:Parse.Error.to_string (e, sp)) ;
+      Caml.exit 1
+  | Ok unt_ast, _ ->
+      if args.print_parse_ast then
+        Out.print_endline (Parse.Ast.to_string unt_ast) ;
+      unt_ast
+
+
+(*
 let get_typed_ast args =
   let program = In.with_file args.filename ~f:In.input_all in
   match Parse.parse program with
@@ -55,7 +68,8 @@ let get_typed_ast args =
           Caml.exit 1
       | Ok ty_ast, _ -> ty_ast
 
-
+      *)
+(*
 let interpret ty_ast _args =
   let ctxt = Interpreter.make ty_ast in
   match Interpreter.get_function ctxt ~name:"main" with
@@ -68,11 +82,17 @@ let interpret ty_ast _args =
 
 
 let compile ty_ast _args = Llvm.output_object_file ~file:"foo.o" ty_ast
+*)
 
 let main args =
+  let _ = get_parse_ast args in
+  ()
+
+
+(*
   let typed_ast = get_typed_ast args in
   if args.interpreted then interpret typed_ast args else compile typed_ast args
-
+  *)
 
 let () =
   let args =

@@ -2,9 +2,8 @@ module Expected = struct
   type t =
     | Specific of Token.t
     | Item_declarator
-    | Type_definition
-    | Identifier_or_under
     | Identifier
+    | Variable_decl
     | Type
     | Expression
     | Expression_follow
@@ -12,9 +11,8 @@ module Expected = struct
   let to_string = function
     | Specific tok -> Token.to_string tok
     | Item_declarator -> "either `func` or `type`"
-    | Type_definition -> "`struct`, `variant`, or a type"
     | Identifier -> "an identifier"
-    | Identifier_or_under -> "an identifier or `_`"
+    | Variable_decl -> "a variable declaration"
     | Type -> "the start of a type"
     | Expression -> "the start of an expression"
     | Expression_follow ->

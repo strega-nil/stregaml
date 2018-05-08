@@ -1,9 +1,9 @@
-type vec2 = struct { x0: int; x1: int };
+type V2 = < x0: int; x1: int >;
 
-func map(p: vec2, f: func(int) -> int): vec2 =
-  vec2 { x0 = f(p.x0); x1 = f(p.x1) };
+func map(p: V2, f: func(int) -> int): V2 =
+  < x0 = f(p.x0); x1 = f(p.x1) >;
 
 func double(i: int): int = MUL(i, 2);
 
-func main(): vec2 =
-  map(vec2 { x0 = 2014; x1 = 9 }, double);
+func main(): V2 =
+  map(< x0 = 2014; x1 = 9 >, double);

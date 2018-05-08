@@ -68,7 +68,7 @@ let make ast =
   let helper _ =
     match Sequence.next !seq with
     | None -> assert false
-    | Some ((({Ast.name; _}, _), (expr, _)), rest) ->
+    | Some ((({Ast.Function.name; _}, _), (expr, _)), rest) ->
         seq := rest ;
         (name, expr)
   in
