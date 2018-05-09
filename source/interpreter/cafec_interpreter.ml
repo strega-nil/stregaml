@@ -9,8 +9,6 @@ module Expr = Ast.Expr
 type t = {funcs: (string * Expr.t) array}
 
 module Value = struct
-  type ctxt = t
-
   type function_index = int
 
   type t =
@@ -18,7 +16,7 @@ module Value = struct
     | Bool of bool
     | Integer of int
     | Function of int
-    | Struct of t array
+    | Record of (string * t) list
     | Builtin of Expr.Builtin.t
 
   let rec equal lhs rhs =
@@ -27,40 +25,34 @@ module Value = struct
     | Bool b1, Bool b2 -> Bool.equal b1 b2
     | Integer i1, Integer i2 -> i1 = i2
     | Function f1, Function f2 -> f1 = f2
-    | Struct lhs, Struct rhs -> Array.equal ~equal lhs rhs
+    | Record lhs, Record rhs ->
+        let equal (name1, e1) (name2, e2) =
+          String.equal name1 name2 && equal e1 e2
+        in
+        List.equal ~equal lhs rhs
     | Builtin b1, Builtin b2 -> Expr.Builtin.equal b1 b2
     | _ -> false
 
 
-  let rec output f v ctxt =
-    let module Out = Stdio.Out_channel in
+  let rec to_string v ctxt =
     match v with
-    | Unit -> Out.output_string f "()"
-    | Integer n -> Out.fprintf f "%d" n
-    | Bool true -> Out.output_string f "true"
-    | Bool false -> Out.output_string f "false"
-    | Struct arr ->
-        let rec output_rest seq =
-          match Sequence.next seq with
-          | Some (x, xs) ->
-              Out.output_string f "; " ; output f x ctxt ; output_rest xs
-          | None -> ()
+    | Unit -> "()"
+    | Integer n -> Int.to_string n
+    | Bool true -> "true"
+    | Bool false -> "false"
+    | Record members ->
+        let members =
+          let f (name, e) = String.concat [name; " = "; to_string e ctxt] in
+          String.concat ~sep:"; " (List.map ~f members)
         in
-        Out.output_string f "{" ;
-        let () =
-          match Sequence.next (Array.to_sequence_mutable arr) with
-          | Some (x, xs) ->
-              Out.output_char f ' ' ; output f x ctxt ; output_rest xs
-          | None -> ()
-        in
-        Out.output_string f " }"
+        String.concat ["< "; members; " >"]
     | Function n ->
         let name, _ = (ctxt.funcs).(n) in
-        Out.fprintf f "<function %s>" name
-    | Builtin Expr.Builtin.Add -> Out.output_string f "<builtin add>"
-    | Builtin Expr.Builtin.Sub -> Out.output_string f "<builtin sub>"
-    | Builtin Expr.Builtin.Mul -> Out.output_string f "<builtin mul>"
-    | Builtin Expr.Builtin.Less_eq -> Out.output_string f "<builtin less_eq>"
+        Printf.sprintf "<function %s>" name
+    | Builtin Expr.Builtin.Add -> "<builtin add>"
+    | Builtin Expr.Builtin.Sub -> "<builtin sub>"
+    | Builtin Expr.Builtin.Mul -> "<builtin mul>"
+    | Builtin Expr.Builtin.Less_eq -> "<builtin less_eq>"
 end
 
 let make ast =
@@ -68,7 +60,7 @@ let make ast =
   let helper _ =
     match Sequence.next !seq with
     | None -> assert false
-    | Some ((({Ast.Function.name; _}, _), (expr, _)), rest) ->
+    | Some ((({Ast.Function_declaration.name; _}, _), (expr, _)), rest) ->
         seq := rest ;
         (name, expr)
   in
@@ -125,15 +117,19 @@ let call ctxt idx args =
       | _ -> assert false )
     | Expr.Builtin b -> Value.Builtin b
     | Expr.Global_function i -> Value.Function i
-    | Expr.Struct_literal (_, members) ->
-        let len = List.length members in
-        let arr = Array.create ~len Value.Unit in
-        let f (i, (e, _)) = arr.(i) <- eval ctxt args e in
-        List.iter ~f members ; Value.Struct arr
-    | Expr.Struct_access ((e, _), idx) ->
+    | Expr.Record_literal members ->
+        let members =
+          List.map members ~f:(fun ((name, (e, _)), _) ->
+              (name, eval ctxt args e) )
+        in
+        Value.Record members
+    | Expr.Record_access ((e, _), member) ->
         let v = eval ctxt args e in
         match v with
-        | Value.Struct members -> members.(idx)
+        | Value.Record members ->
+            let f (name, _) = String.equal name member in
+            let _, e = List.find_exn ~f members in
+            e
         | _ -> assert false
   in
   let _, expr = (ctxt.funcs).(idx) in

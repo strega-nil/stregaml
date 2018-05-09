@@ -60,26 +60,22 @@ let get_typed_ast args =
   | Ok ty_ast, _ -> ty_ast
 
 
-(*
 let interpret ty_ast _args =
   let ctxt = Interpreter.make ty_ast in
   match Interpreter.get_function ctxt ~name:"main" with
   | Some f ->
       let v = Interpreter.call ctxt f [] in
       Out.output_string Out.stdout "main returned: " ;
-      Interpreter.Value.output Out.stdout v ctxt ;
+      Out.output_string Out.stdout (Interpreter.Value.to_string v ctxt) ;
       Out.newline Out.stdout
   | None -> Out.output_string Out.stderr "no main was found\n"
 
 
-let compile ty_ast _args = Llvm.output_object_file ~file:"foo.o" ty_ast
-*)
+(*let compile ty_ast _args = Llvm.output_object_file ~file:"foo.o" ty_ast*)
 
 let main args =
   let typed_ast = get_typed_ast args in
-  (* if args.interpreted then interpret typed_ast args else compile typed_ast
-   * args *)
-  ()
+  if args.interpreted then interpret typed_ast args else assert false
 
 
 let () =

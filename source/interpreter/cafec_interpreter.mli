@@ -1,22 +1,24 @@
 type t
 
-module Value : sig
-  type ctxt = t
+module Value :
+  sig
+    type ctxt
 
-  type function_index
+    type function_index
 
-  type t =
-    | Unit
-    | Bool of bool
-    | Integer of int
-    | Function of function_index
-    | Struct of t array
-    | Builtin of Cafec_typed_ast.Expr.Builtin.t
+    type t =
+      | Unit
+      | Bool of bool
+      | Integer of int
+      | Function of function_index
+      | Record of (string * t) list
+      | Builtin of Cafec_typed_ast.Expr.Builtin.t
 
-  val equal : t -> t -> bool
+    val equal : t -> t -> bool
 
-  val output : Stdio.Out_channel.t -> t -> ctxt -> unit
-end
+    val to_string : t -> ctxt -> string
+  end
+  with type ctxt := t
 
 val make : Cafec_typed_ast.t -> t
 
