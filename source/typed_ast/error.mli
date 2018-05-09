@@ -2,7 +2,7 @@ module Spanned = Cafec_containers.Spanned
 
 type t =
   | Name_not_found of string
-  | Type_not_found of Cafec_parse.Ast.Type.t
+  | Type_not_found of string
   | Record_literal_duplicate_members of string
   | Record_access_non_record_type of Type.t * string
   | Record_access_non_member of Type.t * string

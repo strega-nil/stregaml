@@ -10,8 +10,13 @@ let rec equal l r =
   | Unit, Unit -> true
   | Bool, Bool -> true
   | Int, Int -> true
-  | Function fl, Function fr ->
-      equal fl.ret_ty fr.ret_ty && List.equal fl.params fr.params ~equal
+  | Record m1, Record m2 ->
+      let equal (name1, ty1) (name2, ty2) =
+        String.equal name1 name2 && equal ty1 ty2
+      in
+      List.equal m1 m2 ~equal
+  | Function f1, Function f2 ->
+      equal f1.ret_ty f2.ret_ty && List.equal f1.params f2.params ~equal
   | _ -> false
 
 
@@ -20,7 +25,12 @@ let rec to_string ty =
   | Unit -> "unit"
   | Bool -> "bool"
   | Int -> "int"
-  | Record _members -> "record-type"
+  | Record members ->
+      let members =
+        let f (name, ty) = String.concat [name; ": "; to_string ty] in
+        String.concat ~sep:"; " (List.map ~f members)
+      in
+      String.concat ["< "; members; " >"]
   | Function {params; ret_ty} ->
       let params =
         let f ty = to_string ty in

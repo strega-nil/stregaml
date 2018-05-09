@@ -44,31 +44,22 @@ let get_parse_ast args =
       Out.eprintf "Error: %s\n"
         (Spanned.to_string ~f:Parse.Error.to_string (e, sp)) ;
       Caml.exit 1
-  | Ok unt_ast, _ ->
+  | Ok parse_ast, _ ->
       if args.print_parse_ast then
-        Out.print_endline (Parse.Ast.to_string unt_ast) ;
-      unt_ast
+        Out.print_endline (Parse.Ast.to_string parse_ast) ;
+      parse_ast
 
 
-(*
 let get_typed_ast args =
-  let program = In.with_file args.filename ~f:In.input_all in
-  match Parse.parse program with
+  let parse_ast = get_parse_ast args in
+  match Typed_ast.make parse_ast with
   | Error e, sp ->
-      Out.eprintf "Error: %s\n"
-        (Spanned.to_string ~f:Parse.Error.to_string (e, sp)) ;
+      let f e = Typed_ast.Error.to_string e in
+      Out.eprintf "Error: %s\n" (Spanned.to_string ~f (e, sp)) ;
       Caml.exit 1
-  | Ok unt_ast, _ ->
-      if args.print_parse_ast then
-        Out.print_endline (Parse.Ast.to_string unt_ast) ;
-      match Typed_ast.make unt_ast with
-      | Error (e, ctxt), sp ->
-          let f e = Typed_ast.Error.to_string e ~ctxt in
-          Out.eprintf "Error: %s\n" (Spanned.to_string ~f (e, sp)) ;
-          Caml.exit 1
-      | Ok ty_ast, _ -> ty_ast
+  | Ok ty_ast, _ -> ty_ast
 
-      *)
+
 (*
 let interpret ty_ast _args =
   let ctxt = Interpreter.make ty_ast in
@@ -85,14 +76,11 @@ let compile ty_ast _args = Llvm.output_object_file ~file:"foo.o" ty_ast
 *)
 
 let main args =
-  let _ = get_parse_ast args in
+  let typed_ast = get_typed_ast args in
+  (* if args.interpreted then interpret typed_ast args else compile typed_ast
+   * args *)
   ()
 
-
-(*
-  let typed_ast = get_typed_ast args in
-  if args.interpreted then interpret typed_ast args else compile typed_ast args
-  *)
 
 let () =
   let args =

@@ -4,7 +4,7 @@ module Type : sig
   type t =
     | Named of string
     | Record of (string * t) Spanned.t list
-    | Function of (t Spanned.t list * t Spanned.t option)
+    | Function of t Spanned.t list * t Spanned.t option
 
   val to_string : t -> string
 end

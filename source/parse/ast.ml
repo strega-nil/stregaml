@@ -6,7 +6,7 @@ module Type = struct
   type t =
     | Named of string
     | Record of (string * t) Spanned.t list
-    | Function of (t Spanned.t list * t Spanned.t option)
+    | Function of t Spanned.t list * t Spanned.t option
 
   let rec to_string = function
     | Named s -> s

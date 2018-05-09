@@ -1,10 +1,7 @@
 module Error = Error
 module Expr = Expr
 module Type = Type
-
-module Function : sig
-  type t = {name: string; params: (string * Type.t) list; ret_ty: Type.t}
-end
+module Function_declaration = Internal.Function_declaration
 
 (*
 type type_kind = Internal.type_kind = Type_alias of Type.t
@@ -24,4 +21,5 @@ val type_seq : t -> type_def spanned seq
 
 val number_of_functions : t -> int
 
-val function_seq : t -> (Function.t Spanned.t * Expr.t Spanned.t) Sequence.t
+val function_seq :
+  t -> (Function_declaration.t Spanned.t * Expr.t Spanned.t) Sequence.t

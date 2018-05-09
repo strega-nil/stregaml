@@ -2,7 +2,7 @@ module Spanned = Cafec_containers.Spanned
 
 type t =
   | Name_not_found of string
-  | Type_not_found of Cafec_parse.Ast.Type.t
+  | Type_not_found of string
   | Record_literal_duplicate_members of string
   | Record_access_non_record_type of Type.t * string
   | Record_access_non_member of Type.t * string
@@ -19,8 +19,7 @@ type t =
 let to_string err =
   match err with
   | Name_not_found name -> Printf.sprintf "Name not found: %s" name
-  | Type_not_found ty ->
-      Printf.sprintf "Type not found: %s" (Cafec_parse.Ast.Type.to_string ty)
+  | Type_not_found ty -> Printf.sprintf "Type not found: %s" ty
   | Record_literal_duplicate_members member ->
       Printf.sprintf "Record literal - member `%s` initialized multiple times"
         member
