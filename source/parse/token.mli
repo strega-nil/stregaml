@@ -1,5 +1,5 @@
 module Keyword : sig
-  type t = True | False | If | Else | Func | Type | Struct | Underscore
+  type t = True | False | If | Else | Func | Type | Data | Alias | Underscore
 
   val equal : t -> t -> bool
 
@@ -11,6 +11,8 @@ type t =
   | Close_paren
   | Open_brace
   | Close_brace
+  | Open_record
+  | Close_record
   | Keyword of Keyword.t
   | Identifier of string
   | Operator of string

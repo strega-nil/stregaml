@@ -10,7 +10,7 @@ module Expected = struct
 
   let to_string = function
     | Specific tok -> Token.to_string tok
-    | Item_declarator -> "either `func` or `type`"
+    | Item_declarator -> "`func`, `type`, or `alias`"
     | Identifier -> "an identifier"
     | Variable_decl -> "a variable declaration"
     | Type -> "the start of a type"

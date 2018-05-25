@@ -1,9 +1,20 @@
-type V2 = < x0: int; x1: int >;
+alias V2 = {|
+  x0: int;
+  x1: int;
+|};
 
-func map(p: V2, f: func(int) -> int): V2 =
-  < x0 = f(p.x0); x1 = f(p.x1) >;
+type V2' {
+  data = V2
+}
 
-func double(i: int): int = MUL(i, 2);
+func map(p: V2, f: func(int) -> int) -> V2 {
+  {| x0 = f(p.x0); x1 = f(p.x1) |}
+}
 
-func main(): V2 =
-  map(< x0 = 2014; x1 = 9 >, double);
+func double(i: int) -> int {
+  MUL(i, 2)
+}
+
+func main() -> V2 {
+  map({| x0 = 2014; x1 = 9 |}, double)
+}

@@ -45,7 +45,7 @@ module Value = struct
           let f (name, e) = String.concat [name; " = "; to_string e ctxt] in
           String.concat ~sep:"; " (List.map ~f members)
         in
-        String.concat ["< "; members; " >"]
+        String.concat ["{| "; members; " |}"]
     | Function n ->
         let name, _ = (ctxt.funcs).(n) in
         Printf.sprintf "<function %s>" name

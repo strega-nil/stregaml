@@ -96,7 +96,8 @@ let lex_ident fst sp lex =
         | "else" -> kw Token.Keyword.Else
         | "func" -> kw Token.Keyword.Func
         | "type" -> kw Token.Keyword.Type
-        | "struct" -> kw Token.Keyword.Struct
+        | "data" -> kw Token.Keyword.Data
+        | "alias" -> kw Token.Keyword.Alias
         | "_" -> kw Token.Keyword.Underscore
         | "let" as res -> (Error (Error.Reserved_token res), sp)
         | "variant" as res -> (Error (Error.Reserved_token res), sp)
@@ -121,21 +122,17 @@ let lex_number fst sp lex =
       buff := [fst] ;
       (10, sp) )
   in
-  let rec helper sp space_allowed =
+  let rec helper sp quote_allowed =
     match peek_ch lex with
     | Some (ch, sp') when is_number_continue ch base ->
         eat_ch lex ;
         buff := ch :: !buff ;
         helper (Spanned.Span.union sp sp') true
-    | Some (' ', sp') ->
-        eat_ch lex ;
-        buff := ' ' :: !buff ;
-        helper (Spanned.Span.union sp sp') false
-    | Some (ch, sp')
-      when space_allowed && (is_number_continue ch 10 || is_ident_continue ch) ->
-        eat_ch lex ;
-        buff := ' ' :: !buff ;
-        (Error Error.Malformed_number_literal, Spanned.Span.union sp sp')
+    | Some ('\'', sp') ->
+        if quote_allowed then (
+          eat_ch lex ;
+          helper (Spanned.Span.union sp sp') false )
+        else (Error Error.Malformed_number_literal, Spanned.Span.union sp sp')
     | Some _ | None ->
         let char_to_int ch =
           if ch >= '0' && ch <= '9' then Char.to_int ch - Char.to_int '0'
@@ -148,7 +145,6 @@ let lex_number fst sp lex =
         (* TODO(ubsan): fix overflow *)
         let rec to_int pow acc = function
           | [] -> acc
-          | ' ' :: xs -> to_int pow acc xs
           | ch :: xs ->
               let cur = char_to_int ch * pow in
               to_int (pow * base) (acc + cur) xs
@@ -230,8 +226,17 @@ let rec next_token lex =
   match next_ch lex with
   | Some ('(', sp) -> (Ok Token.Open_paren, sp)
   | Some (')', sp) -> (Ok Token.Close_paren, sp)
-  | Some ('{', sp) -> (Ok Token.Open_brace, sp)
+  | Some ('{', sp) -> (
+    match peek_ch lex with
+    | Some ('|', sp') ->
+        eat_ch lex ; (Ok Token.Open_record, Spanned.Span.union sp sp')
+    | _ -> (Ok Token.Open_brace, sp) )
   | Some ('}', sp) -> (Ok Token.Close_brace, sp)
+  | Some ('|', sp) -> (
+    match peek_ch lex with
+    | Some ('}', sp') ->
+        eat_ch lex ; (Ok Token.Close_record, Spanned.Span.union sp sp')
+    | _ -> lex_operator '|' sp lex )
   | Some ('[', sp) -> (Error (Error.Reserved_token "["), sp)
   | Some (']', sp) -> (Error (Error.Reserved_token "]"), sp)
   | Some (';', sp) -> (Ok Token.Semicolon, sp)

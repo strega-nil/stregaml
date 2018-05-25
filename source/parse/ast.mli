@@ -33,7 +33,15 @@ module Func : sig
   val to_string : t -> string
 end
 
+module Type_definition : sig
+  type t = {name: string; data: Type.t}
+
+  val to_string : t -> string
+end
+
 type t =
-  {funcs: Func.t Spanned.t list; aliases: (string * Type.t) Spanned.t list}
+  { funcs: Func.t Spanned.t list
+  ; aliases: (string * Type.t) Spanned.t list
+  ; types: Type_definition.t Spanned.t list }
 
 val to_string : t -> string
