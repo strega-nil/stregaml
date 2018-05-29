@@ -27,9 +27,11 @@ module Expr = struct
     | Bool_literal of bool
     | Integer_literal of int
     | If_else of t Spanned.t * t Spanned.t * t Spanned.t
-    | Variable of string
+    | Variable of {path: string list; name: string}
     | Call of t Spanned.t * t Spanned.t list
-    | Record_literal of (string * t Spanned.t) Spanned.t list
+    | Record_literal of
+        { path: string list
+        ; members: (string * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * string
 
   let rec to_string e ~indent =
@@ -54,21 +56,24 @@ module Expr = struct
           ; "\n"
           ; indent_to_string indent
           ; "}" ]
-    | Variable s -> s
+    | Variable {path; name} -> String.concat ~sep:"::" (path @ [name])
     | Call ((e, _), args) ->
         let args =
           let f (x, _) = to_string x ~indent:(indent + 1) in
           String.concat ~sep:", " (List.map args ~f)
         in
         String.concat [to_string ~indent e; "("; args; ")"]
-    | Record_literal members ->
+    | Record_literal {path; members} ->
         let members =
           let f ((name, (expr, _)), _) =
             String.concat [name; " = "; to_string expr ~indent:(indent + 1)]
           in
           String.concat ~sep:"; " (List.map ~f members)
         in
-        String.concat ["{| "; members; " |}"]
+        if not (List.is_empty path) then
+          let path = String.concat ~sep:"::" path in
+          String.concat [path; "::"; "{| "; members; " |}"]
+        else String.concat ["{| "; members; " |}"]
     | Record_access ((e, _), member) ->
         String.concat [to_string ~indent:(indent + 1) e; "."; member]
 end

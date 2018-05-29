@@ -15,9 +15,11 @@ module Expr : sig
     | Bool_literal of bool
     | Integer_literal of int
     | If_else of t Spanned.t * t Spanned.t * t Spanned.t
-    | Variable of string
+    | Variable of {path: string list; name: string}
     | Call of t Spanned.t * t Spanned.t list
-    | Record_literal of (string * t Spanned.t) Spanned.t list
+    | Record_literal of
+        { path: string list
+        ; members: (string * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * string
 
   val to_string : t -> indent:int -> string

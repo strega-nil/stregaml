@@ -40,6 +40,7 @@ type t =
   | Integer_literal of int
   | Arrow
   | Colon
+  | Double_colon
   | Equals
   | Semicolon
   | Dot
@@ -60,6 +61,7 @@ let equal lhs rhs =
   | Integer_literal i1, Integer_literal i2 -> i1 = i2
   | Arrow, Arrow -> true
   | Colon, Colon -> true
+  | Double_colon, Double_colon -> true
   | Equals, Equals -> true
   | Semicolon, Semicolon -> true
   | Dot, Dot -> true
@@ -73,8 +75,8 @@ let to_string = function
   | Close_paren -> "close paren `)`"
   | Open_brace -> "open brace `{`"
   | Close_brace -> "close brace `}`"
-  | Open_record -> "open brace `{|`"
-  | Close_record -> "close brace `|}`"
+  | Open_record -> "open record `{|`"
+  | Close_record -> "close record `|}`"
   | Keyword kw -> Printf.sprintf "keyword: `%s`" (Keyword.to_string kw)
   | Operator op -> Printf.sprintf "operator: `%s`" op
   | Identifier id -> Printf.sprintf "identifier: `%s`" id

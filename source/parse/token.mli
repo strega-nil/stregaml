@@ -19,6 +19,7 @@ type t =
   | Integer_literal of int
   | Arrow
   | Colon
+  | Double_colon
   | Equals
   | Semicolon
   | Dot

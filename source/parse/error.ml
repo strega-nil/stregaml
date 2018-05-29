@@ -7,6 +7,7 @@ module Expected = struct
     | Type
     | Expression
     | Expression_follow
+    | Path_expression
 
   let to_string = function
     | Specific tok -> Token.to_string tok
@@ -17,6 +18,8 @@ module Expected = struct
     | Expression -> "the start of an expression"
     | Expression_follow ->
         "an operator, semicolon, comma, dot, or closing brace (`}`, `)`)"
+    | Path_expression ->
+        "the continuation of a path, or an identifier or record literal"
 end
 
 type t =

@@ -108,25 +108,16 @@ let rec maybe_parse_expression ?(gt_ends: bool option) (parser: t)
         let%bind () = get_specific parser (Token.Keyword Token.Keyword.Else) in
         let%bind els = spanned_bind (parse_block parser) in
         return (Some (Ast.Expr.If_else (cond, thn, els)))
-    | Token.Identifier s ->
+    | Token.Identifier name -> (
         eat_token parser ;
-        return (Some (Ast.Expr.Variable s))
+        match%bind maybe_get_specific parser Token.Double_colon with
+        | Some () ->
+            let%bind expr = parse_path_expression parser ~start:name in
+            return (Some expr)
+        | None -> return (Some (Ast.Expr.Variable {path= []; name})) )
     | Token.Open_record ->
-        let f parser =
-          let%bind name = get_ident parser in
-          let%bind () = get_specific parser Token.Equals in
-          let%bind expr =
-            spanned_bind (parse_expression ~gt_ends:true parser)
-          in
-          return (name, expr)
-        in
-        eat_token parser ;
-        let%bind members =
-          parse_list parser ~f ~sep:Token.Semicolon ~close:Token.Close_record
-            ~expected:Error.Expected.Variable_decl
-        in
-        let%bind () = get_specific parser Token.Close_record in
-        return (Some (Ast.Expr.Record_literal members))
+        let%bind expr = parse_record_literal parser in
+        return (Some expr)
     | _ -> return None
   in
   match%bind spanned_bind initial with
@@ -134,6 +125,51 @@ let rec maybe_parse_expression ?(gt_ends: bool option) (parser: t)
       let%bind x = parse_follow ?gt_ends parser (i, sp) in
       return (Some x)
   | None, _ -> return None
+
+
+and parse_path_expression (parser: t) ~(start: string) : Ast.Expr.t result =
+  let rec helper parser =
+    match%bind peek_token parser with
+    | Token.Identifier name -> (
+        eat_token parser ;
+        match%bind peek_token parser with
+        | Token.Double_colon ->
+            eat_token parser ;
+            let%bind path, expr = helper parser in
+            return (name :: path, expr)
+        | _ -> return ([], Ast.Expr.Variable {path= []; name}) )
+    | Token.Open_record ->
+        let%bind expr = parse_record_literal parser in
+        return ([], expr)
+    | tok ->
+        return_err
+          (Error.Unexpected_token (Error.Expected.Path_expression, tok))
+  in
+  let%bind new_path, expr = helper parser in
+  match expr with
+  | Ast.Expr.Variable {path; name} ->
+      assert (List.is_empty path) ;
+      return (Ast.Expr.Variable {path= start :: new_path; name})
+  | Ast.Expr.Record_literal {path; members} ->
+      assert (List.is_empty path) ;
+      return (Ast.Expr.Record_literal {path= start :: new_path; members})
+  | _ -> assert false
+
+
+and parse_record_literal (parser: t) : Ast.Expr.t result =
+  let f parser =
+    let%bind name = get_ident parser in
+    let%bind () = get_specific parser Token.Equals in
+    let%bind expr = spanned_bind (parse_expression ~gt_ends:true parser) in
+    return (name, expr)
+  in
+  let%bind () = get_specific parser Token.Open_record in
+  let%bind members =
+    parse_list parser ~f ~sep:Token.Semicolon ~close:Token.Close_record
+      ~expected:Error.Expected.Variable_decl
+  in
+  let%bind () = get_specific parser Token.Close_record in
+  return (Ast.Expr.Record_literal {path= []; members})
 
 
 and parse_expression ?(gt_ends: bool option) (parser: t) : Ast.Expr.t result =
@@ -256,6 +292,7 @@ and parse_type_definition (parser: t) : Ast.Type_definition.t result =
   let%bind () = get_specific parser (Token.Keyword Token.Keyword.Data) in
   let%bind () = get_specific parser Token.Equals in
   let%bind data = parse_type parser in
+  let%bind () = get_specific parser Token.Semicolon in
   let%bind () = get_specific parser Token.Close_brace in
   return Ast.Type_definition.{name; data}
 

@@ -7,6 +7,7 @@ module Expected : sig
     | Type
     | Expression
     | Expression_follow
+    | Path_expression
 
   val to_string : t -> string
 end

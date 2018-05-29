@@ -231,7 +231,7 @@ let rec type_expression decl ctxt unt_expr =
       in
       let%bind args = helper args in
       return (T.Call (callee, args))
-  | U.Variable name -> (
+  | U.Variable {path= _; name} -> (
       let {Function_declaration.params; _} = decl in
       match find_parameter name params with
       | None -> (
@@ -245,7 +245,7 @@ let rec type_expression decl ctxt unt_expr =
           | _ -> return_err (Error.Name_not_found name) )
         | Some idx -> return (T.Global_function idx) )
       | Some (_ty, idx) -> return (T.Parameter idx) )
-  | U.Record_literal members ->
+  | U.Record_literal {path= _; members} ->
       let%bind members =
         let rec map (xs: (string * U.t Spanned.t) Spanned.t list) =
           match xs with

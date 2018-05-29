@@ -38,8 +38,8 @@ let is_ident_continue_no_prime ch = is_ident_start ch || is_number_start ch
 let is_ident_continue ch = is_ident_continue_no_prime ch || Char.equal ch '\''
 
 let is_operator_start = function
-  | '!' | '#' | '$' | '%' | '&' | '*' | '+' | '-' | '/' | ':' | '<' | '='
-   |'>' | '?' | '@' | '\\' | '^' | '|' | '~' ->
+  | '!' | '#' | '$' | '%' | '&' | '*' | '+' | '-' | '/' | '<' | '=' | '>'
+   |'?' | '@' | '\\' | '^' | '|' | '~' ->
       true
   | _ -> false
 
@@ -212,7 +212,6 @@ let rec next_token lex =
           | Ok (), _ -> next_token lex
           | Error e, sp -> (Error e, sp) )
         | "//" -> line_comment () ; next_token lex
-        | ":" -> (Ok Token.Colon, sp)
         | "=" -> (Ok Token.Equals, sp)
         | "->" -> (Ok Token.Arrow, sp)
         | "|" as res -> (Error (Error.Reserved_token res), sp)
@@ -239,6 +238,11 @@ let rec next_token lex =
     | _ -> lex_operator '|' sp lex )
   | Some ('[', sp) -> (Error (Error.Reserved_token "["), sp)
   | Some (']', sp) -> (Error (Error.Reserved_token "]"), sp)
+  | Some (':', sp) -> (
+    match peek_ch lex with
+    | Some (':', sp') ->
+        eat_ch lex ; (Ok Token.Double_colon, Spanned.Span.union sp sp')
+    | _ -> (Ok Token.Colon, sp) )
   | Some (';', sp) -> (Ok Token.Semicolon, sp)
   | Some (',', sp) -> (Ok Token.Comma, sp)
   | Some ('.', sp) -> (Ok Token.Dot, sp)
