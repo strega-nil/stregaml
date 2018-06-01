@@ -110,31 +110,27 @@ module Func = struct
 end
 
 module Type_definition = struct
-  type t = {name: string; data: Type.t}
+  type kind = Alias of Type.t | User_defined of {data: Type.t}
 
-  let to_string {name; data} =
-    String.concat
-      ["type "; name; " {\n"; "  data = "; Type.to_string data; ";\n}"]
+  type t = {name: string; kind: kind}
 end
 
-type t =
-  { funcs: Func.t Spanned.t list
-  ; aliases: (string * Type.t) Spanned.t list
-  ; types: Type_definition.t Spanned.t list }
+type t = {funcs: Func.t Spanned.t list; types: Type_definition.t Spanned.t list}
 
 let to_string self =
-  let aliases =
-    let f ((name, def), _) =
-      String.concat ["alias "; name; " = "; Type.to_string def; ";"]
-    in
-    String.concat ~sep:"\n" (List.map ~f self.aliases)
-  in
   let types =
-    let f (ty, _) = Type_definition.to_string ty in
+    let f (Type_definition.{name; kind}, _) =
+      match kind with
+      | Type_definition.Alias data ->
+          String.concat ["alias "; name; " = "; Type.to_string data; ";"]
+      | Type_definition.User_defined {data} ->
+          String.concat
+            ["type "; name; " {\n"; "  data = "; Type.to_string data; ";\n}"]
+    in
     String.concat ~sep:"\n" (List.map ~f self.types)
   in
   let funcs =
     let f (func, _) = Func.to_string func in
     String.concat ~sep:"\n" (List.map ~f self.funcs)
   in
-  String.concat [aliases; "\n\n"; types; "\n\n"; funcs]
+  String.concat [types; "\n\n"; funcs]

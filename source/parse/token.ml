@@ -85,6 +85,7 @@ let to_string = function
   | Colon -> "colon `:`"
   | Equals -> "equals `=`"
   | Semicolon -> "semicolon `;`"
+  | Double_colon -> "double colon `::`"
   | Comma -> "comma `,`"
   | Dot -> "dot `.`"
   | Eof -> "end of file"

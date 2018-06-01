@@ -36,14 +36,11 @@ module Func : sig
 end
 
 module Type_definition : sig
-  type t = {name: string; data: Type.t}
+  type kind = Alias of Type.t | User_defined of {data: Type.t}
 
-  val to_string : t -> string
+  type t = {name: string; kind: kind}
 end
 
-type t =
-  { funcs: Func.t Spanned.t list
-  ; aliases: (string * Type.t) Spanned.t list
-  ; types: Type_definition.t Spanned.t list }
+type t = {funcs: Func.t Spanned.t list; types: Type_definition.t Spanned.t list}
 
 val to_string : t -> string

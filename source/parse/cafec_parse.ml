@@ -35,7 +35,6 @@ let is_expression_end = function
 module Item = struct
   type t =
     | Func of Ast.Func.t
-    | Type_alias of (string * Ast.Type.t)
     | Type_definition of Ast.Type_definition.t
 end
 
@@ -286,7 +285,7 @@ and parse_block (parser: t) : Ast.Expr.t result =
           return_err (Error.Unexpected_token (Error.Expected.Expression, tok))
 
 
-and parse_type_definition (parser: t) : Ast.Type_definition.t result =
+and parse_user_defined_type (parser: t) : Ast.Type_definition.t result =
   let%bind name = get_ident parser in
   let%bind () = get_specific parser Token.Open_brace in
   let%bind () = get_specific parser (Token.Keyword Token.Keyword.Data) in
@@ -294,7 +293,8 @@ and parse_type_definition (parser: t) : Ast.Type_definition.t result =
   let%bind data = parse_type parser in
   let%bind () = get_specific parser Token.Semicolon in
   let%bind () = get_specific parser Token.Close_brace in
-  return Ast.Type_definition.{name; data}
+  let kind = Ast.Type_definition.User_defined {data} in
+  return Ast.Type_definition.{name; kind}
 
 
 let parse_item (parser: t) : (Item.t option, Error.t) Spanned.Result.t =
@@ -309,11 +309,13 @@ let parse_item (parser: t) : (Item.t option, Error.t) Spanned.Result.t =
   | Token.Keyword Token.Keyword.Alias ->
       let%bind name = get_ident parser in
       let%bind () = get_specific parser Token.Equals in
-      let%bind def = parse_type parser in
+      let%bind ty = parse_type parser in
       let%bind () = get_specific parser Token.Semicolon in
-      return (Some (Item.Type_alias (name, def)))
+      let kind = Ast.Type_definition.Alias ty in
+      let def = Ast.Type_definition.{name; kind} in
+      return (Some (Item.Type_definition def))
   | Token.Keyword Token.Keyword.Type ->
-      let%bind def = parse_type_definition parser in
+      let%bind def = parse_user_defined_type parser in
       return (Some (Item.Type_definition def))
   | Token.Eof -> return None
   | tok ->
@@ -324,14 +326,12 @@ let parse_program (parser: t) : (Ast.t, Error.t) Spanned.Result.t =
   let rec helper parser =
     let%bind item, sp = spanned_bind (parse_item parser) in
     match item with
-    | None -> return Ast.{funcs= []; aliases= []; types= []}
+    | None -> return Ast.{funcs= []; types= []}
     | Some item ->
         let%bind rest = helper parser in
         match item with
         | Item.Func func ->
             return Ast.{rest with funcs= (func, sp) :: rest.funcs}
-        | Item.Type_alias ty ->
-            return Ast.{rest with aliases= (ty, sp) :: rest.aliases}
         | Item.Type_definition def ->
             return Ast.{rest with types= (def, sp) :: rest.types}
   in
