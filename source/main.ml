@@ -53,8 +53,8 @@ let get_parse_ast args =
 let get_typed_ast args =
   let parse_ast = get_parse_ast args in
   match Typed_ast.make parse_ast with
-  | Error e, sp ->
-      let f e = Typed_ast.Error.to_string e in
+  | Error (e, ctxt), sp ->
+      let f e = Typed_ast.Error.to_string e ~ctxt in
       Out.eprintf "Error: %s\n" (Spanned.to_string ~f (e, sp)) ;
       Caml.exit 1
   | Ok ty_ast, _ -> ty_ast

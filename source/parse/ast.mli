@@ -7,6 +7,12 @@ module Type : sig
     | Function of t Spanned.t list * t Spanned.t option
 
   val to_string : t -> string
+
+  module Definition : sig
+    type kind = Alias of t | User_defined of {data: t}
+
+    type t = {name: string; kind: kind}
+  end
 end
 
 module Expr : sig
@@ -35,12 +41,6 @@ module Func : sig
   val to_string : t -> string
 end
 
-module Type_definition : sig
-  type kind = Alias of Type.t | User_defined of {data: Type.t}
-
-  type t = {name: string; kind: kind}
-end
-
-type t = {funcs: Func.t Spanned.t list; types: Type_definition.t Spanned.t list}
+type t = {funcs: Func.t Spanned.t list; types: Type.Definition.t Spanned.t list}
 
 val to_string : t -> string

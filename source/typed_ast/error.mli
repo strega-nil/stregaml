@@ -16,4 +16,4 @@ type t =
   | Return_type_mismatch of {expected: Type.t; found: Type.t}
   | Invalid_function_arguments of {expected: Type.t list; found: Type.t list}
 
-val to_string : t -> string
+val to_string : t -> ctxt:Type.Context.t -> string

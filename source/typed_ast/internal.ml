@@ -8,14 +8,6 @@ module Function_declaration = struct
   type t = {name: string; params: (string * Type.t) list; ret_ty: Type.t}
 end
 
-(*
-  NOTE: we may eventually want to do some sort of caching
-  so we don't have to calculate types each time
-*)
-module Type_context = struct
-  type t = (string * Untyped_ast.Type.t) list
-end
-
 module Function_context = struct
   type t = Function_declaration.t Spanned.t list
 end
@@ -25,56 +17,11 @@ module Function_definitions = struct
 end
 
 type t =
-  { type_context: Type_context.t
+  { type_context: Type.Context.t
   ; function_context: Function_context.t
   ; function_definitions: Function_definitions.t }
 
 type 'a result = ('a, Error.t) Spanned.Result.t
-
-module Types : sig
-  val type_untyped : Type_context.t -> Untyped_ast.Type.t -> Type.t result
-end = struct
-  let rec type_untyped ctxt unt_ty =
-    let module U = Untyped_ast.Type in
-    match unt_ty with
-    | U.Named name -> (
-        let f (name', _) = String.equal name' name in
-        match List.find ~f ctxt with
-        | Some (_, ty) -> type_untyped ctxt ty
-        | None ->
-          match name with
-          | "unit" -> return Type.Unit
-          | "bool" -> return Type.Bool
-          | "int" -> return Type.Int
-          | name -> return_err (Error.Type_not_found name) )
-    | U.Record members ->
-        let rec map = function
-          | [] -> return []
-          | ((name, ty), sp) :: xs ->
-              let%bind () = with_span sp in
-              let%bind ty = type_untyped ctxt ty in
-              let%bind rest = map xs in
-              return ((name, ty) :: rest)
-        in
-        let%bind members = map members in
-        return (Type.Record members)
-    | U.Function (params, ret_ty) ->
-        let rec map = function
-          | [] -> return []
-          | (ty, sp) :: xs ->
-              let%bind () = with_span sp in
-              let%bind ty = type_untyped ctxt ty in
-              let%bind rest = map xs in
-              return (ty :: rest)
-        in
-        let%bind params = map params in
-        let%bind ret_ty =
-          match ret_ty with
-          | None -> return Type.Unit
-          | Some (ty, _) -> type_untyped ctxt ty
-        in
-        return (Type.Function {params; ret_ty})
-end
 
 module Functions : sig
   val index_by_name : Function_context.t -> string -> int option
@@ -263,21 +210,6 @@ let rec type_expression decl ctxt unt_expr =
       return (T.Record_access (expr, member))
 
 
-let add_alias (ctxt: t) (unt_type: (string * Untyped_ast.Type.t) Spanned.t)
-    : t result =
-  let module T = Untyped_ast.Type in
-  let rec duplicates search = function
-    | [] -> false
-    | (name, _) :: _ when String.equal name search -> true
-    | _ :: xs -> duplicates search xs
-  in
-  let (name, uty), sp = unt_type in
-  let%bind () = with_span sp in
-  if duplicates name ctxt.type_context then
-    return_err (Error.Defined_type_multiple_times name)
-  else return {ctxt with type_context= (name, uty) :: ctxt.type_context}
-
-
 let add_function_declaration (ctxt: t) (unt_func: Untyped_ast.Func.t Spanned.t)
     : t result =
   let module F = Untyped_ast.Func in
@@ -287,17 +219,25 @@ let add_function_declaration (ctxt: t) (unt_func: Untyped_ast.Func.t Spanned.t)
     let rec helper ctxt = function
       | [] -> return []
       | ((name, ty), _) :: xs ->
-          let%bind ty = Types.type_untyped ctxt ty in
+          let%bind ty =
+            match Type.type_untyped ~ctxt ty with
+            | Result.Ok ty -> return ty
+            | Result.Error Type.Type_not_found name ->
+                return_err (Error.Type_not_found name)
+          in
           let%bind tys = helper ctxt xs in
           return ((name, ty) :: tys)
     in
     spanned_bind (helper ctxt.type_context params)
   in
-  let%bind ret_ty, rty_sp =
+  let%bind ret_ty =
     match ret_ty with
-    | Some (ret_ty, _) ->
-        spanned_bind (Types.type_untyped ctxt.type_context ret_ty)
-    | None -> return (Type.Unit, Span.made_up)
+    | Some (ret_ty, _) -> (
+      match Type.type_untyped ~ctxt:ctxt.type_context ret_ty with
+      | Result.Ok ty -> return ty
+      | Result.Error Type.Type_not_found name ->
+          return_err (Error.Type_not_found name) )
+    | None -> return Type.Unit
   in
   (* check for duplicates *)
   let rec check_for_duplicates search = function
@@ -311,9 +251,7 @@ let add_function_declaration (ctxt: t) (unt_func: Untyped_ast.Func.t Spanned.t)
       return_err
         (Error.Defined_function_multiple_times {name; original_declaration= sp})
   | None ->
-      let decl =
-        (Function_declaration.{name; params; ret_ty}, Span.union parm_sp rty_sp)
-      in
+      let decl = (Function_declaration.{name; params; ret_ty}, parm_sp) in
       return {ctxt with function_context= decl :: ctxt.function_context}
 
 
@@ -340,14 +278,8 @@ let add_function_definition (ctxt: t) (unt_func: Untyped_ast.Func.t Spanned.t)
          {expected= decl.Function_declaration.ret_ty; found= expr_ty})
 
 
-let make unt_ast =
+let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
   let module U = Untyped_ast in
-  let rec add_aliases ast = function
-    | unt_type :: types ->
-        let%bind new_ast = add_alias ast unt_type in
-        add_aliases new_ast types
-    | [] -> return ast
-  in
   let rec add_function_declarations ast = function
     | unt_func :: funcs ->
         let%bind new_ast = add_function_declaration ast unt_func in
@@ -360,9 +292,17 @@ let make unt_ast =
         add_function_definitions new_ast funcs
     | [] -> return ast
   in
-  let ret =
-    {type_context= []; function_context= []; function_definitions= []}
+  let%bind type_context =
+    match Type.Context.make unt_ast.U.types with
+    | Result.Ok tc -> return tc
+    | Result.Error Type.Context.Duplicate_definitions name ->
+        return_err (Error.Defined_type_multiple_times name, Type.Context.empty)
   in
-  let%bind ret = add_aliases ret unt_ast.U.aliases in
-  let%bind ret = add_function_declarations ret unt_ast.U.funcs in
-  add_function_definitions ret unt_ast.U.funcs
+  let ret =
+    let ret = {type_context; function_context= []; function_definitions= []} in
+    let%bind ret = add_function_declarations ret unt_ast.U.funcs in
+    add_function_definitions ret unt_ast.U.funcs
+  in
+  match ret with
+  | Result.Ok o, sp -> Result.Ok o, sp
+  | Result.Error e, sp -> Result.Error (e, type_context), sp

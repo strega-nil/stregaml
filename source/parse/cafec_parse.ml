@@ -33,9 +33,7 @@ let is_expression_end = function
 
 
 module Item = struct
-  type t =
-    | Func of Ast.Func.t
-    | Type_definition of Ast.Type_definition.t
+  type t = Func of Ast.Func.t | Type_definition of Ast.Type.Definition.t
 end
 
 type 'a result = ('a, Error.t) Spanned.Result.t
@@ -285,7 +283,7 @@ and parse_block (parser: t) : Ast.Expr.t result =
           return_err (Error.Unexpected_token (Error.Expected.Expression, tok))
 
 
-and parse_user_defined_type (parser: t) : Ast.Type_definition.t result =
+and parse_user_defined_type (parser: t) : Ast.Type.Definition.t result =
   let%bind name = get_ident parser in
   let%bind () = get_specific parser Token.Open_brace in
   let%bind () = get_specific parser (Token.Keyword Token.Keyword.Data) in
@@ -293,8 +291,8 @@ and parse_user_defined_type (parser: t) : Ast.Type_definition.t result =
   let%bind data = parse_type parser in
   let%bind () = get_specific parser Token.Semicolon in
   let%bind () = get_specific parser Token.Close_brace in
-  let kind = Ast.Type_definition.User_defined {data} in
-  return Ast.Type_definition.{name; kind}
+  let kind = Ast.Type.Definition.User_defined {data} in
+  return Ast.Type.Definition.{name; kind}
 
 
 let parse_item (parser: t) : (Item.t option, Error.t) Spanned.Result.t =
@@ -311,8 +309,8 @@ let parse_item (parser: t) : (Item.t option, Error.t) Spanned.Result.t =
       let%bind () = get_specific parser Token.Equals in
       let%bind ty = parse_type parser in
       let%bind () = get_specific parser Token.Semicolon in
-      let kind = Ast.Type_definition.Alias ty in
-      let def = Ast.Type_definition.{name; kind} in
+      let kind = Ast.Type.Definition.Alias ty in
+      let def = Ast.Type.Definition.{name; kind} in
       return (Some (Item.Type_definition def))
   | Token.Keyword Token.Keyword.Type ->
       let%bind def = parse_user_defined_type parser in

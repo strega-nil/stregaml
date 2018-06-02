@@ -19,6 +19,13 @@ module Type = struct
         let ret = match ret with Some x -> ") -> " ^ f x | None -> ")" in
         let parms = String.concat ~sep:", " (List.map parms ~f) in
         String.concat ["func("; parms; ret]
+
+
+  module Definition = struct
+    type kind = Alias of t | User_defined of {data: t}
+
+    type t = {name: string; kind: kind}
+  end
 end
 
 module Expr = struct
@@ -109,21 +116,15 @@ module Func = struct
       ; "\n}\n" ]
 end
 
-module Type_definition = struct
-  type kind = Alias of Type.t | User_defined of {data: Type.t}
-
-  type t = {name: string; kind: kind}
-end
-
-type t = {funcs: Func.t Spanned.t list; types: Type_definition.t Spanned.t list}
+type t = {funcs: Func.t Spanned.t list; types: Type.Definition.t Spanned.t list}
 
 let to_string self =
   let types =
-    let f (Type_definition.{name; kind}, _) =
+    let f (Type.Definition.({name; kind}), _) =
       match kind with
-      | Type_definition.Alias data ->
+      | Type.Definition.Alias data ->
           String.concat ["alias "; name; " = "; Type.to_string data; ";"]
-      | Type_definition.User_defined {data} ->
+      | Type.Definition.User_defined {data} ->
           String.concat
             ["type "; name; " {\n"; "  data = "; Type.to_string data; ";\n}"]
     in
