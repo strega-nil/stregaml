@@ -23,48 +23,8 @@ type t =
   | Int
   | Record of (string * t) list
   | Function of {params: t list; ret_ty: t}
+  (* note: this will always be a User_defined type *)
   | User_defined of Context.index
-
-let rec equal l r =
-  match (l, r) with
-  | Unit, Unit -> true
-  | Bool, Bool -> true
-  | Int, Int -> true
-  | Record m1, Record m2 ->
-      let equal (name1, ty1) (name2, ty2) =
-        String.equal name1 name2 && equal ty1 ty2
-      in
-      List.equal m1 m2 ~equal
-  | Function f1, Function f2 ->
-      equal f1.ret_ty f2.ret_ty && List.equal f1.params f2.params ~equal
-  | User_defined u1, User_defined u2 -> u1 = u2
-  | _ -> false
-
-
-let rec to_string ty ~(ctxt: Context.t) =
-  match ty with
-  | Unit -> "unit"
-  | Bool -> "bool"
-  | Int -> "int"
-  | Record members ->
-      let members =
-        let f (name, ty) = String.concat [name; ": "; to_string ty ~ctxt] in
-        String.concat ~sep:"; " (List.map ~f members)
-      in
-      String.concat ["< "; members; " >"]
-  | Function {params; ret_ty} ->
-      let params =
-        let f ty = to_string ty ~ctxt in
-        String.concat ~sep:", " (List.map ~f params)
-      in
-      String.concat ["func"; params; " -> "; to_string ret_ty ~ctxt]
-  | User_defined idx ->
-      let Parse.Ast.Type.Definition.({name; kind}), _ =
-        List.nth_exn ctxt idx
-      in
-      let _name, _kind = (name, kind) in
-      failwith "not yet implemented"
-
 
 type make_error = Type_not_found of string
 
@@ -74,11 +34,11 @@ let rec type_untyped unt_ty ~(ctxt: Context.t) =
   let open Result.Let_syntax in
   match unt_ty with
   | U.Named name -> (
-      let f ({D.name= name'; _}, _) = String.equal name' name in
-      match List.find ~f ctxt with
-      | Some ({D.kind= D.Alias ty; _}, _) -> type_untyped ty ~ctxt
-      | Some ({D.kind= D.User_defined _; _}, _) ->
-          failwith "not yet implemented"
+      let f _ ({D.name= name'; _}, _sp) = String.equal name' name in
+      match List.findi ~f ctxt with
+      | Some (_, ({D.kind= D.Alias ty; _}, _sp)) -> type_untyped ty ~ctxt
+      | Some (idx, ({D.kind= D.User_defined _; _}, _sp)) ->
+          Result.Ok (User_defined idx)
       | None ->
         match name with
         | "unit" -> return Unit
@@ -110,3 +70,56 @@ let rec type_untyped unt_ty ~(ctxt: Context.t) =
         | Some (ty, _) -> type_untyped ty ~ctxt
       in
       return (Function {params; ret_ty})
+
+
+let rec equal l r =
+  match (l, r) with
+  | Unit, Unit -> true
+  | Bool, Bool -> true
+  | Int, Int -> true
+  | Record m1, Record m2 ->
+      let equal (name1, ty1) (name2, ty2) =
+        String.equal name1 name2 && equal ty1 ty2
+      in
+      List.equal m1 m2 ~equal
+  | Function f1, Function f2 ->
+      equal f1.ret_ty f2.ret_ty && List.equal f1.params f2.params ~equal
+  | User_defined u1, User_defined u2 -> u1 = u2
+  | _ -> false
+
+
+let rec structural ty ~(ctxt: Context.t) =
+  match ty with
+  | User_defined idx -> (
+      let module U = Parse.Ast.Type in
+      let U.Definition.({kind; _}), _ = List.nth_exn ctxt idx in
+      match kind with
+      | U.Definition.Alias _ -> assert false
+      | U.Definition.User_defined {data} ->
+        match type_untyped data ~ctxt with
+        | Result.Ok o -> structural o ~ctxt
+        | Result.Error _ -> failwith "this should fail somewhere else" )
+  | other -> other
+
+
+let rec to_string ty ~(ctxt: Context.t) =
+  match ty with
+  | Unit -> "unit"
+  | Bool -> "bool"
+  | Int -> "int"
+  | Record members ->
+      let members =
+        let f (name, ty) = String.concat [name; ": "; to_string ty ~ctxt] in
+        String.concat ~sep:"; " (List.map ~f members)
+      in
+      String.concat ["< "; members; " >"]
+  | Function {params; ret_ty} ->
+      let params =
+        let f ty = to_string ty ~ctxt in
+        String.concat ~sep:", " (List.map ~f params)
+      in
+      String.concat ["func"; params; " -> "; to_string ret_ty ~ctxt]
+  | User_defined idx ->
+      let module U = Parse.Ast.Type in
+      let U.Definition.({name; _}), _ = List.nth_exn ctxt idx in
+      name

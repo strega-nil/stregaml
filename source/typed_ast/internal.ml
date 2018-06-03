@@ -1,7 +1,5 @@
 module Span = Spanned.Span
 module Untyped_ast = Cafec_parse.Ast
-module Error = Error
-module Expr = Expr
 open Spanned.Result.Monad
 
 module Function_declaration = struct
@@ -133,13 +131,13 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
           return (Type.Record members) )
   | Expr.Record_access (expr, name) ->
       let%bind ty = type_of_expr ctxt decl expr in
-      match ty with
+      match Type.structural ty ~ctxt:ctxt.type_context with
       | Type.Record members -> (
           let f (n, _) = String.equal n name in
           match List.find ~f members with
           | Some (_, ty) -> return ty
           | None -> return_err (Error.Record_access_non_member (ty, name)) )
-      | ty -> return_err (Error.Record_access_non_record_type (ty, name))
+      | _ -> return_err (Error.Record_access_non_record_type (ty, name))
 
 
 let find_parameter name lst =
@@ -304,5 +302,5 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
     add_function_definitions ret unt_ast.U.funcs
   in
   match ret with
-  | Result.Ok o, sp -> Result.Ok o, sp
-  | Result.Error e, sp -> Result.Error (e, type_context), sp
+  | Result.Ok o, sp -> (Result.Ok o, sp)
+  | Result.Error e, sp -> (Result.Error (e, type_context), sp)
