@@ -117,7 +117,7 @@ let call ctxt idx args =
       | _ -> assert false )
     | Expr.Builtin b -> Value.Builtin b
     | Expr.Global_function i -> Value.Function i
-    | Expr.Record_literal members ->
+    | Expr.Record_literal {members; _} ->
         let members =
           List.map members ~f:(fun ((name, (e, _)), _) ->
               (name, eval ctxt args e) )

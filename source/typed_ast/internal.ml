@@ -112,7 +112,7 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
   | Expr.Parameter p ->
       let _, ty = List.nth_exn decl.Function_declaration.params p in
       return ty
-  | Expr.Record_literal members -> (
+  | Expr.Record_literal {ty; members} -> (
       let compare ((name1, _), _) ((name2, _), _) =
         String.compare name1 name2
       in
@@ -128,7 +128,15 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
                 return ((name, ty) :: rest)
           in
           let%bind members = map members in
-          return (Type.Record members) )
+          match ty with
+          | None -> return (Type.Record members)
+          | Some idx ->
+              let ty = Type.User_defined idx in
+              let structural = Type.structural ty ~ctxt:ctxt.type_context in
+              if (Type.equal (Type.Record members) structural) then
+                return ty
+              else
+                failwith "not yet implemented - should be an error" )
   | Expr.Record_access (expr, name) ->
       let%bind ty = type_of_expr ctxt decl expr in
       match Type.structural ty ~ctxt:ctxt.type_context with
@@ -151,7 +159,7 @@ let find_parameter name lst =
 
 
 (* NOTE(ubsan): this does *not* typecheck *)
-let rec type_expression decl ctxt unt_expr =
+let rec type_expression decl (ctxt: t) unt_expr =
   let module U = Untyped_ast.Expr in
   let module T = Expr in
   let unt_expr, sp = unt_expr in
@@ -180,7 +188,7 @@ let rec type_expression decl ctxt unt_expr =
       let {Function_declaration.params; _} = decl in
       match find_parameter name params with
       | None -> (
-        match Functions.index_by_name ctxt name with
+        match Functions.index_by_name ctxt.function_context name with
         | None -> (
           match name with
           | "LESS_EQ" -> return (T.Builtin T.Builtin.Less_eq)
@@ -190,7 +198,17 @@ let rec type_expression decl ctxt unt_expr =
           | _ -> return_err (Error.Name_not_found name) )
         | Some idx -> return (T.Global_function idx) )
       | Some (_ty, idx) -> return (T.Parameter idx) )
-  | U.Record_literal {path= _; members} ->
+  | U.Record_literal {path; members} ->
+      let%bind ty =
+        match path with
+        | [] -> return None
+        | [name] -> (
+            let unt_ty = Untyped_ast.Type.Named name in
+            match Type.type_untyped unt_ty ~ctxt:ctxt.type_context with
+            | Result.Ok Type.User_defined idx -> return (Some idx)
+            | _ -> failwith "blaaagh" )
+        | _ -> failwith "multi-part paths not yet supported"
+      in
       let%bind members =
         let rec map (xs: (string * U.t Spanned.t) Spanned.t list) =
           match xs with
@@ -202,7 +220,7 @@ let rec type_expression decl ctxt unt_expr =
         in
         map members
       in
-      return (T.Record_literal members)
+      return (T.Record_literal {ty; members})
   | U.Record_access (expr, member) ->
       let%bind expr = spanned_bind (type_expression decl ctxt expr) in
       return (T.Record_access (expr, member))
@@ -265,7 +283,7 @@ let add_function_definition (ctxt: t) (unt_func: Untyped_ast.Func.t Spanned.t)
     decl
   in
   let%bind expr =
-    spanned_bind (type_expression decl ctxt.function_context unt_func.F.expr)
+    spanned_bind (type_expression decl ctxt unt_func.F.expr)
   in
   let%bind expr_ty = type_of_expr ctxt decl expr in
   if Type.equal expr_ty decl.Function_declaration.ret_ty then
