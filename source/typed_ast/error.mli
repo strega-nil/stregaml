@@ -4,6 +4,8 @@ type t =
   | Name_not_found of string
   | Type_not_found of string
   | Record_literal_duplicate_members of string
+  | Record_literal_extra_field of Type.t * string
+  | Record_literal_missing_field of Type.t * string
   | Record_access_non_record_type of Type.t * string
   | Record_access_non_member of Type.t * string
   | If_non_bool of Type.t

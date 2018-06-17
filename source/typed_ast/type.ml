@@ -17,14 +17,16 @@ module Context = struct
   let empty = []
 end
 
-type t =
-  | Unit
-  | Bool
-  | Int
-  | Record of (string * t) list
-  | Function of {params: t list; ret_ty: t}
-  (* note: this will always be a User_defined type *)
+type builtin = Unit | Bool | Int | Function of {params: t list; ret_ty: t}
+
+and t =
+  | Builtin of builtin
+  (* note: this will never be an alias, only a type declaration *)
   | User_defined of Context.index
+
+module Structural = struct
+  type nonrec t = Builtin of builtin | Record of (string * t) list
+end
 
 type make_error = Type_not_found of string
 
@@ -41,20 +43,10 @@ let rec type_untyped unt_ty ~(ctxt: Context.t) =
           Result.Ok (User_defined idx)
       | None ->
         match name with
-        | "unit" -> return Unit
-        | "bool" -> return Bool
-        | "int" -> return Int
+        | "unit" -> return (Builtin Unit)
+        | "bool" -> return (Builtin Bool)
+        | "int" -> return (Builtin Int)
         | name -> Result.Error (Type_not_found name) )
-  | U.Record members ->
-      let rec map = function
-        | [] -> return []
-        | ((name, ty), _sp) :: xs ->
-            let%bind ty = type_untyped ty ~ctxt in
-            let%bind rest = map xs in
-            return ((name, ty) :: rest)
-      in
-      let%bind members = map members in
-      return (Record members)
   | U.Function (params, ret_ty) ->
       let rec map = function
         | [] -> return []
@@ -66,23 +58,18 @@ let rec type_untyped unt_ty ~(ctxt: Context.t) =
       let%bind params = map params in
       let%bind ret_ty =
         match ret_ty with
-        | None -> return Unit
+        | None -> return (Builtin Unit)
         | Some (ty, _) -> type_untyped ty ~ctxt
       in
-      return (Function {params; ret_ty})
+      return (Builtin (Function {params; ret_ty}))
 
 
 let rec equal l r =
   match (l, r) with
-  | Unit, Unit -> true
-  | Bool, Bool -> true
-  | Int, Int -> true
-  | Record m1, Record m2 ->
-      let equal (name1, ty1) (name2, ty2) =
-        String.equal name1 name2 && equal ty1 ty2
-      in
-      List.equal m1 m2 ~equal
-  | Function f1, Function f2 ->
+  | Builtin Unit, Builtin Unit -> true
+  | Builtin Bool, Builtin Bool -> true
+  | Builtin Int, Builtin Int -> true
+  | Builtin Function f1, Builtin Function f2 ->
       equal f1.ret_ty f2.ret_ty && List.equal f1.params f2.params ~equal
   | User_defined u1, User_defined u2 -> u1 = u2
   | _ -> false
@@ -90,30 +77,21 @@ let rec equal l r =
 
 let rec structural ty ~(ctxt: Context.t) =
   match ty with
-  | User_defined idx -> (
+  | Builtin b -> Structural.Builtin b
+  | User_defined idx ->
       let module U = Parse.Ast.Type in
       let U.Definition.({kind; _}), _ = List.nth_exn ctxt idx in
       match kind with
       | U.Definition.Alias _ -> assert false
-      | U.Definition.User_defined {data} ->
-        match type_untyped data ~ctxt with
-        | Result.Ok o -> structural o ~ctxt
-        | Result.Error _ -> failwith "this should fail somewhere else" )
-  | other -> other
+      | U.Definition.User_defined _ -> failwith "unimplemented"
 
 
 let rec to_string ty ~(ctxt: Context.t) =
   match ty with
-  | Unit -> "unit"
-  | Bool -> "bool"
-  | Int -> "int"
-  | Record members ->
-      let members =
-        let f (name, ty) = String.concat [name; ": "; to_string ty ~ctxt] in
-        String.concat ~sep:"; " (List.map ~f members)
-      in
-      String.concat ["< "; members; " >"]
-  | Function {params; ret_ty} ->
+  | Builtin Unit -> "unit"
+  | Builtin Bool -> "bool"
+  | Builtin Int -> "int"
+  | Builtin Function {params; ret_ty} ->
       let params =
         let f ty = to_string ty ~ctxt in
         String.concat ~sep:", " (List.map ~f params)

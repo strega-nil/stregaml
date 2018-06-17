@@ -3,13 +3,18 @@ module Spanned = Cafec_containers.Spanned
 module Type : sig
   type t =
     | Named of string
-    | Record of (string * t) Spanned.t list
     | Function of t Spanned.t list * t Spanned.t option
 
   val to_string : t -> string
 
+  module Data : sig
+    type nonrec t = Record of (string * t) Spanned.t list
+
+    val to_string : t -> string
+  end
+
   module Definition : sig
-    type kind = Alias of t | User_defined of {data: t}
+    type kind = Alias of t | User_defined of {data: Data.t}
 
     type t = {name: string; kind: kind}
   end
@@ -24,7 +29,7 @@ module Expr : sig
     | Variable of {path: string list; name: string}
     | Call of t Spanned.t * t Spanned.t list
     | Record_literal of
-        { path: string list
+        { ty: Type.t
         ; members: (string * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * string
 

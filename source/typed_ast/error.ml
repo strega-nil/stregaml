@@ -4,6 +4,8 @@ type t =
   | Name_not_found of string
   | Type_not_found of string
   | Record_literal_duplicate_members of string
+  | Record_literal_extra_field of Type.t * string
+  | Record_literal_missing_field of Type.t * string
   | Record_access_non_record_type of Type.t * string
   | Record_access_non_member of Type.t * string
   | If_non_bool of Type.t
@@ -23,6 +25,12 @@ let to_string err ~ctxt =
   | Record_literal_duplicate_members member ->
       Printf.sprintf "Record literal - member `%s` initialized multiple times"
         member
+  | Record_literal_extra_field (ty, member) ->
+      Printf.sprintf "Record literal - member `%s` not in type `%s`" member
+        (Type.to_string ty ~ctxt)
+  | Record_literal_missing_field (ty, member) ->
+      Printf.sprintf "Record literal - member `%s` of type `%s` missing" member
+        (Type.to_string ty ~ctxt)
   | Record_access_non_record_type (ty, member) ->
       Printf.sprintf
         "Attempted to access the `%s` member of a non-struct type: `%s`" member

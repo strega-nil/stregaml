@@ -1,5 +1,16 @@
 module Keyword = struct
-  type t = True | False | If | Else | Func | Type | Data | Alias | Underscore
+  type t =
+    | True
+    | False
+    | If
+    | Else
+    | Func
+    | Type
+    | Data
+    | Record
+    | Alias
+    | Let
+    | Underscore
 
   let equal lhs rhs =
     match (lhs, rhs) with
@@ -11,6 +22,8 @@ module Keyword = struct
     | Type, Type -> true
     | Data, Data -> true
     | Alias, Alias -> true
+    | Record, Record -> true
+    | Let, Let -> true
     | Underscore, Underscore -> true
     | _ -> false
 
@@ -23,7 +36,9 @@ module Keyword = struct
     | Func -> "func"
     | Type -> "type"
     | Data -> "data"
+    | Record -> "record"
     | Alias -> "alias"
+    | Let -> "let"
     | Underscore -> "_"
 end
 
@@ -32,8 +47,6 @@ type t =
   | Close_paren
   | Open_brace
   | Close_brace
-  | Open_record
-  | Close_record
   | Keyword of Keyword.t
   | Identifier of string
   | Operator of string
@@ -53,8 +66,6 @@ let equal lhs rhs =
   | Close_paren, Close_paren -> true
   | Open_brace, Open_brace -> true
   | Close_brace, Close_brace -> true
-  | Open_record, Open_record -> true
-  | Close_record, Close_record -> true
   | Keyword kw1, Keyword kw2 -> Keyword.equal kw1 kw2
   | Identifier id1, Identifier id2 -> String.equal id1 id2
   | Operator op1, Operator op2 -> String.equal op1 op2
@@ -75,8 +86,6 @@ let to_string = function
   | Close_paren -> "close paren `)`"
   | Open_brace -> "open brace `{`"
   | Close_brace -> "close brace `}`"
-  | Open_record -> "open record `{|`"
-  | Close_record -> "close record `|}`"
   | Keyword kw -> Printf.sprintf "keyword: `%s`" (Keyword.to_string kw)
   | Operator op -> Printf.sprintf "operator: `%s`" op
   | Identifier id -> Printf.sprintf "identifier: `%s`" id

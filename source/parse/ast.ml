@@ -5,15 +5,10 @@ let indent_to_string indent = String.make (indent * 2) ' '
 module Type = struct
   type t =
     | Named of string
-    | Record of (string * t) Spanned.t list
     | Function of t Spanned.t list * t Spanned.t option
 
   let rec to_string = function
     | Named s -> s
-    | Record members ->
-        let f ((name, ty), _) = String.concat [name; ": "; to_string ty] in
-        let members = String.concat ~sep:"; " (List.map members ~f) in
-        String.concat ["{| "; members; " |}"]
     | Function (parms, ret) ->
         let f (x, _) = to_string x in
         let ret = match ret with Some x -> ") -> " ^ f x | None -> ")" in
@@ -21,8 +16,17 @@ module Type = struct
         String.concat ["func("; parms; ret]
 
 
+  module Data = struct
+    type nonrec t = Record of (string * t) Spanned.t list
+
+    let to_string (Record members) =
+      let f ((name, ty), _) = String.concat [name; ": "; to_string ty; "\n"] in
+      let members = String.concat ~sep:"; " (List.map members ~f) in
+      String.concat ["record {\n"; members; "   }"]
+  end
+
   module Definition = struct
-    type kind = Alias of t | User_defined of {data: t}
+    type kind = Alias of t | User_defined of {data: Data.t}
 
     type t = {name: string; kind: kind}
   end
@@ -37,7 +41,7 @@ module Expr = struct
     | Variable of {path: string list; name: string}
     | Call of t Spanned.t * t Spanned.t list
     | Record_literal of
-        { path: string list
+        { ty: Type.t
         ; members: (string * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * string
 
@@ -70,17 +74,14 @@ module Expr = struct
           String.concat ~sep:", " (List.map args ~f)
         in
         String.concat [to_string ~indent e; "("; args; ")"]
-    | Record_literal {path; members} ->
+    | Record_literal {ty; members} ->
         let members =
           let f ((name, (expr, _)), _) =
             String.concat [name; " = "; to_string expr ~indent:(indent + 1)]
           in
           String.concat ~sep:"; " (List.map ~f members)
         in
-        if not (List.is_empty path) then
-          let path = String.concat ~sep:"::" path in
-          String.concat [path; "::"; "{| "; members; " |}"]
-        else String.concat ["{| "; members; " |}"]
+        Type.to_string ty ^ members
     | Record_access ((e, _), member) ->
         String.concat [to_string ~indent:(indent + 1) e; "."; member]
 end
@@ -126,7 +127,12 @@ let to_string self =
           String.concat ["alias "; name; " = "; Type.to_string data; ";"]
       | Type.Definition.User_defined {data} ->
           String.concat
-            ["type "; name; " {\n"; "  data = "; Type.to_string data; ";\n}"]
+            [ "type "
+            ; name
+            ; " {\n"
+            ; "  data = "
+            ; Type.Data.to_string data
+            ; ";\n}" ]
     in
     String.concat ~sep:"\n" (List.map ~f self.types)
   in

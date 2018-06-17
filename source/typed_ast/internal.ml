@@ -63,12 +63,12 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
   let e, sp = e in
   let%bind () = with_span sp in
   match e with
-  | Expr.Unit_literal -> return Type.Unit
-  | Expr.Bool_literal _ -> return Type.Bool
-  | Expr.Integer_literal _ -> return Type.Int
+  | Expr.Unit_literal -> return (Type.Builtin Type.Unit)
+  | Expr.Bool_literal _ -> return (Type.Builtin Type.Bool)
+  | Expr.Integer_literal _ -> return (Type.Builtin Type.Int)
   | Expr.If_else (cond, e1, e2) -> (
       match%bind type_of_expr ctxt decl cond with
-      | Type.Bool ->
+      | Type.Builtin Type.Bool ->
           let%bind t1 = type_of_expr ctxt decl e1 in
           let%bind t2 = type_of_expr ctxt decl e2 in
           if Type.equal t1 t2 then return t1
@@ -77,7 +77,7 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
   | Expr.Call (callee, args) -> (
       let%bind ty_callee = type_of_expr ctxt decl callee in
       match ty_callee with
-      | Type.Function {params; ret_ty} ->
+      | Type.Builtin Type.Function {params; ret_ty} ->
           let%bind ty_args =
             let rec helper = function
               | [] -> return []
@@ -95,11 +95,18 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
                  {expected= params; found= ty_args})
       | ty -> return_err (Error.Call_of_non_function ty) )
   | Expr.Builtin b -> (
-    match b with
-    | Expr.Builtin.Add | Expr.Builtin.Sub | Expr.Builtin.Mul ->
-        return Type.(Function {params= [Int; Int]; ret_ty= Int})
-    | Expr.Builtin.Less_eq ->
-        return Type.(Function {params= [Int; Int]; ret_ty= Bool}) )
+      let open Type in
+      match b with
+      | Expr.Builtin.Add | Expr.Builtin.Sub | Expr.Builtin.Mul ->
+          let func =
+            Function {params= [Builtin Int; Builtin Int]; ret_ty= Builtin Int}
+          in
+          return (Builtin func)
+      | Expr.Builtin.Less_eq ->
+          let func =
+            Function {params= [Builtin Int; Builtin Int]; ret_ty= Builtin Bool}
+          in
+          return (Builtin func) )
   | Expr.Global_function f ->
       let decl, _ = Functions.decl_by_index ctxt.function_context f in
       let rec get_params = function
@@ -108,7 +115,7 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
       in
       let params = get_params decl.Function_declaration.params in
       let ret_ty = decl.Function_declaration.ret_ty in
-      return (Type.Function {params; ret_ty})
+      return (Type.Builtin (Type.Function {params; ret_ty}))
   | Expr.Parameter p ->
       let _, ty = List.nth_exn decl.Function_declaration.params p in
       return ty
@@ -128,19 +135,16 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
                 return ((name, ty) :: rest)
           in
           let%bind members = map members in
-          match ty with
-          | None -> return (Type.Record members)
-          | Some idx ->
-              let ty = Type.User_defined idx in
-              let structural = Type.structural ty ~ctxt:ctxt.type_context in
-              if (Type.equal (Type.Record members) structural) then
-                return ty
-              else
-                failwith "not yet implemented - should be an error" )
+          let ty = Type.User_defined ty in
+          let structural = Type.structural ty ~ctxt:ctxt.type_context in
+          (* TODO: fix this *)
+          if Poly.equal (Type.Structural.Record members) structural then
+            return ty
+          else failwith "not yet implemented" )
   | Expr.Record_access (expr, name) ->
       let%bind ty = type_of_expr ctxt decl expr in
       match Type.structural ty ~ctxt:ctxt.type_context with
-      | Type.Record members -> (
+      | Type.Structural.Record members -> (
           let f (n, _) = String.equal n name in
           match List.find ~f members with
           | Some (_, ty) -> return ty
@@ -198,16 +202,11 @@ let rec type_expression decl (ctxt: t) unt_expr =
           | _ -> return_err (Error.Name_not_found name) )
         | Some idx -> return (T.Global_function idx) )
       | Some (_ty, idx) -> return (T.Parameter idx) )
-  | U.Record_literal {path; members} ->
+  | U.Record_literal {ty; members} ->
       let%bind ty =
-        match path with
-        | [] -> return None
-        | [name] -> (
-            let unt_ty = Untyped_ast.Type.Named name in
-            match Type.type_untyped unt_ty ~ctxt:ctxt.type_context with
-            | Result.Ok Type.User_defined idx -> return (Some idx)
-            | _ -> failwith "blaaagh" )
-        | _ -> failwith "multi-part paths not yet supported"
+        match Type.type_untyped ty ~ctxt:ctxt.type_context with
+        | Result.Ok Type.User_defined idx -> return idx
+        | _ -> failwith "blaaagh"
       in
       let%bind members =
         let rec map (xs: (string * U.t Spanned.t) Spanned.t list) =
@@ -253,7 +252,7 @@ let add_function_declaration (ctxt: t) (unt_func: Untyped_ast.Func.t Spanned.t)
       | Result.Ok ty -> return ty
       | Result.Error Type.Type_not_found name ->
           return_err (Error.Type_not_found name) )
-    | None -> return Type.Unit
+    | None -> return (Type.Builtin Type.Unit)
   in
   (* check for duplicates *)
   let rec check_for_duplicates search = function
@@ -282,9 +281,7 @@ let add_function_definition (ctxt: t) (unt_func: Untyped_ast.Func.t Spanned.t)
     assert (String.equal decl.Function_declaration.name unt_func.F.name) ;
     decl
   in
-  let%bind expr =
-    spanned_bind (type_expression decl ctxt unt_func.F.expr)
-  in
+  let%bind expr = spanned_bind (type_expression decl ctxt unt_func.F.expr) in
   let%bind expr_ty = type_of_expr ctxt decl expr in
   if Type.equal expr_ty decl.Function_declaration.ret_ty then
     return {ctxt with function_definitions= expr :: ctxt.function_definitions}

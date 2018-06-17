@@ -1,10 +1,13 @@
+* recursive types
+  - first - check for it
+  - second - see pointers
+* add pointers
 * LLVM backend
-* check for recursive types
-  - add structural types into the middle end
 * fix issues with incorrect spans
+  - maybe just remove spans? they're kind of a pain
+* externals
 * ADTs + pattern matching
 * linearity
-* externals
 
 * names for stuff
   * tamper - build

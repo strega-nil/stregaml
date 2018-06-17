@@ -1,14 +1,12 @@
 type V2 {
-  data = {|
+  data = record {
     x0: int;
     x1: int;
-  |};
+  };
 }
 
-/* note: :: may eventually become . */
-
 func map(p: V2, f: func(int) -> int) -> V2 {
-  V2::{| x0 = f(p.x0); x1 = f(p.x1) |}
+  V2::{ x0 = f(p.x0); x1 = f(p.x1) }
 }
 
 func double(i: int) -> int {
@@ -16,5 +14,6 @@ func double(i: int) -> int {
 }
 
 func main() -> V2 {
-  map(V2::{| x0 = 2014; x1 = 9 |}, double)
+  //let v = V2::{| x0 = 2014; x1 = 9 |};
+  map(V2::{ x0 = 2014; x1 = 9}, double)
 }

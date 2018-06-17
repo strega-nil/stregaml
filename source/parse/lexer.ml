@@ -97,9 +97,10 @@ let lex_ident fst sp lex =
         | "func" -> kw Token.Keyword.Func
         | "type" -> kw Token.Keyword.Type
         | "data" -> kw Token.Keyword.Data
+        | "record" -> kw Token.Keyword.Record
         | "alias" -> kw Token.Keyword.Alias
+        | "let" -> kw Token.Keyword.Let
         | "_" -> kw Token.Keyword.Underscore
-        | "let" as res -> (Error (Error.Reserved_token res), sp)
         | "variant" as res -> (Error (Error.Reserved_token res), sp)
         | id -> (Ok (Token.Identifier id), sp)
   in
@@ -225,17 +226,8 @@ let rec next_token lex =
   match next_ch lex with
   | Some ('(', sp) -> (Ok Token.Open_paren, sp)
   | Some (')', sp) -> (Ok Token.Close_paren, sp)
-  | Some ('{', sp) -> (
-    match peek_ch lex with
-    | Some ('|', sp') ->
-        eat_ch lex ; (Ok Token.Open_record, Spanned.Span.union sp sp')
-    | _ -> (Ok Token.Open_brace, sp) )
+  | Some ('{', sp) -> (Ok Token.Open_brace, sp)
   | Some ('}', sp) -> (Ok Token.Close_brace, sp)
-  | Some ('|', sp) -> (
-    match peek_ch lex with
-    | Some ('}', sp') ->
-        eat_ch lex ; (Ok Token.Close_record, Spanned.Span.union sp sp')
-    | _ -> lex_operator '|' sp lex )
   | Some ('[', sp) -> (Error (Error.Reserved_token "["), sp)
   | Some (']', sp) -> (Error (Error.Reserved_token "]"), sp)
   | Some (':', sp) -> (

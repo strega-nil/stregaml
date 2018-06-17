@@ -12,17 +12,17 @@ module Context : sig
     -> (t, error) Result.t
 end
 
-type t =
-  | Unit
-  | Bool
-  | Int
-  | Record of (string * t) list
-  | Function of {params: t list; ret_ty: t}
-  | User_defined of Context.index
+type builtin = Unit | Bool | Int | Function of {params: t list; ret_ty: t}
+
+and t = Builtin of builtin | User_defined of Context.index
+
+module Structural : sig
+  type nonrec t = Builtin of builtin | Record of (string * t) list
+end
 
 type make_error = Type_not_found of string
 
-val structural : t -> ctxt:Context.t -> t
+val structural : t -> ctxt:Context.t -> Structural.t
 
 val equal : t -> t -> bool
 
