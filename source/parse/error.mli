@@ -5,6 +5,7 @@ module Expected : sig
     | Identifier
     | Variable_decl
     | Type
+    | Data
     | Expression
     | Expression_follow
     | Path_expression

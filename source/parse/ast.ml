@@ -20,9 +20,11 @@ module Type = struct
     type nonrec t = Record of (string * t) Spanned.t list
 
     let to_string (Record members) =
-      let f ((name, ty), _) = String.concat [name; ": "; to_string ty; "\n"] in
-      let members = String.concat ~sep:"; " (List.map members ~f) in
-      String.concat ["record {\n"; members; "   }"]
+      let f ((name, ty), _) =
+        String.concat ["\n    "; name; ": "; to_string ty; ";"]
+      in
+      let members = String.concat (List.map members ~f) in
+      String.concat ["record {"; members; "\n  }"]
   end
 
   module Definition = struct
@@ -81,7 +83,7 @@ module Expr = struct
           in
           String.concat ~sep:"; " (List.map ~f members)
         in
-        Type.to_string ty ^ members
+        String.concat [Type.to_string ty; "::{ "; members; " }"]
     | Record_access ((e, _), member) ->
         String.concat [to_string ~indent:(indent + 1) e; "."; member]
 end

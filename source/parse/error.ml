@@ -5,6 +5,7 @@ module Expected = struct
     | Identifier
     | Variable_decl
     | Type
+    | Data
     | Expression
     | Expression_follow
     | Path_expression
@@ -15,6 +16,7 @@ module Expected = struct
     | Identifier -> "an identifier"
     | Variable_decl -> "a variable declaration"
     | Type -> "the start of a type"
+    | Data -> "either `record` or `variant`"
     | Expression -> "the start of an expression"
     | Expression_follow ->
         "an operator, semicolon, comma, dot, or closing brace (`}`, `)`)"

@@ -75,7 +75,7 @@ let rec equal l r =
   | _ -> false
 
 
-let rec structural ty ~(ctxt: Context.t) =
+let structural ty ~(ctxt: Context.t) =
   match ty with
   | Builtin b -> Structural.Builtin b
   | User_defined idx ->
@@ -83,7 +83,14 @@ let rec structural ty ~(ctxt: Context.t) =
       let U.Definition.({kind; _}), _ = List.nth_exn ctxt idx in
       match kind with
       | U.Definition.Alias _ -> assert false
-      | U.Definition.User_defined _ -> failwith "unimplemented"
+      | U.Definition.User_defined {data} ->
+        match data with U.Data.Record members ->
+          let f ((name, ty), _) =
+            match type_untyped ty ~ctxt with
+            | Result.Ok o -> (name, o)
+            | Result.Error _ -> failwith "this should fail somewhere else"
+          in
+          Structural.Record (List.map ~f members)
 
 
 let rec to_string ty ~(ctxt: Context.t) =
