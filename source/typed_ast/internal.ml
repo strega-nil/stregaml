@@ -53,12 +53,11 @@ end = struct
 end
 
 (* also typechecks *)
-let rec type_of_block (ctxt: t) (decl: Function_declaration.t)
-    (e: Expr.block Spanned.t) : Type.t result =
+let rec type_of_block (_ctxt: t) (_decl: Function_declaration.t)
+    (_blk: Expr.block Spanned.t) : Type.t result =
   assert false
 
-
-let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
+and type_of_expr (ctxt: t) (decl: Function_declaration.t)
     (e: Expr.t Spanned.t) : Type.t result =
   let e, sp = e in
   let%bind () = with_span sp in
@@ -107,6 +106,7 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
             Function {params= [Builtin Int; Builtin Int]; ret_ty= Builtin Bool}
           in
           return (Builtin func) )
+  | Expr.Block blk -> type_of_block ctxt decl blk
   | Expr.Global_function f ->
       let decl, _ = Functions.decl_by_index ctxt.function_context f in
       let rec get_params = function
@@ -163,7 +163,27 @@ let find_parameter name lst =
 
 
 (* NOTE(ubsan): this does *not* do typechecking *)
-let rec type_block decl (ctxt: t) unt_blk = assert false
+let rec type_block decl (ctxt: t) unt_blk =
+  let module U = Untyped_ast in
+  let module T = Ast in
+  let rec type_stmts = function
+    | [] -> return []
+    | (s, _) :: xs ->
+        match s with
+        | U.Stmt.Expression e ->
+            let%bind e = type_expression decl ctxt e in
+            let%bind xs = type_stmts xs in
+            return (T.Stmt.Expression e :: xs)
+  in
+  let U.Expr.{stmts; expr}, sp = unt_blk in
+  let%bind stmts = type_stmts stmts in
+  let%bind expr = match expr with
+  | Some e ->
+      let%bind e = type_expression decl ctxt e in
+      return (Some e)
+  | None -> return None
+  in
+  Ok T.Expr.{stmts; expr}, sp
 
 and type_expression decl (ctxt: t) unt_expr =
   let module U = Untyped_ast.Expr in
@@ -204,6 +224,9 @@ and type_expression decl (ctxt: t) unt_expr =
           | _ -> return_err (Error.Name_not_found name) )
         | Some idx -> return (T.Global_function idx) )
       | Some (_ty, idx) -> return (T.Parameter idx) )
+  | U.Block blk ->
+      let%bind blk = spanned_bind (type_block decl ctxt blk) in
+      return (Expr.Block blk)
   | U.Record_literal {ty; members} ->
       let%bind ty =
         match Type.type_untyped ty ~ctxt:ctxt.type_context with

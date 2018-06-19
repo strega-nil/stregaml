@@ -17,7 +17,7 @@ and Expr : sig
     | Integer_literal of int
     | If_else of t Spanned.t * block Spanned.t * block Spanned.t
     | Call of t Spanned.t * t Spanned.t list
-    | Block of block
+    | Block of block Spanned.t
     | Record_literal of
         { ty: Type.Context.index
         ; members: (string * t Spanned.t) Spanned.t list }

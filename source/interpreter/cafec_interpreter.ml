@@ -119,7 +119,7 @@ let call ctxt idx args =
           ret
       | _ -> assert false )
     | Expr.Builtin b -> Value.Builtin b
-    | Expr.Block b -> eval_block ctxt args b
+    | Expr.Block (b, _) -> eval_block ctxt args b
     | Expr.Global_function i -> Value.Function i
     | Expr.Record_literal {members; _} ->
         let members =

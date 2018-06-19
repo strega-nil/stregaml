@@ -275,15 +275,17 @@ and parse_block_no_open (parser: t) : Ast.Expr.block result =
   | _ ->
       match%bind spanned_bind (maybe_parse_expression parser) with
       | Some e, sp -> (
-          match%bind next_token parser with
-          | Token.Close_brace ->
+          match%bind spanned_bind (next_token parser) with
+          | Token.Close_brace, _ ->
               return Ast.Expr.{stmts= []; expr= Some (e, sp)}
-          | Token.Semicolon ->
+          | Token.Semicolon, semi_sp ->
               let%bind blk = parse_block_no_open parser in
+              let full_sp = Spanned.Span.union sp semi_sp in
+              let stmt = Ast.Stmt.Expression (e, sp), full_sp in
               return
                 Ast.Expr.
-                  {blk with stmts= (Ast.Stmt.Expression e, sp) :: blk.stmts}
-          | tok ->
+                  {blk with stmts= stmt :: blk.stmts}
+          | tok, _ ->
               return_err
                 (Error.Unexpected_token (Error.Expected.Statement_end, tok)) )
       | None, _ ->
