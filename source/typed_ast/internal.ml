@@ -1,33 +1,28 @@
 module Span = Spanned.Span
 module Untyped_ast = Cafec_parse.Ast
+module Expr = Ast.Expr
 open Spanned.Result.Monad
 
 module Function_declaration = struct
   type t = {name: string; params: (string * Type.t) list; ret_ty: Type.t}
 end
 
-module Function_context = struct
-  type t = Function_declaration.t Spanned.t list
-end
-
-module Function_definitions = struct
-  type t = Expr.t Spanned.t list
-end
-
 type t =
   { type_context: Type.Context.t
-  ; function_context: Function_context.t
-  ; function_definitions: Function_definitions.t }
+  ; function_context: Function_declaration.t Spanned.t list
+  ; function_definitions: Expr.block Spanned.t list }
 
 type 'a result = ('a, Error.t) Spanned.Result.t
 
 module Functions : sig
-  val index_by_name : Function_context.t -> string -> int option
+  val index_by_name :
+    Function_declaration.t Spanned.t list -> string -> int option
 
   val decl_by_index :
-    Function_context.t -> int -> Function_declaration.t Spanned.t
+    Function_declaration.t Spanned.t list -> int
+    -> Function_declaration.t Spanned.t
 
-  val expr_by_index : Function_definitions.t -> int -> Expr.t Spanned.t
+  val expr_by_index : Expr.block Spanned.t list -> int -> Expr.block Spanned.t
 end = struct
   let index_by_name ctxt search =
     let rec helper n = function
@@ -58,6 +53,11 @@ end = struct
 end
 
 (* also typechecks *)
+let rec type_of_block (ctxt: t) (decl: Function_declaration.t)
+    (e: Expr.block Spanned.t) : Type.t result =
+  assert false
+
+
 let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
     (e: Expr.t Spanned.t) : Type.t result =
   let e, sp = e in
@@ -69,8 +69,8 @@ let rec type_of_expr (ctxt: t) (decl: Function_declaration.t)
   | Expr.If_else (cond, e1, e2) -> (
       match%bind type_of_expr ctxt decl cond with
       | Type.Builtin Type.Bool ->
-          let%bind t1 = type_of_expr ctxt decl e1 in
-          let%bind t2 = type_of_expr ctxt decl e2 in
+          let%bind t1 = type_of_block ctxt decl e1 in
+          let%bind t2 = type_of_block ctxt decl e2 in
           if Type.equal t1 t2 then return t1
           else return_err (Error.If_branches_of_differing_type (t1, t2))
       | ty -> return_err (Error.If_non_bool ty) )
@@ -162,8 +162,10 @@ let find_parameter name lst =
   helper name lst 0
 
 
-(* NOTE(ubsan): this does *not* typecheck *)
-let rec type_expression decl (ctxt: t) unt_expr =
+(* NOTE(ubsan): this does *not* do typechecking *)
+let rec type_block decl (ctxt: t) unt_blk = assert false
+
+and type_expression decl (ctxt: t) unt_expr =
   let module U = Untyped_ast.Expr in
   let module T = Expr in
   let unt_expr, sp = unt_expr in
@@ -174,8 +176,8 @@ let rec type_expression decl (ctxt: t) unt_expr =
   | U.Integer_literal i -> return (T.Integer_literal i)
   | U.If_else (cond, thn, els) ->
       let%bind cond = spanned_bind (type_expression decl ctxt cond) in
-      let%bind thn = spanned_bind (type_expression decl ctxt thn) in
-      let%bind els = spanned_bind (type_expression decl ctxt els) in
+      let%bind thn = spanned_bind (type_block decl ctxt thn) in
+      let%bind els = spanned_bind (type_block decl ctxt els) in
       return (T.If_else (cond, thn, els))
   | U.Call (callee, args) ->
       let%bind callee = spanned_bind (type_expression decl ctxt callee) in
@@ -281,14 +283,14 @@ let add_function_definition (ctxt: t) (unt_func: Untyped_ast.Func.t Spanned.t)
     assert (String.equal decl.Function_declaration.name unt_func.F.name) ;
     decl
   in
-  let%bind expr = spanned_bind (type_expression decl ctxt unt_func.F.expr) in
-  let%bind expr_ty = type_of_expr ctxt decl expr in
-  if Type.equal expr_ty decl.Function_declaration.ret_ty then
-    return {ctxt with function_definitions= expr :: ctxt.function_definitions}
+  let%bind body = spanned_bind (type_block decl ctxt unt_func.F.body) in
+  let%bind body_ty = type_of_block ctxt decl body in
+  if Type.equal body_ty decl.Function_declaration.ret_ty then
+    return {ctxt with function_definitions= body :: ctxt.function_definitions}
   else
     return_err
       (Error.Return_type_mismatch
-         {expected= decl.Function_declaration.ret_ty; found= expr_ty})
+         {expected= decl.Function_declaration.ret_ty; found= body_ty})
 
 
 let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =

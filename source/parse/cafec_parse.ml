@@ -267,17 +267,36 @@ and parse_argument_list (parser: t) : Ast.Expr.t Spanned.t list result =
   return args
 
 
-and parse_block (parser: t) : Ast.Expr.t result =
+and parse_block_no_open (parser: t) : Ast.Expr.block result =
+  match%bind peek_token parser with
+  | Token.Keyword Token.Keyword.Let ->
+      eat_token parser ;
+      assert false
+  | _ ->
+      match%bind spanned_bind (maybe_parse_expression parser) with
+      | Some e, sp -> (
+          match%bind next_token parser with
+          | Token.Close_brace ->
+              return Ast.Expr.{stmts= []; expr= Some (e, sp)}
+          | Token.Semicolon ->
+              let%bind blk = parse_block_no_open parser in
+              return
+                Ast.Expr.
+                  {blk with stmts= (Ast.Stmt.Expression e, sp) :: blk.stmts}
+          | tok ->
+              return_err
+                (Error.Unexpected_token (Error.Expected.Statement_end, tok)) )
+      | None, _ ->
+          match%bind next_token parser with
+          | Token.Close_brace -> return Ast.Expr.{stmts= []; expr= None}
+          | tok ->
+              return_err
+                (Error.Unexpected_token (Error.Expected.Expression, tok))
+
+
+and parse_block (parser: t) : Ast.Expr.block result =
   let%bind () = get_specific parser Token.Open_brace in
-  match%bind maybe_parse_expression parser with
-  | Some e ->
-      let%bind () = get_specific parser Token.Close_brace in
-      return e
-  | None ->
-      match%bind next_token parser with
-      | Token.Close_brace -> return Ast.Expr.Unit_literal
-      | tok ->
-          return_err (Error.Unexpected_token (Error.Expected.Expression, tok))
+  parse_block_no_open parser
 
 
 and parse_user_defined_type (parser: t) : Ast.Type.Definition.t result =
@@ -298,8 +317,8 @@ let parse_item (parser: t) : (Item.t option, Error.t) Spanned.Result.t =
       let%bind name = get_ident parser in
       let%bind params = parse_parameter_list parser in
       let%bind ret_ty = parse_return_type parser in
-      let%bind expr = spanned_bind (parse_block parser) in
-      let func = Ast.Func.{name; params; ret_ty; expr} in
+      let%bind body = spanned_bind (parse_block parser) in
+      let func = Ast.Func.{name; params; ret_ty; body} in
       return (Some (Item.Func func))
   | Token.Keyword Token.Keyword.Alias ->
       let%bind name = get_ident parser in

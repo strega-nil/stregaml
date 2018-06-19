@@ -14,6 +14,6 @@ func double(i: int) -> int {
 }
 
 func main() -> V2 {
-  //let v = V2::{| x0 = 2014; x1 = 9 |};
-  map(V2::{ x0 = 2014; x1 = 9}, double)
+  V2::{ x0 = 2014; x1 = 9 };
+  ()
 }

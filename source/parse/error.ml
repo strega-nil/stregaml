@@ -8,6 +8,7 @@ module Expected = struct
     | Data
     | Expression
     | Expression_follow
+    | Statement_end
     | Path_expression
 
   let to_string = function
@@ -20,6 +21,7 @@ module Expected = struct
     | Expression -> "the start of an expression"
     | Expression_follow ->
         "an operator, semicolon, comma, dot, or closing brace (`}`, `)`)"
+    | Statement_end -> "a closing brace or semicolon"
     | Path_expression ->
         "the continuation of a path, or an identifier or record literal"
 end

@@ -8,6 +8,7 @@ module Expected : sig
     | Data
     | Expression
     | Expression_follow
+    | Statement_end
     | Path_expression
 
   val to_string : t -> string

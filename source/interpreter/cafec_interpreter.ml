@@ -6,7 +6,7 @@ module Expr = Ast.Expr
   They should be immutable,
   but ocaml doesn't have immutable arrays
 *)
-type t = {funcs: (string * Expr.t) array}
+type t = {funcs: (string * Expr.block) array}
 
 module Value = struct
   type function_index = int
@@ -76,14 +76,17 @@ let get_function ctxt ~name =
 
 
 let call ctxt idx args =
-  let rec eval ctxt args = function
+  let rec eval_block ctxt args Expr.({stmts; expr}) =
+    assert (List.is_empty stmts) ;
+    match expr with Some e -> eval ctxt args e | None -> Value.Unit
+  and eval ctxt args = function
     | Expr.Unit_literal -> Value.Unit
     | Expr.Bool_literal b -> Value.Bool b
     | Expr.Integer_literal n -> Value.Integer n
     | Expr.If_else ((cond, _), (thn, _), (els, _)) -> (
       match eval ctxt args cond with
-      | Value.Bool true -> eval ctxt args thn
-      | Value.Bool false -> eval ctxt args els
+      | Value.Bool true -> eval_block ctxt args thn
+      | Value.Bool false -> eval_block ctxt args els
       | _ -> assert false )
     | Expr.Parameter i -> List.nth_exn args i
     | Expr.Call ((e, _), args') -> (
@@ -91,7 +94,7 @@ let call ctxt idx args =
       | Value.Function func ->
           let _, expr = (ctxt.funcs).(func) in
           let args' = List.map args' ~f:(fun (e, _) -> eval ctxt args e) in
-          eval ctxt args' expr
+          eval_block ctxt args' expr
       | Value.Builtin b ->
           let (lhs, _), (rhs, _) =
             match args' with [lhs; rhs] -> (lhs, rhs) | _ -> assert false
@@ -116,6 +119,7 @@ let call ctxt idx args =
           ret
       | _ -> assert false )
     | Expr.Builtin b -> Value.Builtin b
+    | Expr.Block b -> eval_block ctxt args b
     | Expr.Global_function i -> Value.Function i
     | Expr.Record_literal {members; _} ->
         let members =
@@ -132,5 +136,5 @@ let call ctxt idx args =
             e
         | _ -> assert false
   in
-  let _, expr = (ctxt.funcs).(idx) in
-  eval ctxt args expr
+  let _, blk = (ctxt.funcs).(idx) in
+  eval_block ctxt args blk

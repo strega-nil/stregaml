@@ -102,6 +102,8 @@ let lex_ident fst sp lex =
         | "let" -> kw Token.Keyword.Let
         | "_" -> kw Token.Keyword.Underscore
         | "variant" as res -> (Error (Error.Reserved_token res), sp)
+        | "opaque" as res -> (Error (Error.Reserved_token res), sp)
+        | "public" as res -> (Error (Error.Reserved_token res), sp)
         | id -> (Ok (Token.Identifier id), sp)
   in
   helper sp

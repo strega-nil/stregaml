@@ -1,5 +1,5 @@
 module Error = Error
-module Expr = Expr
+module Expr = Ast.Expr
 module Type = Type
 module Internal = Internal
 module Function_declaration = Internal.Function_declaration

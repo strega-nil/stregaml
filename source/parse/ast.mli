@@ -20,13 +20,22 @@ module Type : sig
   end
 end
 
-module Expr : sig
-  type t =
+module rec Stmt : sig
+  type t = Expression of Expr.t
+
+  val to_string : t -> indent:int -> string
+end
+
+and Expr : sig
+  type block = {stmts: Stmt.t Spanned.t list; expr: t Spanned.t option}
+
+  and t =
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
-    | If_else of t Spanned.t * t Spanned.t * t Spanned.t
+    | If_else of t Spanned.t * block Spanned.t * block Spanned.t
     | Variable of {path: string list; name: string}
+    | Block of block
     | Call of t Spanned.t * t Spanned.t list
     | Record_literal of
         { ty: Type.t
@@ -34,6 +43,8 @@ module Expr : sig
     | Record_access of t Spanned.t * string
 
   val to_string : t -> indent:int -> string
+
+  val block_to_string : block -> indent:int -> string
 end
 
 module Func : sig
@@ -41,7 +52,7 @@ module Func : sig
     { name: string
     ; params: (string * Type.t) Spanned.t list
     ; ret_ty: Type.t Spanned.t option
-    ; expr: Expr.t Spanned.t }
+    ; body: Expr.block Spanned.t }
 
   val to_string : t -> string
 end

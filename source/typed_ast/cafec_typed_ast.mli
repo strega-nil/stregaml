@@ -1,5 +1,5 @@
 module Error = Error
-module Expr = Expr
+module Expr = Ast.Expr
 module Type = Type
 module Function_declaration = Internal.Function_declaration
 
@@ -22,4 +22,4 @@ val type_seq : t -> type_def spanned seq
 val number_of_functions : t -> int
 
 val function_seq :
-  t -> (Function_declaration.t Spanned.t * Expr.t Spanned.t) Sequence.t
+  t -> (Function_declaration.t Spanned.t * Expr.block Spanned.t) Sequence.t

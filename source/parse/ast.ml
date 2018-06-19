@@ -34,13 +34,46 @@ module Type = struct
   end
 end
 
-module Expr = struct
-  type t =
+module rec Stmt : sig
+  type t = Expression of Expr.t
+
+  val to_string : t -> indent:int -> string
+end = struct
+  type t = Expression of Expr.t
+
+  let to_string self ~indent =
+    match self with Expression e -> Expr.to_string ~indent e
+end
+
+and Expr : sig
+  type block = {stmts: Stmt.t Spanned.t list; expr: t Spanned.t option}
+
+  and t =
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
-    | If_else of t Spanned.t * t Spanned.t * t Spanned.t
+    | If_else of t Spanned.t * block Spanned.t * block Spanned.t
     | Variable of {path: string list; name: string}
+    | Block of block
+    | Call of t Spanned.t * t Spanned.t list
+    | Record_literal of
+        { ty: Type.t
+        ; members: (string * t Spanned.t) Spanned.t list }
+    | Record_access of t Spanned.t * string
+
+  val to_string : t -> indent:int -> string
+
+  val block_to_string : block -> indent:int -> string
+end = struct
+  type block = {stmts: Stmt.t Spanned.t list; expr: t Spanned.t option}
+
+  and t =
+    | Unit_literal
+    | Bool_literal of bool
+    | Integer_literal of int
+    | If_else of t Spanned.t * block Spanned.t * block Spanned.t
+    | Variable of {path: string list; name: string}
+    | Block of block
     | Call of t Spanned.t * t Spanned.t list
     | Record_literal of
         { ty: Type.t
@@ -57,19 +90,13 @@ module Expr = struct
         let helper x = to_string x ~indent:(indent + 1) in
         String.concat
           [ "if ("
-          ; helper cond
-          ; ") {\n"
-          ; indent_to_string (indent + 1)
-          ; helper thn
-          ; "\n"
-          ; indent_to_string indent
-          ; "} else {\n"
-          ; indent_to_string (indent + 1)
-          ; helper els
-          ; "\n"
-          ; indent_to_string indent
-          ; "}" ]
+          ; to_string cond ~indent:(indent + 1)
+          ; ") "
+          ; block_to_string thn ~indent
+          ; " else "
+          ; block_to_string els ~indent ]
     | Variable {path; name} -> String.concat ~sep:"::" (path @ [name])
+    | Block blk -> block_to_string blk ~indent
     | Call ((e, _), args) ->
         let args =
           let f (x, _) = to_string x ~indent:(indent + 1) in
@@ -86,6 +113,24 @@ module Expr = struct
         String.concat [Type.to_string ty; "::{ "; members; " }"]
     | Record_access ((e, _), member) ->
         String.concat [to_string ~indent:(indent + 1) e; "."; member]
+
+  and block_to_string {stmts; expr} ~indent =
+    let stmts =
+      let f (s, _) =
+        String.concat
+          [ indent_to_string (indent + 1)
+          ; Stmt.to_string s ~indent:(indent + 1)
+          ; ";\n" ]
+      in
+      String.concat (List.map stmts ~f)
+    in
+    let expr =
+      match expr with
+      | None -> ""
+      | Some (e, _) ->
+          indent_to_string (indent + 1) ^ to_string e ~indent:(indent + 1)
+    in
+    String.concat ["{\n"; stmts; expr; indent_to_string indent; "\n}"]
 end
 
 module Func = struct
@@ -93,7 +138,7 @@ module Func = struct
     { name: string
     ; params: (string * Type.t) Spanned.t list
     ; ret_ty: Type.t Spanned.t option
-    ; expr: Expr.t Spanned.t }
+    ; body: Expr.block Spanned.t }
 
   let to_string self =
     let parameters =
@@ -112,11 +157,10 @@ module Func = struct
       ; parameters
       ; ")"
       ; ret_ty
-      ; " {\n"
-      ; indent_to_string 1
-      ; (let expr, _ = self.expr in
-         Expr.to_string ~indent:1 expr)
-      ; "\n}\n" ]
+      ; " "
+      ; (let body, _ = self.body in
+         Expr.block_to_string ~indent:0 body)
+      ; "\n" ]
 end
 
 type t = {funcs: Func.t Spanned.t list; types: Type.Definition.t Spanned.t list}
