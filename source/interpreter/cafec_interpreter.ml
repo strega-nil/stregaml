@@ -1,5 +1,6 @@
 module Ast = Cafec_typed_ast
 module Expr = Ast.Expr
+module Stmt = Ast.Stmt
 
 (*
   NOTE(ubsan): NEVER modify these arrays.
@@ -77,8 +78,16 @@ let get_function ctxt ~name =
 
 let call ctxt idx args =
   let rec eval_block ctxt args Expr.({stmts; expr}) =
-    assert (List.is_empty stmts) ;
-    match expr with Some e -> eval ctxt args e | None -> Value.Unit
+    let rec helper = function
+      | [] -> ()
+      | (stmt, _) :: xs ->
+          match stmt with
+          | Stmt.Expression e ->
+              let _ = eval ctxt args e in
+              helper xs
+    in
+    helper stmts ;
+    match expr with Some (e, _) -> eval ctxt args e | None -> Value.Unit
   and eval ctxt args = function
     | Expr.Unit_literal -> Value.Unit
     | Expr.Bool_literal b -> Value.Bool b

@@ -13,7 +13,7 @@ func double(i: int) -> int {
   MUL(i, 2)
 }
 
-func main() -> V2 {
+func main() -> unit {
   V2::{ x0 = 2014; x1 = 9 };
   ()
 }

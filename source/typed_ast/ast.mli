@@ -9,7 +9,7 @@ and Expr : sig
     val equal : t -> t -> bool
   end
 
-  type block = {stmts: Stmt.t list; expr: t option}
+  type block = {stmts: Stmt.t Spanned.t list; expr: t Spanned.t option}
 
   and t =
     | Unit_literal

@@ -53,9 +53,12 @@ end = struct
 end
 
 (* also typechecks *)
-let rec type_of_block (_ctxt: t) (_decl: Function_declaration.t)
-    (_blk: Expr.block Spanned.t) : Type.t result =
-  assert false
+let rec type_of_block (ctxt: t) (decl: Function_declaration.t)
+    (blk: Expr.block Spanned.t) : Type.t result =
+  let (blk, _) = blk in
+  match blk.Expr.expr with
+  | None -> return (Type.Builtin Type.Unit)
+  | Some e -> type_of_expr ctxt decl e
 
 and type_of_expr (ctxt: t) (decl: Function_declaration.t)
     (e: Expr.t Spanned.t) : Type.t result =
@@ -168,18 +171,18 @@ let rec type_block decl (ctxt: t) unt_blk =
   let module T = Ast in
   let rec type_stmts = function
     | [] -> return []
-    | (s, _) :: xs ->
+    | (s, sp) :: xs ->
         match s with
         | U.Stmt.Expression e ->
             let%bind e = type_expression decl ctxt e in
             let%bind xs = type_stmts xs in
-            return (T.Stmt.Expression e :: xs)
+            return ((T.Stmt.Expression e, sp) :: xs)
   in
   let U.Expr.{stmts; expr}, sp = unt_blk in
   let%bind stmts = type_stmts stmts in
   let%bind expr = match expr with
   | Some e ->
-      let%bind e = type_expression decl ctxt e in
+      let%bind e = spanned_bind (type_expression decl ctxt e) in
       return (Some e)
   | None -> return None
   in
