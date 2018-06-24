@@ -35,11 +35,21 @@ module Type = struct
 end
 
 module rec Stmt : sig
-  type t = Expression of Expr.t Spanned.t
+  type let_binding =
+    { name: string Spanned.t
+    ; ty: Type.t Spanned.t option
+    ; expr: Expr.t Spanned.t }
+
+  type t = Expression of Expr.t Spanned.t | Let of let_binding
 
   val to_string : t -> indent:int -> string
 end = struct
-  type t = Expression of Expr.t Spanned.t
+  type let_binding =
+    { name: string Spanned.t
+    ; ty: Type.t Spanned.t option
+    ; expr: Expr.t Spanned.t }
+
+  type t = Expression of Expr.t Spanned.t | Let of let_binding
 
   let to_string self ~indent =
     match self with Expression (e, _) -> Expr.to_string ~indent e

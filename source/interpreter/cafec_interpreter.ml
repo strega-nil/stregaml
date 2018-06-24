@@ -81,10 +81,9 @@ let call ctxt idx args =
     let rec helper = function
       | [] -> ()
       | (stmt, _) :: xs ->
-          match stmt with
-          | Stmt.Expression e ->
-              let _ = eval ctxt args e in
-              helper xs
+        match stmt with Stmt.Expression e ->
+          let _ = eval ctxt args e in
+          helper xs
     in
     helper stmts ;
     match expr with Some (e, _) -> eval ctxt args e | None -> Value.Unit

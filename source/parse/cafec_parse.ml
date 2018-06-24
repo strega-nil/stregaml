@@ -231,10 +231,11 @@ and parse_data (parser: t) : Ast.Type.Data.t result =
   | tok -> return_err (Error.Unexpected_token (Error.Expected.Data, tok))
 
 
-and _maybe_parse_type_annotation (parser: t) : Ast.Type.t option result =
+and maybe_parse_type_annotation (parser: t)
+    : Ast.Type.t Spanned.t option result =
   match%bind maybe_get_specific parser Token.Colon with
   | Some () ->
-      let%bind ty = parse_type parser in
+      let%bind ty = spanned_bind (parse_type parser) in
       return (Some ty)
   | None -> return None
 
@@ -271,7 +272,18 @@ and parse_block_no_open (parser: t) : Ast.Expr.block result =
   match%bind peek_token parser with
   | Token.Keyword Token.Keyword.Let ->
       eat_token parser ;
-      assert false
+      let%bind name, name_sp = spanned_bind (get_ident parser) in
+      let name = (name, name_sp) in
+      let%bind ty = maybe_parse_type_annotation parser in
+      let%bind () = get_specific parser Token.Equals in
+      let%bind expr = spanned_bind (parse_expression parser) in
+      let%bind (), semi_sp =
+        spanned_bind (get_specific parser Token.Semicolon)
+      in
+      let%bind blk = parse_block_no_open parser in
+      let full_sp = Spanned.Span.union name_sp semi_sp in
+      let stmt = (Ast.Stmt.(Let {name; ty; expr}), full_sp) in
+      return Ast.Expr.{blk with stmts= stmt :: blk.stmts}
   | _ ->
       match%bind spanned_bind (maybe_parse_expression parser) with
       | Some e, sp -> (
@@ -281,10 +293,8 @@ and parse_block_no_open (parser: t) : Ast.Expr.block result =
           | Token.Semicolon, semi_sp ->
               let%bind blk = parse_block_no_open parser in
               let full_sp = Spanned.Span.union sp semi_sp in
-              let stmt = Ast.Stmt.Expression (e, sp), full_sp in
-              return
-                Ast.Expr.
-                  {blk with stmts= stmt :: blk.stmts}
+              let stmt = (Ast.Stmt.Expression (e, sp), full_sp) in
+              return Ast.Expr.{blk with stmts= stmt :: blk.stmts}
           | tok, _ ->
               return_err
                 (Error.Unexpected_token (Error.Expected.Statement_end, tok)) )
