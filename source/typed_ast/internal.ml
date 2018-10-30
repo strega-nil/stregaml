@@ -173,10 +173,12 @@ let rec type_block decl (ctxt: t) unt_blk =
   let rec type_stmts = function
     | [] -> return []
     | (s, sp) :: xs ->
-      match s with U.Stmt.Expression e ->
+      match s with
+      | U.Stmt.Expression e ->
         let%bind e = type_expression decl ctxt e in
         let%bind xs = type_stmts xs in
         return ((T.Stmt.Expression e, sp) :: xs)
+      | _ -> assert false
   in
   let U.Expr.({stmts; expr}), sp = unt_blk in
   let%bind stmts = type_stmts stmts in

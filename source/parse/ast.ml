@@ -52,7 +52,18 @@ end = struct
   type t = Expression of Expr.t Spanned.t | Let of let_binding
 
   let to_string self ~indent =
-    match self with Expression (e, _) -> Expr.to_string ~indent e
+    match self with
+    | Expression (e, _) -> Expr.to_string ~indent e
+    | Let {name; ty; expr} ->
+      let (name, _) = name in
+      let ty = match ty with Some (ty, _) -> Type.to_string ty | None -> "" in
+      let (expr, _) = expr in
+      String.concat
+        [ name
+        ; ": "
+        ; ty
+        ; " = "
+        ; Expr.to_string expr ~indent ]
 end
 
 and Expr : sig
