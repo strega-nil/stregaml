@@ -40,7 +40,7 @@ let get_parse_ast args =
   let program = In.with_file args.filename ~f:In.input_all in
   match Parse.parse program with
   | Error e, sp ->
-      Out.eprintf "Error: %s\n"
+      Out.eprintf "Parse error: %s\n"
         (Spanned.to_string ~f:Parse.Error.to_string (e, sp)) ;
       Caml.exit 1
   | Ok parse_ast, _ ->
@@ -53,7 +53,7 @@ let get_typed_ast args =
   match Typed_ast.make parse_ast with
   | Error (e, ctxt), sp ->
       let f e = Typed_ast.Error.to_string e ~ctxt in
-      Out.eprintf "Error: %s\n" (Spanned.to_string ~f (e, sp)) ;
+      Out.eprintf "Typing error: %s\n" (Spanned.to_string ~f (e, sp)) ;
       Caml.exit 1
   | Ok ty_ast, _ -> ty_ast
 
@@ -71,7 +71,8 @@ let interpret ty_ast _args =
 
 let main args =
   let typed_ast = get_typed_ast args in
-  if args.interpreted then interpret typed_ast args else assert false
+  if args.interpreted then interpret typed_ast args
+  else failwith "compiler backend doesn't exist yet"
 
 let () =
   let args =

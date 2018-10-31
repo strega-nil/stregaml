@@ -75,16 +75,19 @@ let get_function ctxt ~name =
 
 let call ctxt idx args =
   let rec eval_block ctxt locals Expr.({stmts; expr}) =
-    let rec helper = function
-      | [] -> ()
+    let rec helper locals = function
+      | [] -> locals
       | (stmt, _) :: xs -> (
         match stmt with
         | Stmt.Expression e ->
             let _ = eval ctxt locals e in
-            helper xs
-        | Stmt.Let _ -> assert false )
+            helper locals xs
+        | Stmt.Let {expr= (expr, _); _} ->
+            let v = eval ctxt locals expr in
+            let locals = v :: locals in
+            helper locals xs )
     in
-    helper stmts ;
+    let locals = helper locals stmts in
     match expr with Some (e, _) -> eval ctxt locals e | None -> Value.Unit
   and eval ctxt locals e =
     let Expr.({variant; _}) = e in
@@ -98,23 +101,23 @@ let call ctxt idx args =
       | Value.Bool false -> eval_block ctxt locals els
       | _ -> assert false )
     | Expr.Local i -> List.nth_exn locals i
-    | Expr.Call ((e, _), args') -> (
-      match eval ctxt args e with
+    | Expr.Call ((e, _), args) -> (
+      match eval ctxt locals e with
       | Value.Function func ->
           let _, expr = ctxt.funcs.(func) in
-          let args' = List.map args' ~f:(fun (e, _) -> eval ctxt args e) in
-          eval_block ctxt args' expr
+          let args = List.map args ~f:(fun (e, _) -> eval ctxt locals e) in
+          eval_block ctxt args expr
       | Value.Builtin b ->
           let (lhs, _), (rhs, _) =
-            match args' with [lhs; rhs] -> (lhs, rhs) | _ -> assert false
+            match args with [lhs; rhs] -> (lhs, rhs) | _ -> assert false
           in
           let lhs =
-            match eval ctxt args lhs with
+            match eval ctxt locals lhs with
             | Value.Integer v -> v
             | _ -> assert false
           in
           let rhs =
-            match eval ctxt args rhs with
+            match eval ctxt locals rhs with
             | Value.Integer v -> v
             | _ -> assert false
           in
@@ -133,11 +136,11 @@ let call ctxt idx args =
     | Expr.Record_literal {members; _} ->
         let members =
           List.map members ~f:(fun ((name, (e, _)), _) ->
-              (name, eval ctxt args e) )
+              (name, eval ctxt locals e) )
         in
         Value.Record members
     | Expr.Record_access ((e, _), member) -> (
-        let v = eval ctxt args e in
+        let v = eval ctxt locals e in
         match v with
         | Value.Record members ->
             let f (name, _) = String.equal name member in

@@ -64,30 +64,40 @@ let find_parameter name lst =
 let rec typeck_block (locals : (string * Type.t) list) (ctxt : t) unt_blk =
   let module U = Untyped_ast in
   let module T = Ast in
-  let rec typeck_stmts = function
-    | [] -> return []
+  let rec typeck_stmts locals = function
+    | [] -> return ([], locals)
     | (s, sp) :: xs -> (
       match s with
       | U.Stmt.Expression e ->
           let%bind e = typeck_expression locals ctxt e in
-          let%bind xs = typeck_stmts xs in
-          return ((T.Stmt.Expression e, sp) :: xs)
-      | U.Stmt.Let _ ->
-          assert false
-          (* let%bind expr = typeck_expression locals ctxt expr in
-          let ty =
+          let%bind xs, expr_locals = typeck_stmts locals xs in
+          return ((T.Stmt.Expression e, sp) :: xs, expr_locals)
+      | U.Stmt.Let {name; ty; expr} ->
+          let%bind expr = spanned_bind (typeck_expression locals ctxt expr) in
+          let T.Expr.({ty= expr_ty; _}), _ = expr in
+          let%bind ty =
             match ty with
-            | None -> return None
+            | None -> return (expr_ty, Spanned.Span.made_up)
             | Some ty ->
-              let%bind ty = Type.of_untyped ty ~ctxt:ctxt.type_context in
-              return (Some ty)
+                let%bind ty, ty_sp =
+                  spanned_bind (Type.of_untyped ty ~ctxt:ctxt.type_context)
+                in
+                if Type.equal expr_ty ty then return (ty, ty_sp)
+                else
+                  let name, _ = name in
+                  return_err
+                    (Error.Incorrect_let_type {name; let_ty= ty; expr_ty})
           in
-          let%bind xs = typeck_stmts xs in
-          return ((T.Stmt.Let {name; ty; expr}, sp) :: xs) *)
-      )
+          let locals =
+            let name, _ = name in
+            let ty, _ = ty in
+            (name, ty) :: locals
+          in
+          let%bind xs, expr_locals = typeck_stmts locals xs in
+          return ((T.Stmt.Let {name; ty; expr}, sp) :: xs, expr_locals) )
   in
   let U.Expr.({stmts; expr}), sp = unt_blk in
-  let%bind stmts = typeck_stmts stmts in
+  let%bind stmts, locals = typeck_stmts locals stmts in
   let%bind expr =
     match expr with
     | Some e ->

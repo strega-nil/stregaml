@@ -59,7 +59,8 @@ end = struct
           match ty with Some (ty, _) -> Type.to_string ty | None -> ""
         in
         let expr, _ = expr in
-        String.concat [name; ": "; ty; " = "; Expr.to_string expr ~indent]
+        String.concat
+          ["let "; name; ": "; ty; " = "; Expr.to_string expr ~indent]
 end
 
 and Expr : sig

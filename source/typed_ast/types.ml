@@ -2,6 +2,7 @@ module rec Error : sig
   type t =
     | Name_not_found of string
     | Type_not_found of string
+    | Incorrect_let_type of {name: string; let_ty: Type.t; expr_ty: Type.t}
     | Record_literal_non_record_type of Type.t
     | Record_literal_duplicate_members of string
     | Record_literal_incorrect_type of
@@ -25,6 +26,7 @@ end = struct
   type t =
     | Name_not_found of string
     | Type_not_found of string
+    | Incorrect_let_type of {name: string; let_ty: Type.t; expr_ty: Type.t}
     | Record_literal_non_record_type of Type.t
     | Record_literal_duplicate_members of string
     | Record_literal_incorrect_type of
