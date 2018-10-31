@@ -34,7 +34,6 @@ module Value = struct
     | Builtin b1, Builtin b2 -> Expr.Builtin.equal b1 b2
     | _ -> false
 
-
   let rec to_string v ctxt =
     match v with
     | Unit -> "()"
@@ -48,7 +47,7 @@ module Value = struct
         in
         String.concat ["{ "; members; " }"]
     | Function n ->
-        let name, _ = (ctxt.funcs).(n) in
+        let name, _ = ctxt.funcs.(n) in
         Printf.sprintf "<function %s>" name
     | Builtin Expr.Builtin.Add -> "<builtin add>"
     | Builtin Expr.Builtin.Sub -> "<builtin sub>"
@@ -67,7 +66,6 @@ let make ast =
   in
   {funcs= Array.init (Ast.number_of_functions ast) ~f:helper}
 
-
 let get_function ctxt ~name =
   match
     Array.findi ctxt.funcs ~f:(fun _ (name', _) -> String.equal name name')
@@ -75,32 +73,35 @@ let get_function ctxt ~name =
   | None -> None
   | Some (n, _) -> Some n
 
-
 let call ctxt idx args =
-  let rec eval_block ctxt args Expr.({stmts; expr}) =
+  let rec eval_block ctxt locals Expr.({stmts; expr}) =
     let rec helper = function
       | [] -> ()
-      | (stmt, _) :: xs ->
-        match stmt with Stmt.Expression e ->
-          let _ = eval ctxt args e in
-          helper xs
+      | (stmt, _) :: xs -> (
+        match stmt with
+        | Stmt.Expression e ->
+            let _ = eval ctxt locals e in
+            helper xs
+        | Stmt.Let _ -> assert false )
     in
     helper stmts ;
-    match expr with Some (e, _) -> eval ctxt args e | None -> Value.Unit
-  and eval ctxt args = function
+    match expr with Some (e, _) -> eval ctxt locals e | None -> Value.Unit
+  and eval ctxt locals e =
+    let Expr.({variant; _}) = e in
+    match variant with
     | Expr.Unit_literal -> Value.Unit
     | Expr.Bool_literal b -> Value.Bool b
     | Expr.Integer_literal n -> Value.Integer n
-    | Expr.If_else ((cond, _), (thn, _), (els, _)) -> (
-      match eval ctxt args cond with
-      | Value.Bool true -> eval_block ctxt args thn
-      | Value.Bool false -> eval_block ctxt args els
+    | Expr.If_else {cond= cond, _; thn= thn, _; els= els, _} -> (
+      match eval ctxt locals cond with
+      | Value.Bool true -> eval_block ctxt locals thn
+      | Value.Bool false -> eval_block ctxt locals els
       | _ -> assert false )
-    | Expr.Parameter i -> List.nth_exn args i
+    | Expr.Local i -> List.nth_exn locals i
     | Expr.Call ((e, _), args') -> (
       match eval ctxt args e with
       | Value.Function func ->
-          let _, expr = (ctxt.funcs).(func) in
+          let _, expr = ctxt.funcs.(func) in
           let args' = List.map args' ~f:(fun (e, _) -> eval ctxt args e) in
           eval_block ctxt args' expr
       | Value.Builtin b ->
@@ -135,14 +136,14 @@ let call ctxt idx args =
               (name, eval ctxt args e) )
         in
         Value.Record members
-    | Expr.Record_access ((e, _), member) ->
+    | Expr.Record_access ((e, _), member) -> (
         let v = eval ctxt args e in
         match v with
         | Value.Record members ->
             let f (name, _) = String.equal name member in
             let _, e = List.find_exn ~f members in
             e
-        | _ -> assert false
+        | _ -> assert false )
   in
-  let _, blk = (ctxt.funcs).(idx) in
+  let _, blk = ctxt.funcs.(idx) in
   eval_block ctxt args blk

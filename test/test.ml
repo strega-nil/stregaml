@@ -14,19 +14,17 @@ let () =
     | Function_not_found s -> Some ("Function not found: " ^ s)
     | _ -> None )
 
-
 let call program name args =
   match Cafec.Parse.parse program with
   | Error e, _ -> raise (Parser_error e)
-  | Ok unt_ast, _ ->
+  | Ok unt_ast, _ -> (
     match Cafec.Typed_ast.make unt_ast with
     | Error e, _ -> raise (Type_error e)
-    | Ok ty_ast, _ ->
+    | Ok ty_ast, _ -> (
         let ctxt = Cafec.Interpreter.make ty_ast in
         match Cafec.Interpreter.get_function ctxt ~name with
         | Some f -> Cafec.Interpreter.call ctxt f args
-        | None -> raise (Function_not_found name)
-
+        | None -> raise (Function_not_found name) ) )
 
 let _ =
   let module Value = Cafec.Interpreter.Value in

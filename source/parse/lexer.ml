@@ -10,14 +10,16 @@ let make s = {buffer= s; index= 0; line= 1; column= 1}
 
 (* the actual lexer functions *)
 let is_whitespace ch =
-  let open! Char.O in ch = ' ' || ch = '\t' || ch = '\n' || ch = '\r'
-
+  let open! Char.O in
+  ch = ' ' || ch = '\t' || ch = '\n' || ch = '\r'
 
 let is_alpha ch =
-  let open! Char.O in ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z'
+  let open! Char.O in
+  (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
 
-
-let is_number_start ch = let open! Char.O in ch >= '0' && ch <= '9'
+let is_number_start ch =
+  let open! Char.O in
+  ch >= '0' && ch <= '9'
 
 let is_number_continue ch base =
   let open! Char.O in
@@ -26,10 +28,10 @@ let is_number_continue ch base =
   | 8 -> ch >= '0' && ch <= '7'
   | 10 -> ch >= '0' && ch <= '9'
   | 16 ->
-      ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f'
-      || ch >= 'A' && ch <= 'F'
+      (ch >= '0' && ch <= '9')
+      || (ch >= 'a' && ch <= 'f')
+      || (ch >= 'A' && ch <= 'F')
   | base -> raise (Bug_lexer ("Invalid base: " ^ Int.to_string base))
-
 
 let is_ident_start ch = is_alpha ch || Char.equal ch '_'
 
@@ -43,7 +45,6 @@ let is_operator_start = function
       true
   | _ -> false
 
-
 let is_operator_continue ch = is_operator_start ch || Char.equal ch '.'
 
 let current_span lex =
@@ -53,11 +54,9 @@ let current_span lex =
   ; end_line= lex.line
   ; end_column= lex.column + 1 }
 
-
 let peek_ch lex =
   if String.length lex.buffer <= lex.index then None
-  else Some ((lex.buffer).[lex.index], current_span lex)
-
+  else Some (lex.buffer.[lex.index], current_span lex)
 
 let next_ch lex =
   match peek_ch lex with
@@ -70,14 +69,12 @@ let next_ch lex =
       Some (ch, sp)
   | None -> None
 
-
 let eat_ch lex = next_ch lex |> ignore
 
 let rec eat_whitespace lex =
   match peek_ch lex with
   | Some (ch, _) when is_whitespace ch -> eat_ch lex ; eat_whitespace lex
   | Some _ | None -> ()
-
 
 let lex_ident fst sp lex =
   let buff = ref [fst] in
@@ -87,7 +84,7 @@ let lex_ident fst sp lex =
         eat_ch lex ;
         buff := ch :: !buff ;
         helper (Spanned.Span.union sp sp')
-    | Some _ | None ->
+    | Some _ | None -> (
         let kw k = (Ok (Token.Keyword k), sp) in
         match String.of_char_list (List.rev !buff) with
         | "true" -> kw Token.Keyword.True
@@ -104,10 +101,9 @@ let lex_ident fst sp lex =
         | "variant" as res -> (Error (Error.Reserved_token res), sp)
         | "opaque" as res -> (Error (Error.Reserved_token res), sp)
         | "public" as res -> (Error (Error.Reserved_token res), sp)
-        | id -> (Ok (Token.Identifier id), sp)
+        | id -> (Ok (Token.Identifier id), sp) )
   in
   helper sp
-
 
 let lex_number fst sp lex =
   let open! Char.O in
@@ -115,9 +111,15 @@ let lex_number fst sp lex =
   let base, sp =
     if fst = '0' then (
       match peek_ch lex with
-      | Some ('x', sp') -> eat_ch lex ; (16, Spanned.Span.union sp sp')
-      | Some ('o', sp') -> eat_ch lex ; (8, Spanned.Span.union sp sp')
-      | Some ('b', sp') -> eat_ch lex ; (2, Spanned.Span.union sp sp')
+      | Some ('x', sp') ->
+          eat_ch lex ;
+          (16, Spanned.Span.union sp sp')
+      | Some ('o', sp') ->
+          eat_ch lex ;
+          (8, Spanned.Span.union sp sp')
+      | Some ('b', sp') ->
+          eat_ch lex ;
+          (2, Spanned.Span.union sp sp')
       | Some _ | None ->
           buff := [fst] ;
           (10, sp) )
@@ -155,7 +157,6 @@ let lex_number fst sp lex =
         (Ok (Token.Integer_literal (to_int 1 0 !buff)), sp)
   in
   helper sp true
-
 
 let rec next_token lex =
   let lex_operator fst sp lex =
@@ -208,7 +209,7 @@ let rec next_token lex =
           eat_ch lex ;
           buff := ch :: !buff ;
           helper (Spanned.Span.union sp sp')
-      | Some _ | None ->
+      | Some _ | None -> (
         match String.of_char_list (List.rev !buff) with
         | "/*" -> (
           match block_comment sp with
@@ -220,7 +221,7 @@ let rec next_token lex =
         | "|" as res -> (Error (Error.Reserved_token res), sp)
         | op when includes_operator_token op ->
             (Error (Error.Operator_including_comment_token op), sp)
-        | op -> (Ok (Token.Operator op), sp)
+        | op -> (Ok (Token.Operator op), sp) )
     in
     helper sp
   in
@@ -235,7 +236,8 @@ let rec next_token lex =
   | Some (':', sp) -> (
     match peek_ch lex with
     | Some (':', sp') ->
-        eat_ch lex ; (Ok Token.Double_colon, Spanned.Span.union sp sp')
+        eat_ch lex ;
+        (Ok Token.Double_colon, Spanned.Span.union sp sp')
     | _ -> (Ok Token.Colon, sp) )
   | Some (';', sp) -> (Ok Token.Semicolon, sp)
   | Some (',', sp) -> (Ok Token.Comma, sp)

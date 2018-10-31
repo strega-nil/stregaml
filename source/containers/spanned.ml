@@ -2,9 +2,10 @@ module Span = struct
   type t = {start_line: int; start_column: int; end_line: int; end_column: int}
 
   let equal t1 t2 =
-    t1.start_line = t2.start_line && t1.start_column = t2.start_column
-    && t1.end_line = t2.end_line && t1.end_column = t2.end_column
-
+    t1.start_line = t2.start_line
+    && t1.start_column = t2.start_column
+    && t1.end_line = t2.end_line
+    && t1.end_column = t2.end_column
 
   let made_up = {start_line= 0; start_column= 0; end_line= 0; end_column= 0}
 
@@ -19,7 +20,6 @@ module Span = struct
       ; end_line= snd.end_line
       ; end_column= snd.end_column }
 
-
   let to_string {start_line; start_column; end_line; end_column} =
     Printf.sprintf "(%d, %d) to (%d, %d)" start_line start_column end_line
       end_column
@@ -29,7 +29,6 @@ type 'a t = 'a * Span.t
 
 let to_string (el, sp) ~f =
   Printf.sprintf "%s at %s" (f el) (Span.to_string sp)
-
 
 module Result = struct
   type 'a spanned = 'a t
@@ -43,11 +42,11 @@ module Result = struct
       let bind (self, sp) ~f =
         match self with
         | Error e -> (Error e, sp)
-        | Ok o ->
+        | Ok o -> (
           match f o with
           | Ok o', sp' -> (Ok o', Span.union sp sp')
           | Error e', sp' -> (Error e', if Span.is_made_up sp' then sp else sp')
-
+          )
 
       let map = `Define_using_bind
 
@@ -60,7 +59,6 @@ module Result = struct
 
     let spanned_bind (t, sp) =
       match t with Error e -> (Error e, sp) | Ok o -> (Ok (o, sp), sp)
-
 
     let return_err e = (Error e, Span.made_up)
 

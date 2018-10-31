@@ -1,4 +1,4 @@
-module Error = Error
+module Error = Error_print
 module Expr = Ast.Expr
 module Stmt = Ast.Stmt
 module Type = Type

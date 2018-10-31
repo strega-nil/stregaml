@@ -1,22 +1,5 @@
-module Spanned = Cafec_containers.Spanned
-
-type t =
-  | Name_not_found of string
-  | Type_not_found of string
-  | Record_literal_duplicate_members of string
-  | Record_literal_extra_field of Type.t * string
-  | Record_literal_missing_field of Type.t * string
-  | Record_access_non_record_type of Type.t * string
-  | Record_access_non_member of Type.t * string
-  | If_non_bool of Type.t
-  | If_branches_of_differing_type of Type.t * Type.t
-  | Call_of_non_function of Type.t
-  | Defined_function_multiple_times of
-      { name: string
-      ; original_declaration: Spanned.Span.t }
-  | Defined_type_multiple_times of string
-  | Return_type_mismatch of {expected: Type.t; found: Type.t}
-  | Invalid_function_arguments of {expected: Type.t list; found: Type.t list}
+open! Types.Pervasives
+include Types.Error
 
 let to_string err ~ctxt =
   match err with
@@ -38,7 +21,8 @@ let to_string err ~ctxt =
   | Record_access_non_member (ty, member) ->
       Printf.sprintf
         "Attempted to access the `%s` member of a type without that member: \
-         `%s`" member (Type.to_string ty ~ctxt)
+         `%s`"
+        member (Type.to_string ty ~ctxt)
   | If_non_bool ty ->
       Printf.sprintf
         "Attempted to `if` on an expression of non-boolean type `%s`"

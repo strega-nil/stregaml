@@ -21,12 +21,12 @@ module Type : sig
 end
 
 module rec Stmt : sig
-  type let_binding =
-    { name: string Spanned.t
-    ; ty: Type.t Spanned.t option
-    ; expr: Expr.t Spanned.t }
-
-  type t = Expression of Expr.t Spanned.t | Let of let_binding
+  type t =
+    | Expression of Expr.t Spanned.t
+    | Let of
+        { name: string Spanned.t
+        ; ty: Type.t Spanned.t option
+        ; expr: Expr.t Spanned.t }
 
   val to_string : t -> indent:int -> string
 end
@@ -38,12 +38,12 @@ and Expr : sig
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
-    | If_else of t Spanned.t * block Spanned.t * block Spanned.t
+    | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
     | Variable of {path: string list; name: string}
     | Block of block Spanned.t
     | Call of t Spanned.t * t Spanned.t list
     | Record_literal of
-        { ty: Type.t
+        { ty: Type.t Spanned.t
         ; members: (string * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * string
 
@@ -55,7 +55,7 @@ end
 module Func : sig
   type t =
     { name: string
-    ; params: (string * Type.t) Spanned.t list
+    ; params: (string Spanned.t * Type.t Spanned.t) Spanned.t list
     ; ret_ty: Type.t Spanned.t option
     ; body: Expr.block Spanned.t }
 

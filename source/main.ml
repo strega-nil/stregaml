@@ -27,15 +27,14 @@ let parse_command_line () : (command_line_arguments, string) Result.t =
   Caml.Arg.parse cmd_options get_filename "cafec [filename]" ;
   match !error with
   | Some err -> Error err
-  | None ->
+  | None -> (
     match !filename with
     | Some filename ->
         Ok
           { filename
           ; print_parse_ast= !print_parse_ast
           ; interpreted= !interpreted }
-    | None -> Error "no filename specified"
-
+    | None -> Error "no filename specified" )
 
 let get_parse_ast args =
   let program = In.with_file args.filename ~f:In.input_all in
@@ -49,7 +48,6 @@ let get_parse_ast args =
         Out.print_endline (Parse.Ast.to_string parse_ast) ;
       parse_ast
 
-
 let get_typed_ast args =
   let parse_ast = get_parse_ast args in
   match Typed_ast.make parse_ast with
@@ -58,7 +56,6 @@ let get_typed_ast args =
       Out.eprintf "Error: %s\n" (Spanned.to_string ~f (e, sp)) ;
       Caml.exit 1
   | Ok ty_ast, _ -> ty_ast
-
 
 let interpret ty_ast _args =
   let ctxt = Interpreter.make ty_ast in
@@ -70,13 +67,11 @@ let interpret ty_ast _args =
       Out.newline Out.stdout
   | None -> Out.output_string Out.stderr "no main was found\n"
 
-
 (*let compile ty_ast _args = Llvm.output_object_file ~file:"foo.o" ty_ast*)
 
 let main args =
   let typed_ast = get_typed_ast args in
   if args.interpreted then interpret typed_ast args else assert false
-
 
 let () =
   let args =

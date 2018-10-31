@@ -27,7 +27,6 @@ module Keyword = struct
     | Underscore, Underscore -> true
     | _ -> false
 
-
   let to_string = function
     | True -> "true"
     | False -> "false"
@@ -79,7 +78,6 @@ let equal lhs rhs =
   | Comma, Comma -> true
   | Eof, Eof -> true
   | _ -> false
-
 
 let to_string = function
   | Open_paren -> "open paren `(`"

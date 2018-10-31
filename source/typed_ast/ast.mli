@@ -1,28 +1,15 @@
-module rec Stmt : sig
-  type t = Expression of Expr.t
-end
+module Stmt = Types.Ast_stmt
 
-and Expr : sig
+module Expr : sig
+  include module type of struct
+      include Types.Ast_expr
+  end
+
   module Builtin : sig
-    type t = Less_eq | Add | Sub | Mul
+    include module type of struct
+        include Types.Ast_expr_builtin
+    end
 
     val equal : t -> t -> bool
   end
-
-  type block = {stmts: Stmt.t Spanned.t list; expr: t Spanned.t option}
-
-  and t =
-    | Unit_literal
-    | Bool_literal of bool
-    | Integer_literal of int
-    | If_else of t Spanned.t * block Spanned.t * block Spanned.t
-    | Call of t Spanned.t * t Spanned.t list
-    | Block of block Spanned.t
-    | Record_literal of
-        { ty: Type.Context.index
-        ; members: (string * t Spanned.t) Spanned.t list }
-    | Record_access of t Spanned.t * string
-    | Builtin of Builtin.t
-    | Global_function of int
-    | Parameter of int
 end

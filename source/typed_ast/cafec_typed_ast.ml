@@ -1,4 +1,4 @@
-module Error = Error
+module Error = Error_print
 module Expr = Ast.Expr
 module Stmt = Ast.Stmt
 module Type = Type
@@ -20,7 +20,6 @@ let make unt_ast =
       let number_of_functions = List.length ast.Internal.function_context in
       (Ok {number_of_functions; ast}, sp)
   | Error e, sp -> (Error e, sp)
-
 
 (*
 let number_of_types {number_of_types; _} = number_of_types

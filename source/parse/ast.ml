@@ -15,7 +15,6 @@ module Type = struct
         let parms = String.concat ~sep:", " (List.map parms ~f) in
         String.concat ["func("; parms; ret]
 
-
   module Data = struct
     type nonrec t = Record of (string * t) Spanned.t list
 
@@ -35,35 +34,32 @@ module Type = struct
 end
 
 module rec Stmt : sig
-  type let_binding =
-    { name: string Spanned.t
-    ; ty: Type.t Spanned.t option
-    ; expr: Expr.t Spanned.t }
-
-  type t = Expression of Expr.t Spanned.t | Let of let_binding
+  type t =
+    | Expression of Expr.t Spanned.t
+    | Let of
+        { name: string Spanned.t
+        ; ty: Type.t Spanned.t option
+        ; expr: Expr.t Spanned.t }
 
   val to_string : t -> indent:int -> string
 end = struct
-  type let_binding =
-    { name: string Spanned.t
-    ; ty: Type.t Spanned.t option
-    ; expr: Expr.t Spanned.t }
-
-  type t = Expression of Expr.t Spanned.t | Let of let_binding
+  type t =
+    | Expression of Expr.t Spanned.t
+    | Let of
+        { name: string Spanned.t
+        ; ty: Type.t Spanned.t option
+        ; expr: Expr.t Spanned.t }
 
   let to_string self ~indent =
     match self with
     | Expression (e, _) -> Expr.to_string ~indent e
     | Let {name; ty; expr} ->
-      let (name, _) = name in
-      let ty = match ty with Some (ty, _) -> Type.to_string ty | None -> "" in
-      let (expr, _) = expr in
-      String.concat
-        [ name
-        ; ": "
-        ; ty
-        ; " = "
-        ; Expr.to_string expr ~indent ]
+        let name, _ = name in
+        let ty =
+          match ty with Some (ty, _) -> Type.to_string ty | None -> ""
+        in
+        let expr, _ = expr in
+        String.concat [name; ": "; ty; " = "; Expr.to_string expr ~indent]
 end
 
 and Expr : sig
@@ -73,12 +69,12 @@ and Expr : sig
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
-    | If_else of t Spanned.t * block Spanned.t * block Spanned.t
+    | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
     | Variable of {path: string list; name: string}
     | Block of block Spanned.t
     | Call of t Spanned.t * t Spanned.t list
     | Record_literal of
-        { ty: Type.t
+        { ty: Type.t Spanned.t
         ; members: (string * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * string
 
@@ -92,12 +88,12 @@ end = struct
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
-    | If_else of t Spanned.t * block Spanned.t * block Spanned.t
+    | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
     | Variable of {path: string list; name: string}
     | Block of block Spanned.t
     | Call of t Spanned.t * t Spanned.t list
     | Record_literal of
-        { ty: Type.t
+        { ty: Type.t Spanned.t
         ; members: (string * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * string
 
@@ -107,7 +103,7 @@ end = struct
     | Bool_literal true -> "true"
     | Bool_literal false -> "false"
     | Integer_literal n -> Int.to_string n
-    | If_else ((cond, _), (thn, _), (els, _)) ->
+    | If_else {cond= cond, _; thn= thn, _; els= els, _} ->
         String.concat
           [ "if ("
           ; to_string cond ~indent:(indent + 1)
@@ -123,7 +119,7 @@ end = struct
           String.concat ~sep:", " (List.map args ~f)
         in
         String.concat [to_string ~indent e; "("; args; ")"]
-    | Record_literal {ty; members} ->
+    | Record_literal {ty= ty, _; members} ->
         let members =
           let f ((name, (expr, _)), _) =
             String.concat [name; " = "; to_string expr ~indent:(indent + 1)]
@@ -156,13 +152,15 @@ end
 module Func = struct
   type t =
     { name: string
-    ; params: (string * Type.t) Spanned.t list
+    ; params: (string Spanned.t * Type.t Spanned.t) Spanned.t list
     ; ret_ty: Type.t Spanned.t option
     ; body: Expr.block Spanned.t }
 
   let to_string self =
     let parameters =
-      let f ((name, ty), _) = String.concat [name; ": "; Type.to_string ty] in
+      let f (((name, _), (ty, _)), _) =
+        String.concat [name; ": "; Type.to_string ty]
+      in
       String.concat ~sep:", " (List.map ~f self.params)
     in
     let ret_ty =
