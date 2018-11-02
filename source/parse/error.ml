@@ -1,15 +1,5 @@
 module Expected = struct
-  type t =
-    | Specific of Token.t
-    | Item_declarator
-    | Identifier
-    | Variable_decl
-    | Type
-    | Data
-    | Expression
-    | Expression_follow
-    | Statement_end
-    | Path_expression
+  include Types.Error_expected
 
   let to_string = function
     | Specific tok -> Token.to_string tok
@@ -26,13 +16,7 @@ module Expected = struct
         "the continuation of a path, or an identifier or record literal"
 end
 
-type t =
-  | Unclosed_comment
-  | Operator_including_comment_token of string
-  | Malformed_number_literal
-  | Reserved_token of string
-  | Unrecognized_character of char
-  | Unexpected_token of (Expected.t * Token.t)
+include Types.Error
 
 let to_string = function
   | Malformed_number_literal -> "malformed number literal"

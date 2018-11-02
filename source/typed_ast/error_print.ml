@@ -5,9 +5,29 @@ let to_string err ~ctxt =
   match err with
   | Name_not_found name -> Printf.sprintf "Name not found: %s" name
   | Type_not_found ty -> Printf.sprintf "Type not found: %s" ty
+  | Incorrect_let_type {name; let_ty; expr_ty} ->
+      Printf.sprintf
+        {|Let binding of `%s` is typed incorrectly:
+  let binding expected : %s
+  expression is of type: %s|}
+        name
+        (Type.to_string let_ty ~ctxt)
+        (Type.to_string expr_ty ~ctxt)
+  | Record_literal_non_record_type ty ->
+      Printf.sprintf
+        "Attempted to create a record literal of non-record type `%s`"
+        (Type.to_string ty ~ctxt)
   | Record_literal_duplicate_members member ->
       Printf.sprintf "Record literal - member `%s` initialized multiple times"
         member
+  | Record_literal_incorrect_type {field; field_ty; member_ty} ->
+      Printf.sprintf
+        {|Record literal - initializing member `%s` with incorrect type:
+  type of member    : %s
+  type of expression: %s|}
+        field
+        (Type.to_string member_ty ~ctxt)
+        (Type.to_string field_ty ~ctxt)
   | Record_literal_extra_field (ty, member) ->
       Printf.sprintf "Record literal - member `%s` not in type `%s`" member
         (Type.to_string ty ~ctxt)

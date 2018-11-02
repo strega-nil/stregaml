@@ -1,15 +1,15 @@
 type V2 {
   data = record {
-    x0: int;
-    x1: int;
+    x0: Int32;
+    x1: Int32;
   };
 }
 
-func map(p: V2, f: func(int) -> int) -> V2 {
+func map(p: V2, f: func(Int32) -> Int32) -> V2 {
   V2::{ x0 = f(p.x0); x1 = f(p.x1) }
 }
 
-func double(i: int) -> int {
+func double(i: Int32) -> Int32 {
   MUL(i, 2)
 }
 
@@ -17,3 +17,11 @@ func main() -> V2 {
   let v: V2 = V2::{ x0 = 2014; x1 = 9 };
   map(v, double)
 }
+
+/*
+func main() -> Int32 {
+  let mut i: Int32 = 0;
+  i <- 1;
+  i
+}
+*/

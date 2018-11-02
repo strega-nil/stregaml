@@ -97,6 +97,7 @@ let lex_ident fst sp lex =
         | "record" -> kw Token.Keyword.Record
         | "alias" -> kw Token.Keyword.Alias
         | "let" -> kw Token.Keyword.Let
+        | "mut" -> kw Token.Keyword.Mut
         | "_" -> kw Token.Keyword.Underscore
         | "variant" as res -> (Error (Error.Reserved_token res), sp)
         | "opaque" as res -> (Error (Error.Reserved_token res), sp)
@@ -217,6 +218,7 @@ let rec next_token lex =
           | Error e, sp -> (Error e, sp) )
         | "//" -> line_comment () ; next_token lex
         | "=" -> (Ok Token.Equals, sp)
+        | "<-" -> (Ok Token.Assign, sp)
         | "->" -> (Ok Token.Arrow, sp)
         | "|" as res -> (Error (Error.Reserved_token res), sp)
         | op when includes_operator_token op ->

@@ -118,7 +118,7 @@ and typeck_expression (locals : (string * Type.t) list) (ctxt : t) unt_expr =
   | U.Bool_literal b ->
       return T.{variant= Bool_literal b; ty= Type.Builtin Type.Bool}
   | U.Integer_literal i ->
-      return T.{variant= Integer_literal i; ty= Type.Builtin Type.Int}
+      return T.{variant= Integer_literal i; ty= Type.Builtin Type.Int32}
   | U.If_else {cond; thn; els} -> (
       let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
       match cond with
@@ -176,15 +176,16 @@ and typeck_expression (locals : (string * Type.t) list) (ctxt : t) unt_expr =
     | None -> (
       match Functions.index_by_name ctxt.function_context name with
       | None -> (
-          let int_ty = Type.(Builtin Int) in
+          let int32_ty = Type.(Builtin Int32) in
           let less_eq_ty =
             Type.(
               Builtin
-                (Function {params= [int_ty; int_ty]; ret_ty= Builtin Bool}))
+                (Function {params= [int32_ty; int32_ty]; ret_ty= Builtin Bool}))
           in
           let op_ty =
             Type.(
-              Builtin (Function {params= [int_ty; int_ty]; ret_ty= int_ty}))
+              Builtin
+                (Function {params= [int32_ty; int32_ty]; ret_ty= int32_ty}))
           in
           match name with
           | "LESS_EQ" ->

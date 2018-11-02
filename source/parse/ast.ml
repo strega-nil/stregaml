@@ -3,9 +3,7 @@ module Spanned = Cafec_containers.Spanned
 let indent_to_string indent = String.make (indent * 2) ' '
 
 module Type = struct
-  type t =
-    | Named of string
-    | Function of t Spanned.t list * t Spanned.t option
+  include Types.Ast_type
 
   let rec to_string = function
     | Named s -> s
@@ -16,7 +14,7 @@ module Type = struct
         String.concat ["func("; parms; ret]
 
   module Data = struct
-    type nonrec t = Record of (string * t) Spanned.t list
+    include Types.Ast_type_data
 
     let to_string (Record members) =
       let f ((name, ty), _) =
@@ -26,79 +24,12 @@ module Type = struct
       String.concat ["record {"; members; "\n  }"]
   end
 
-  module Definition = struct
-    type kind = Alias of t | User_defined of {data: Data.t}
-
-    type t = {name: string; kind: kind}
-  end
+  module Definition = Types.Ast_type_definition
 end
 
-module rec Stmt : sig
-  type t =
-    | Expression of Expr.t Spanned.t
-    | Let of
-        { name: string Spanned.t
-        ; ty: Type.t Spanned.t option
-        ; expr: Expr.t Spanned.t }
-
-  val to_string : t -> indent:int -> string
-end = struct
-  type t =
-    | Expression of Expr.t Spanned.t
-    | Let of
-        { name: string Spanned.t
-        ; ty: Type.t Spanned.t option
-        ; expr: Expr.t Spanned.t }
-
-  let to_string self ~indent =
-    match self with
-    | Expression (e, _) -> Expr.to_string ~indent e
-    | Let {name; ty; expr} ->
-        let name, _ = name in
-        let ty =
-          match ty with Some (ty, _) -> Type.to_string ty | None -> ""
-        in
-        let expr, _ = expr in
-        String.concat
-          ["let "; name; ": "; ty; " = "; Expr.to_string expr ~indent]
-end
-
-and Expr : sig
-  type block = {stmts: Stmt.t Spanned.t list; expr: t Spanned.t option}
-
-  and t =
-    | Unit_literal
-    | Bool_literal of bool
-    | Integer_literal of int
-    | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
-    | Variable of {path: string list; name: string}
-    | Block of block Spanned.t
-    | Call of t Spanned.t * t Spanned.t list
-    | Record_literal of
-        { ty: Type.t Spanned.t
-        ; members: (string * t Spanned.t) Spanned.t list }
-    | Record_access of t Spanned.t * string
-
-  val to_string : t -> indent:int -> string
-
-  val block_to_string : block -> indent:int -> string
-end = struct
-  type block = {stmts: Stmt.t Spanned.t list; expr: t Spanned.t option}
-
-  and t =
-    | Unit_literal
-    | Bool_literal of bool
-    | Integer_literal of int
-    | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
-    | Variable of {path: string list; name: string}
-    | Block of block Spanned.t
-    | Call of t Spanned.t * t Spanned.t list
-    | Record_literal of
-        { ty: Type.t Spanned.t
-        ; members: (string * t Spanned.t) Spanned.t list }
-    | Record_access of t Spanned.t * string
-
-  let rec to_string e ~indent =
+module Implementation_stmt_expr = struct
+  let rec expr_to_string e ~indent =
+    let open Types.Ast_expr in
     match e with
     | Unit_literal -> "()"
     | Bool_literal true -> "true"
@@ -107,7 +38,7 @@ end = struct
     | If_else {cond= cond, _; thn= thn, _; els= els, _} ->
         String.concat
           [ "if ("
-          ; to_string cond ~indent:(indent + 1)
+          ; expr_to_string cond ~indent:(indent + 1)
           ; ") "
           ; block_to_string thn ~indent
           ; " else "
@@ -116,27 +47,28 @@ end = struct
     | Block (blk, _) -> block_to_string blk ~indent
     | Call ((e, _), args) ->
         let args =
-          let f (x, _) = to_string x ~indent:(indent + 1) in
+          let f (x, _) = expr_to_string x ~indent:(indent + 1) in
           String.concat ~sep:", " (List.map args ~f)
         in
-        String.concat [to_string ~indent e; "("; args; ")"]
+        String.concat [expr_to_string ~indent e; "("; args; ")"]
     | Record_literal {ty= ty, _; members} ->
         let members =
           let f ((name, (expr, _)), _) =
-            String.concat [name; " = "; to_string expr ~indent:(indent + 1)]
+            String.concat
+              [name; " = "; expr_to_string expr ~indent:(indent + 1)]
           in
           String.concat ~sep:"; " (List.map ~f members)
         in
         String.concat [Type.to_string ty; "::{ "; members; " }"]
     | Record_access ((e, _), member) ->
-        String.concat [to_string ~indent:(indent + 1) e; "."; member]
+        String.concat [expr_to_string ~indent:(indent + 1) e; "."; member]
 
-  and block_to_string {stmts; expr} ~indent =
+  and block_to_string Types.Ast_expr.({stmts; expr}) ~indent =
     let stmts =
       let f (s, _) =
         String.concat
           [ indent_to_string (indent + 1)
-          ; Stmt.to_string s ~indent:(indent + 1)
+          ; stmt_to_string s ~indent:(indent + 1)
           ; ";\n" ]
       in
       String.concat (List.map stmts ~f)
@@ -145,17 +77,40 @@ end = struct
       match expr with
       | None -> ""
       | Some (e, _) ->
-          indent_to_string (indent + 1) ^ to_string e ~indent:(indent + 1)
+          indent_to_string (indent + 1) ^ expr_to_string e ~indent:(indent + 1)
     in
     String.concat ["{\n"; stmts; expr; indent_to_string indent; "\n}"]
+
+  and stmt_to_string self ~indent =
+    let open Types.Ast_stmt in
+    match self with
+    | Expression (e, _) -> expr_to_string ~indent e
+    | Let {name; ty; expr} ->
+        let name, _ = name in
+        let ty =
+          match ty with Some (ty, _) -> Type.to_string ty | None -> ""
+        in
+        let expr, _ = expr in
+        String.concat
+          ["let "; name; ": "; ty; " = "; expr_to_string expr ~indent]
+end
+
+module Stmt = struct
+  include Types.Ast_stmt
+
+  let to_string = Implementation_stmt_expr.stmt_to_string
+end
+
+module Expr = struct
+  include Types.Ast_expr
+
+  let to_string = Implementation_stmt_expr.expr_to_string
+
+  let block_to_string = Implementation_stmt_expr.block_to_string
 end
 
 module Func = struct
-  type t =
-    { name: string
-    ; params: (string Spanned.t * Type.t Spanned.t) Spanned.t list
-    ; ret_ty: Type.t Spanned.t option
-    ; body: Expr.block Spanned.t }
+  include Types.Ast_func
 
   let to_string self =
     let parameters =
@@ -182,7 +137,7 @@ module Func = struct
       ; "\n" ]
 end
 
-type t = {funcs: Func.t Spanned.t list; types: Type.Definition.t Spanned.t list}
+include Types.Ast
 
 let to_string self =
   let types =

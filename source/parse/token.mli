@@ -1,39 +1,16 @@
 module Keyword : sig
-  type t =
-    | True
-    | False
-    | If
-    | Else
-    | Func
-    | Type
-    | Data
-    | Record
-    | Alias
-    | Let
-    | Underscore
+  include module type of struct
+      include Types.Token_keyword
+  end
 
   val equal : t -> t -> bool
 
   val to_string : t -> string
 end
 
-type t =
-  | Open_paren
-  | Close_paren
-  | Open_brace
-  | Close_brace
-  | Keyword of Keyword.t
-  | Identifier of string
-  | Operator of string
-  | Integer_literal of int
-  | Arrow
-  | Colon
-  | Double_colon
-  | Equals
-  | Semicolon
-  | Dot
-  | Comma
-  | Eof
+include module type of struct
+    include Types.Token
+end
 
 val equal : t -> t -> bool
 

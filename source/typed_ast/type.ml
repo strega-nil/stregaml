@@ -31,9 +31,9 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
           return (User_defined (Context.index_of_underlying idx))
       | None -> (
         match name with
-        | "unit" -> return (Builtin Unit)
-        | "bool" -> return (Builtin Bool)
-        | "int" -> return (Builtin Int)
+        | "Unit" -> return (Builtin Unit)
+        | "Bool" -> return (Builtin Bool)
+        | "Int32" -> return (Builtin Int32)
         | name -> return_err (Error.Type_not_found name) ) )
   | U.Function (params, ret_ty) ->
       let rec map = function
@@ -55,7 +55,7 @@ let rec equal l r =
   match (l, r) with
   | Builtin Unit, Builtin Unit -> true
   | Builtin Bool, Builtin Bool -> true
-  | Builtin Int, Builtin Int -> true
+  | Builtin Int32, Builtin Int32 -> true
   | Builtin (Function f1), Builtin (Function f2) ->
       equal f1.ret_ty f2.ret_ty && List.equal f1.params f2.params ~equal
   | User_defined u1, User_defined u2 ->
@@ -83,9 +83,9 @@ let structural ty ~(ctxt : Context.t) =
 
 let rec to_string ty ~(ctxt : Context.t) =
   match ty with
-  | Builtin Unit -> "unit"
-  | Builtin Bool -> "bool"
-  | Builtin Int -> "int"
+  | Builtin Unit -> "Unit"
+  | Builtin Bool -> "Bool"
+  | Builtin Int32 -> "Int32"
   | Builtin (Function {params; ret_ty}) ->
       let params =
         let f ty = to_string ty ~ctxt in

@@ -82,7 +82,7 @@ let call ctxt idx args =
         | Stmt.Expression e ->
             let _ = eval ctxt locals e in
             helper locals xs
-        | Stmt.Let {expr= (expr, _); _} ->
+        | Stmt.Let {expr= expr, _; _} ->
             let v = eval ctxt locals expr in
             let locals = v :: locals in
             helper locals xs )

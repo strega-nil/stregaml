@@ -1,16 +1,5 @@
 module Keyword = struct
-  type t =
-    | True
-    | False
-    | If
-    | Else
-    | Func
-    | Type
-    | Data
-    | Record
-    | Alias
-    | Let
-    | Underscore
+  include Types.Token_keyword
 
   let equal lhs rhs =
     match (lhs, rhs) with
@@ -24,6 +13,7 @@ module Keyword = struct
     | Alias, Alias -> true
     | Record, Record -> true
     | Let, Let -> true
+    | Mut, Mut -> true
     | Underscore, Underscore -> true
     | _ -> false
 
@@ -38,26 +28,11 @@ module Keyword = struct
     | Record -> "record"
     | Alias -> "alias"
     | Let -> "let"
+    | Mut -> "mut"
     | Underscore -> "_"
 end
 
-type t =
-  | Open_paren
-  | Close_paren
-  | Open_brace
-  | Close_brace
-  | Keyword of Keyword.t
-  | Identifier of string
-  | Operator of string
-  | Integer_literal of int
-  | Arrow
-  | Colon
-  | Double_colon
-  | Equals
-  | Semicolon
-  | Dot
-  | Comma
-  | Eof
+include Types.Token
 
 let equal lhs rhs =
   match (lhs, rhs) with
@@ -69,6 +44,7 @@ let equal lhs rhs =
   | Identifier id1, Identifier id2 -> String.equal id1 id2
   | Operator op1, Operator op2 -> String.equal op1 op2
   | Integer_literal i1, Integer_literal i2 -> i1 = i2
+  | Assign, Assign -> true
   | Arrow, Arrow -> true
   | Colon, Colon -> true
   | Double_colon, Double_colon -> true
@@ -88,6 +64,7 @@ let to_string = function
   | Operator op -> Printf.sprintf "operator: `%s`" op
   | Identifier id -> Printf.sprintf "identifier: `%s`" id
   | Integer_literal i -> Printf.sprintf "int literal: `%d`" i
+  | Assign -> "assign `<-`"
   | Arrow -> "arrow `->`"
   | Colon -> "colon `:`"
   | Equals -> "equals `=`"
