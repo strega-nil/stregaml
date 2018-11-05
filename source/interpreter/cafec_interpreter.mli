@@ -1,9 +1,9 @@
 type t
 
-module Immediate :
+module Value :
   sig
     include module type of struct
-        include Types.Immediate
+        include Types.Value
     end
 
     type function_index = Types.Function_index.t
@@ -16,6 +16,6 @@ module Immediate :
 
 val make : Cafec_typed_ast.t -> t
 
-val get_function : t -> name:string -> Immediate.function_index option
+val get_function : t -> name:string -> Value.function_index option
 
-val call : t -> Immediate.function_index -> Immediate.t list -> Immediate.t
+val call : t -> Value.function_index -> Value.t list -> Value.t

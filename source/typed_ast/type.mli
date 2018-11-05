@@ -5,9 +5,9 @@ include module type of struct
 end
 
 module Context : sig
-  type t = Types.Type_context.t
+  type t = Types.Type_Context.t
 
-  type index = Types.Type_context.index
+  type index = Types.Type_Context.index
 
   val empty : t
 
@@ -16,7 +16,7 @@ module Context : sig
     -> t result
 end
 
-module Structural = Types.Type_structural
+module Structural = Types.Type_Structural
 
 val structural : t -> ctxt:Context.t -> Structural.t
 

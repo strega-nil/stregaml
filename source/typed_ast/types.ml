@@ -4,7 +4,7 @@ module rec Error : sig
     | Type_not_found of string
     | Incorrect_let_type of {name: string; let_ty: Type.t; expr_ty: Type.t}
     | Assignment_to_incompatible_type of {dest: Type.t; source: Type.t}
-    | Assignment_to_immediate
+    | Assignment_to_value
     | Assignment_to_immutable_place
     | Record_literal_non_record_type of Type.t
     | Record_literal_duplicate_members of string
@@ -31,11 +31,11 @@ end =
 and Type : sig
   type builtin = Unit | Bool | Int32 | Function of {params: t list; ret_ty: t}
 
-  and t = Builtin of builtin | User_defined of Type_context.index
+  and t = Builtin of builtin | User_defined of Type_Context.index
 end =
   Type
 
-and Type_context : sig
+and Type_Context : sig
   type t
 
   type underlying = Cafec_parse.Ast.Type.Definition.t Spanned.t list
@@ -69,47 +69,46 @@ end = struct
   let index_to_underlying x = x
 end
 
-and Type_structural : sig
+and Type_Structural : sig
   type t = Builtin of Type.builtin | Record of (string * Type.t) list
 end =
-  Type_structural
+  Type_Structural
 
-and Value_type : sig
+and Ast_Expr_Type : sig
   type mutability = Immutable | Mutable
 
   (* type owned = Owned | Borrowed *)
 
   type category =
-    | Immediate
-    (* aka rvalue *)
+    | Value
     | Place of {mutability: mutability (* owned: owned *)}
 
   type t = {category: category; ty: Type.t}
 end =
-  Value_type
+  Ast_Expr_Type
 
-and Binding : sig
+and Ast_Binding : sig
   type t =
     { name: string Spanned.t
-    ; mutability: Value_type.mutability
+    ; mutability: Ast_Expr_Type.mutability
     ; ty: Type.t Spanned.t }
 end =
-  Binding
+  Ast_Binding
 
-and Ast_stmt : sig
+and Ast_Stmt : sig
   type t =
-    | Expression of Ast_expr.t
-    | Let of {binding: Binding.t; expr: Ast_expr.t Spanned.t}
+    | Expression of Ast_Expr.t
+    | Let of {binding: Ast_Binding.t; expr: Ast_Expr.t Spanned.t}
 end =
-  Ast_stmt
+  Ast_Stmt
 
-and Ast_expr_local : sig
-  type t = {binding: Binding.t; index: int}
+and Ast_Expr_Local : sig
+  type t = {binding: Ast_Binding.t; index: int}
 end =
-  Ast_expr_local
+  Ast_Expr_Local
 
-and Ast_expr : sig
-  type block = {stmts: Ast_stmt.t Spanned.t list; expr: t Spanned.t option}
+and Ast_Expr : sig
+  type block = {stmts: Ast_Stmt.t Spanned.t list; expr: t Spanned.t option}
 
   and variant =
     | Unit_literal
@@ -123,18 +122,18 @@ and Ast_expr : sig
         { ty: Type.t Spanned.t
         ; members: (string * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * string
-    | Builtin of Ast_expr_builtin.t
+    | Builtin of Ast_Expr_Builtin.t
     | Global_function of int
-    | Local of Ast_expr_local.t
+    | Local of Ast_Expr_Local.t
 
-  and t = {variant: variant; ty: Value_type.t}
+  and t = {variant: variant; ty: Ast_Expr_Type.t}
 end =
-  Ast_expr
+  Ast_Expr
 
-and Ast_expr_builtin : sig
+and Ast_Expr_Builtin : sig
   type t = Less_eq | Add | Sub | Mul
 end =
-  Ast_expr_builtin
+  Ast_Expr_Builtin
 
 module Pervasives = struct
   include Cafec_containers

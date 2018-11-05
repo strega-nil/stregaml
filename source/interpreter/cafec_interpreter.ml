@@ -9,8 +9,8 @@ module Stmt = Ast.Stmt
 *)
 type t = {funcs: (string * Expr.block) array}
 
-module Immediate = struct
-  include Types.Immediate
+module Value = struct
+  include Types.Value
 
   type function_index = Types.Function_index.t
 
@@ -47,26 +47,35 @@ module Immediate = struct
     | Builtin Expr.Builtin.Less_eq -> "<builtin less_eq>"
 end
 
-module Value = struct
-  include Types.Value
+module Expr_result = struct
+  include Types.Expr_result
 
-  let to_immediate = function
-    | Immediate imm -> imm
-    | Object {immediate; _} -> Immediate.clone !immediate
-
-  let obj ~is_mut immediate =
-    let immediate = ref immediate in
-    let header = {is_mut; in_scope = true} in
-    {header; immediate}
+  let to_value = function
+    | Value value -> value
+    | Place {value; _} -> Value.clone !value
 
   let assign obj imm =
     assert obj.header.is_mut ;
     assert obj.header.in_scope ;
-    obj.immediate := imm
+    obj.value := imm
+end
+
+module Object = struct
+  type t =
+    { header: Expr_result.object_header
+    ; value: Value.t ref }
+
+  let place {header; value} =
+    {Expr_result.header; Expr_result.value}
+
+  let obj ~is_mut value =
+    let value = ref value in
+    let header = Expr_result.{is_mut; in_scope = true} in
+    {header; value}
 
   let drop obj =
-    assert obj.header.in_scope ;
-    obj.header.in_scope <- true
+    assert obj.header.Expr_result.in_scope ;
+    obj.header.Expr_result.in_scope <- true
 end
 
 let make ast =
@@ -85,13 +94,13 @@ let get_function ctxt ~name =
     Array.findi ctxt.funcs ~f:(fun _ (name', _) -> String.equal name name')
   with
   | None -> None
-  | Some (n, _) -> Some (Immediate.function_index_of_int n)
+  | Some (n, _) -> Some (Value.function_index_of_int n)
 
 let is_mut = function
-  | Ast.Value_type.Immutable -> false
-  | Ast.Value_type.Mutable -> true
+  | Ast.Expr.Type.Immutable -> false
+  | Ast.Expr.Type.Mutable -> true
 
-let call ctxt (idx: Immediate.function_index) (args: Immediate.t list) =
+let call ctxt (idx: Value.function_index) (args: Value.t list) =
   let rec eval_block ctxt locals Expr.({stmts; expr}) =
     let rec helper locals = function
       | [] -> locals
@@ -101,98 +110,98 @@ let call ctxt (idx: Immediate.function_index) (args: Immediate.t list) =
             let _ = eval ctxt locals e in
             helper locals xs
         | Stmt.Let {expr= expr, _; binding= Ast.Binding.{mutability; _}; _} ->
-            let v = Value.to_immediate (eval ctxt locals expr) in
-            let locals = (Value.obj ~is_mut:(is_mut mutability) v) :: locals in
+            let v = Expr_result.to_value (eval ctxt locals expr) in
+            let locals = (Object.obj ~is_mut:(is_mut mutability) v) :: locals in
             helper locals xs )
     in
     let locals = helper locals stmts in
     match expr with
-    | Some (e, _) -> Value.to_immediate (eval ctxt locals e)
-    | None -> Immediate.Unit
+    | Some (e, _) -> Expr_result.to_value (eval ctxt locals e)
+    | None -> Value.Unit
   and eval ctxt locals e =
     let Expr.({variant; _}) = e in
     match variant with
-    | Expr.Unit_literal -> Value.Immediate Immediate.Unit
-    | Expr.Bool_literal b -> Value.Immediate (Immediate.Bool b)
-    | Expr.Integer_literal n -> Value.Immediate (Immediate.Integer n)
+    | Expr.Unit_literal -> Expr_result.Value Value.Unit
+    | Expr.Bool_literal b -> Expr_result.Value (Value.Bool b)
+    | Expr.Integer_literal n -> Expr_result.Value (Value.Integer n)
     | Expr.If_else {cond= cond, _; thn= thn, _; els= els, _} -> (
-      match Value.to_immediate (eval ctxt locals cond) with
-      | Immediate.Bool true -> Value.Immediate (eval_block ctxt locals thn)
-      | Immediate.Bool false -> Value.Immediate (eval_block ctxt locals els)
+      match Expr_result.to_value (eval ctxt locals cond) with
+      | Value.Bool true -> Expr_result.Value (eval_block ctxt locals thn)
+      | Value.Bool false -> Expr_result.Value (eval_block ctxt locals els)
       | _ -> assert false )
     | Expr.Local Expr.Local.({index; _}) ->
-        Value.Object (List.nth_exn locals index)
+        Expr_result.Place (Object.place (List.nth_exn locals index))
     | Expr.Call ((e, _), args) -> (
-      match Value.to_immediate (eval ctxt locals e) with
-      | Immediate.Function func ->
+      match Expr_result.to_value (eval ctxt locals e) with
+      | Value.Function func ->
           let _, expr = ctxt.funcs.((func :> int)) in
           let ready_arg (arg, _) =
-            let imm = Value.to_immediate (eval ctxt locals arg) in
+            let imm = Expr_result.to_value (eval ctxt locals arg) in
             (* we should actually be figuring out whether these should be mut *)
-            Value.obj ~is_mut:false imm
+            Object.obj ~is_mut:false imm
           in
           let args = List.map args ~f:ready_arg in
           let ret = (eval_block ctxt args expr) in
-          List.iter ~f:Value.drop args ;
-          Value.Immediate ret
-      | Immediate.Builtin b ->
+          List.iter ~f:Object.drop args ;
+          Expr_result.Value ret
+      | Value.Builtin b ->
           let (lhs, _), (rhs, _) =
             match args with [lhs; rhs] -> (lhs, rhs) | _ -> assert false
           in
           let lhs =
-            match Value.to_immediate (eval ctxt locals lhs) with
-            | Immediate.Integer v -> v
+            match Expr_result.to_value (eval ctxt locals lhs) with
+            | Value.Integer v -> v
             | _ -> assert false
           in
           let rhs =
-            match Value.to_immediate (eval ctxt locals rhs) with
-            | Immediate.Integer v -> v
+            match Expr_result.to_value (eval ctxt locals rhs) with
+            | Value.Integer v -> v
             | _ -> assert false
           in
           let ret =
             match b with
-            | Expr.Builtin.Add -> Immediate.Integer (lhs + rhs)
-            | Expr.Builtin.Sub -> Immediate.Integer (lhs - rhs)
-            | Expr.Builtin.Mul -> Immediate.Integer (lhs * rhs)
-            | Expr.Builtin.Less_eq -> Immediate.Bool (lhs <= rhs)
+            | Expr.Builtin.Add -> Value.Integer (lhs + rhs)
+            | Expr.Builtin.Sub -> Value.Integer (lhs - rhs)
+            | Expr.Builtin.Mul -> Value.Integer (lhs * rhs)
+            | Expr.Builtin.Less_eq -> Value.Bool (lhs <= rhs)
           in
-          Value.Immediate ret
+          Expr_result.Value ret
       | _ -> assert false )
-    | Expr.Builtin b -> Value.Immediate (Immediate.Builtin b)
-    | Expr.Block (b, _) -> Value.Immediate (eval_block ctxt locals b)
-    | Expr.Global_function i -> Value.Immediate (Immediate.Function (Immediate.function_index_of_int i))
+    | Expr.Builtin b -> Expr_result.Value (Value.Builtin b)
+    | Expr.Block (b, _) -> Expr_result.Value (eval_block ctxt locals b)
+    | Expr.Global_function i -> Expr_result.Value (Value.Function (Value.function_index_of_int i))
     | Expr.Record_literal {members; _} ->
         let members =
           let f ((name, (e, _)), _) =
-            let immediate = ref (Value.to_immediate (eval ctxt locals e)) in
+            let immediate = ref (Expr_result.to_value (eval ctxt locals e)) in
             (name, immediate)
           in
           List.map members ~f
         in
-        Value.Immediate (Immediate.Record members)
+        Expr_result.Value (Value.Record members)
     | Expr.Record_access ((e, _), member) -> (
         let find_member (name, _) = String.equal name member in
         let v = eval ctxt locals e in
         match v with
-        | Value.Immediate (Immediate.Record members) ->
+        | Expr_result.Value (Value.Record members) ->
             let _, e = List.find_exn ~f:find_member members in
-            Value.Immediate !e
-        | Value.Object Value.{immediate; header} -> (
-            match !immediate with
-            | Immediate.Record members ->
-              let _, immediate = List.find_exn ~f:find_member members in
-              Value.Object Value.{immediate; header}
+            Expr_result.Value !e
+        | Expr_result.Place Expr_result.{value; header} -> (
+            match !value with
+            | Value.Record members ->
+              let _, value = List.find_exn ~f:find_member members in
+              Expr_result.Place Expr_result.{value; header}
             | _ -> assert false )
         | _ -> assert false )
     | Expr.Assign {dest= dest, _; source= source, _} ->
         let dest = eval ctxt locals dest in
-        let source = Value.to_immediate (eval ctxt locals source) in
+        let source = Expr_result.to_value (eval ctxt locals source) in
         match dest with
-        | Value.Immediate _ -> assert false
-        | Value.Object obj ->
-            Value.assign obj source ;
-            Value.Immediate Immediate.Unit
+        | Expr_result.Value _ -> assert false
+        | Expr_result.Place obj ->
+            Expr_result.assign obj source ;
+            Expr_result.Value Value.Unit
   in
   let _, blk = ctxt.funcs.((idx :> int)) in
-  let args = List.map ~f:(Value.obj ~is_mut:false) args in
+  let args = List.map ~f:(Object.obj ~is_mut:false) args in
   eval_block ctxt args blk

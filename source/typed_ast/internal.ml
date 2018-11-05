@@ -3,8 +3,7 @@ module Span = Spanned.Span
 module Untyped_ast = Cafec_parse.Ast
 module Expr = Ast.Expr
 module Local = Ast.Expr.Local
-module Binding = Types.Binding
-module Value_type = Types.Value_type
+module Binding = Ast.Binding
 
 module Function_declaration = struct
   type t = {name: string; params: Binding.t list; ret_ty: Type.t}
@@ -80,7 +79,7 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
       | U.Stmt.Let {name; is_mut; ty; expr} ->
           let%bind expr = spanned_bind (typeck_expression locals ctxt expr) in
           let T.Expr.({ty= expr_ty; _}), _ = expr in
-          let Value_type.({ty= expr_ty; _}) = expr_ty in
+          let T.Expr.Type.({ty= expr_ty; _}) = expr_ty in
           let%bind ty =
             match ty with
             | None -> return (expr_ty, Spanned.Span.made_up)
@@ -95,7 +94,7 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
                     (Error.Incorrect_let_type {name; let_ty= ty; expr_ty})
           in
           let mutability =
-            if is_mut then Value_type.Mutable else Value_type.Immutable
+            if is_mut then T.Expr.Type.Mutable else T.Expr.Type.Immutable
           in
           let binding = Binding.{name; mutability; ty} in
           let locals = binding :: locals in
@@ -118,16 +117,16 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   let module T = Expr in
   let unt_expr, sp = unt_expr in
   let%bind () = with_span sp in
-  let immediate_type ty = Value_type.{category= Immediate; ty} in
+  let value_type ty = T.Type.{category= Value; ty} in
   match unt_expr with
   | U.Unit_literal ->
-      let ty = immediate_type (Type.Builtin Type.Unit) in
+      let ty = value_type (Type.Builtin Type.Unit) in
       return T.{variant= Unit_literal; ty}
   | U.Bool_literal b ->
-      let ty = immediate_type (Type.Builtin Type.Bool) in
+      let ty = value_type (Type.Builtin Type.Bool) in
       return T.{variant= Bool_literal b; ty}
   | U.Integer_literal i ->
-      let ty = immediate_type (Type.Builtin Type.Int32) in
+      let ty = value_type (Type.Builtin Type.Int32) in
       return T.{variant= Integer_literal i; ty}
   | U.If_else {cond; thn; els} -> (
       let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
@@ -143,7 +142,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           let els_ty = typeof els in
           if Type.equal thn_ty els_ty then
             return
-              T.{variant= If_else {cond; thn; els}; ty= immediate_type thn_ty}
+              T.{variant= If_else {cond; thn; els}; ty= value_type thn_ty}
           else
             return_err (Error.If_branches_of_differing_type (thn_ty, els_ty))
       | ty -> return_err (Error.If_non_bool ty) )
@@ -176,25 +175,25 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                    {expected= params; found= List.map ~f:T.base_type_sp args})
         | ty -> return_err (Error.Call_of_non_function ty)
       in
-      return T.{variant= Call (callee, args); ty= immediate_type ret_ty}
+      return T.{variant= Call (callee, args); ty= value_type ret_ty}
   | U.Variable {path= _; name} -> (
     match find_local name locals with
     | Some loc ->
         let Binding.({ty= ty, _; mutability; _}) = loc.Local.binding in
-        let ty = Value_type.{ty; category= Place {mutability}} in
+        let ty = T.Type.{ty; category= Place {mutability}} in
         return T.{variant= Local loc; ty}
     | None -> (
       match Functions.index_by_name ctxt.function_context name with
       | None -> (
           let int32_ty = Type.(Builtin Int32) in
           let less_eq_ty =
-            immediate_type
+            value_type
               Type.(
                 Builtin
                   (Function {params= [int32_ty; int32_ty]; ret_ty= Builtin Bool}))
           in
           let op_ty =
-            immediate_type
+            value_type
               Type.(
                 Builtin
                   (Function {params= [int32_ty; int32_ty]; ret_ty= int32_ty}))
@@ -215,7 +214,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
             in
             let params = get_params decl.Function_declaration.params in
             let ret_ty = decl.Function_declaration.ret_ty in
-            immediate_type (Type.Builtin (Type.Function {params; ret_ty}))
+            value_type (Type.Builtin (Type.Function {params; ret_ty}))
           in
           return T.{variant= Global_function idx; ty} ) )
   | U.Block blk ->
@@ -223,7 +222,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let ty =
         match blk with
         | T.({expr= Some ({ty; _}, _); _}), _ -> ty
-        | _ -> immediate_type (Type.Builtin Type.Unit)
+        | _ -> value_type (Type.Builtin Type.Unit)
       in
       return T.{variant= Block blk; ty}
   | U.Record_literal {ty; members} ->
@@ -299,17 +298,17 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       return
         T.
           { variant= Record_literal {ty= (ty, ty_sp); members}
-          ; ty= immediate_type ty }
+          ; ty= value_type ty }
   | U.Record_access (expr, member) ->
       let%bind expr = spanned_bind (typeck_expression locals ctxt expr) in
-      let ety = T.value_type_sp expr in
+      let ety = T.full_type_sp expr in
       let%bind ty =
-        let Value_type.({category= ecat; ty= ebty}) = ety in
+        let T.Type.({category= ecat; ty= ebty}) = ety in
         match Type.structural ebty ~ctxt:ctxt.type_context with
         | Type.Structural.Record members -> (
             let f (n, _) = String.equal n member in
             match List.find ~f members with
-            | Some (_, ty) -> return Value_type.{category= ecat; ty}
+            | Some (_, ty) -> return T.Type.{category= ecat; ty}
             | None ->
                 return_err (Error.Record_access_non_member (ebty, member)) )
         | _ -> return_err (Error.Record_access_non_record_type (ebty, member))
@@ -318,8 +317,8 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Assign {dest; source} -> (
       let%bind dest = spanned_bind (typeck_expression locals ctxt dest) in
       let%bind source = spanned_bind (typeck_expression locals ctxt source) in
-      let Value_type.({category= dest_cat; ty= dest_ty}) =
-        T.value_type_sp dest
+      let T.Type.({category= dest_cat; ty= dest_ty}) =
+        T.full_type_sp dest
       in
       let source_ty = T.base_type_sp source in
       if not (Type.equal dest_ty source_ty) then
@@ -328,11 +327,11 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
              {dest= dest_ty; source= source_ty})
       else
         match dest_cat with
-        | Value_type.Immediate -> return_err Error.Assignment_to_immediate
-        | Value_type.Place {mutability= Value_type.Immutable} ->
+        | T.Type.Value -> return_err Error.Assignment_to_value
+        | T.Type.Place {mutability= T.Type.Immutable} ->
             return_err Error.Assignment_to_immutable_place
-        | Value_type.Place {mutability= Value_type.Mutable} ->
-            let ty = immediate_type (Type.Builtin Type.Unit) in
+        | T.Type.Place {mutability= T.Type.Mutable} ->
+            let ty = value_type (Type.Builtin Type.Unit) in
             return T.{variant= Assign {dest; source}; ty} )
 
 let add_function_declaration (ctxt : t)
@@ -346,7 +345,7 @@ let add_function_declaration (ctxt : t)
       | ((name, ty), _) :: xs ->
           let%bind ty = spanned_bind (Type.of_untyped ~ctxt ty) in
           let%bind tys = helper ctxt xs in
-          return (Binding.{name; mutability= Value_type.Immutable; ty} :: tys)
+          return (Binding.{name; mutability= Expr.Type.Immutable; ty} :: tys)
     in
     spanned_bind (helper ctxt.type_context params)
   in
@@ -386,7 +385,7 @@ let add_function_definition (ctxt : t)
       (typeck_block decl.Function_declaration.params ctxt unt_func.F.body)
   in
   let body_ty =
-    match body.Ast.Expr.expr with
+    match body.Expr.expr with
     | Some e -> Expr.base_type_sp e
     | None -> Type.Builtin Type.Unit
   in

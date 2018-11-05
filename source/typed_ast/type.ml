@@ -7,14 +7,14 @@ include Types.Type
   so we don't have to calculate types each time
 *)
 module Context = struct
-  include Types.Type_context
+  include Types.Type_Context
 
   let make lst = return (of_underlying lst)
 
   let empty = of_underlying []
 end
 
-module Structural = Types.Type_structural
+module Structural = Types.Type_Structural
 
 let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
     t result =

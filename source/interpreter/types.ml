@@ -1,4 +1,4 @@
-module rec Immediate : sig
+module rec Value : sig
   type t =
     | Unit
     | Bool of bool
@@ -7,7 +7,7 @@ module rec Immediate : sig
     | Record of (string * t ref) list
     | Builtin of Cafec_typed_ast.Expr.Builtin.t
 end =
-  Immediate
+  Value
 
 and Function_index : sig
   type t = private int
@@ -19,15 +19,15 @@ end = struct
   let of_int x = x
 end
 
-and Value : sig
-  type obj_header =
-    { is_mut : bool
+and Expr_result : sig
+  type object_header =
+    { is_mut: bool
     ; mutable in_scope: bool }
 
-  type obj =
-    { header: obj_header
-    ; immediate: Immediate.t ref }
+  type place =
+    { header: object_header
+    ; value: Value.t ref }
 
-  type t = Immediate of Immediate.t | Object of obj
+  type t = Value of Value.t | Place of place
 end =
-  Value
+  Expr_result

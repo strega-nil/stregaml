@@ -2,7 +2,6 @@ module Error = Error_print
 module Binding = Ast.Binding
 module Expr = Ast.Expr
 module Stmt = Ast.Stmt
-module Value_type = Ast.Value_type
 module Type = Type
 module Internal = Internal
 module Function_declaration = Internal.Function_declaration
