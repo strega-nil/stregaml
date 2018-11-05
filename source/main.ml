@@ -63,7 +63,7 @@ let interpret ty_ast _args =
   | Some f ->
       let v = Interpreter.call ctxt f [] in
       Out.output_string Out.stdout "main returned: " ;
-      Out.output_string Out.stdout (Interpreter.Value.to_string v ctxt) ;
+      Out.output_string Out.stdout (Interpreter.Immediate.to_string v ctxt) ;
       Out.newline Out.stdout
   | None -> Out.output_string Out.stderr "no main was found\n"
 

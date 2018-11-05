@@ -3,6 +3,9 @@ module rec Error : sig
     | Name_not_found of string
     | Type_not_found of string
     | Incorrect_let_type of {name: string; let_ty: Type.t; expr_ty: Type.t}
+    | Assignment_to_incompatible_type of {dest: Type.t; source: Type.t}
+    | Assignment_to_immediate
+    | Assignment_to_immutable_place
     | Record_literal_non_record_type of Type.t
     | Record_literal_duplicate_members of string
     | Record_literal_incorrect_type of
@@ -71,15 +74,39 @@ and Type_structural : sig
 end =
   Type_structural
 
+and Value_type : sig
+  type mutability = Immutable | Mutable
+
+  (* type owned = Owned | Borrowed *)
+
+  type category =
+    | Immediate
+    (* aka rvalue *)
+    | Place of {mutability: mutability (* owned: owned *)}
+
+  type t = {category: category; ty: Type.t}
+end =
+  Value_type
+
+and Binding : sig
+  type t =
+    { name: string Spanned.t
+    ; mutability: Value_type.mutability
+    ; ty: Type.t Spanned.t }
+end =
+  Binding
+
 and Ast_stmt : sig
   type t =
     | Expression of Ast_expr.t
-    | Let of
-        { name: string Spanned.t
-        ; ty: Type.t Spanned.t
-        ; expr: Ast_expr.t Spanned.t }
+    | Let of {binding: Binding.t; expr: Ast_expr.t Spanned.t}
 end =
   Ast_stmt
+
+and Ast_expr_local : sig
+  type t = {binding: Binding.t; index: int}
+end =
+  Ast_expr_local
 
 and Ast_expr : sig
   type block = {stmts: Ast_stmt.t Spanned.t list; expr: t Spanned.t option}
@@ -89,6 +116,7 @@ and Ast_expr : sig
     | Bool_literal of bool
     | Integer_literal of int
     | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
+    | Assign of {dest: t Spanned.t; source: t Spanned.t}
     | Call of t Spanned.t * t Spanned.t list
     | Block of block Spanned.t
     | Record_literal of
@@ -97,9 +125,9 @@ and Ast_expr : sig
     | Record_access of t Spanned.t * string
     | Builtin of Ast_expr_builtin.t
     | Global_function of int
-    | Local of int
+    | Local of Ast_expr_local.t
 
-  and t = {variant: variant; ty: Type.t}
+  and t = {variant: variant; ty: Value_type.t}
 end =
   Ast_expr
 

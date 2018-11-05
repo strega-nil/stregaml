@@ -51,6 +51,13 @@ module Implementation_stmt_expr = struct
           String.concat ~sep:", " (List.map args ~f)
         in
         String.concat [expr_to_string ~indent e; "("; args; ")"]
+    | Assign {source= source, _; dest= dest, _} ->
+        String.concat
+          [ "ASSIGN("
+          ; expr_to_string dest ~indent:(indent + 1)
+          ; ", "
+          ; expr_to_string source ~indent:(indent + 1)
+          ; ")" ]
     | Record_literal {ty= ty, _; members} ->
         let members =
           let f ((name, (expr, _)), _) =
@@ -85,14 +92,15 @@ module Implementation_stmt_expr = struct
     let open Types.Ast_stmt in
     match self with
     | Expression (e, _) -> expr_to_string ~indent e
-    | Let {name; ty; expr} ->
+    | Let {name; is_mut; ty; expr} ->
         let name, _ = name in
         let ty =
           match ty with Some (ty, _) -> Type.to_string ty | None -> ""
         in
+        let mut = if is_mut then "mut " else "" in
         let expr, _ = expr in
         String.concat
-          ["let "; name; ": "; ty; " = "; expr_to_string expr ~indent]
+          ["let "; mut; name; ": "; ty; " = "; expr_to_string expr ~indent]
 end
 
 module Stmt = struct

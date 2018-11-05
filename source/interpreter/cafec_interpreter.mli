@@ -1,20 +1,14 @@
 type t
 
-module Value :
+module Immediate :
   sig
+    include module type of struct
+        include Types.Immediate
+    end
+
+    type function_index = Types.Function_index.t
+
     type ctxt
-
-    type function_index
-
-    type t =
-      | Unit
-      | Bool of bool
-      | Integer of int
-      | Function of function_index
-      | Record of (string * t) list
-      | Builtin of Cafec_typed_ast.Expr.Builtin.t
-
-    val equal : t -> t -> bool
 
     val to_string : t -> ctxt -> string
   end
@@ -22,6 +16,6 @@ module Value :
 
 val make : Cafec_typed_ast.t -> t
 
-val get_function : t -> name:string -> Value.function_index option
+val get_function : t -> name:string -> Immediate.function_index option
 
-val call : t -> Value.function_index -> Value.t list -> Value.t
+val call : t -> Immediate.function_index -> Immediate.t list -> Immediate.t

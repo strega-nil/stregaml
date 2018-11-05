@@ -71,8 +71,7 @@ let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
   in
   helper parser f expected sep close false
 
-let rec maybe_parse_expression ?(gt_ends : bool option) (parser : t) :
-    Ast.Expr.t option result =
+let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
   let initial =
     match%bind spanned_bind (peek_token parser) with
     | Token.Keyword Token.Keyword.True, _ ->
@@ -97,6 +96,16 @@ let rec maybe_parse_expression ?(gt_ends : bool option) (parser : t) :
         let%bind () = get_specific parser (Token.Keyword Token.Keyword.Else) in
         let%bind els = spanned_bind (parse_block parser) in
         return (Some (Ast.Expr.If_else {cond; thn; els}))
+    (* TODO: remove this hack and switch to using the <- operator *)
+    | Token.Identifier "ASSIGN", _ -> (
+        eat_token parser ;
+        let%bind args = parse_argument_list parser in
+        match args with
+        | [dest; source] -> return (Some (Ast.Expr.Assign {dest; source}))
+        | lst ->
+            failwith
+              ( "ASSIGN requires 2 arguments; found "
+              ^ Int.to_string (List.length lst) ) )
     | Token.Identifier name, sp -> (
         eat_token parser ;
         match%bind maybe_get_specific parser Token.Double_colon with
@@ -108,7 +117,7 @@ let rec maybe_parse_expression ?(gt_ends : bool option) (parser : t) :
   in
   match%bind spanned_bind initial with
   | Some i, sp ->
-      let%bind x = parse_follow ?gt_ends parser (i, sp) in
+      let%bind x = parse_follow parser (i, sp) in
       return (Some x)
   | None, _ -> return None
 
@@ -138,7 +147,7 @@ and parse_record_literal (parser : t) ~(path : string list Spanned.t) :
   let f parser =
     let%bind name = get_ident parser in
     let%bind () = get_specific parser Token.Equals in
-    let%bind expr = spanned_bind (parse_expression ~gt_ends:true parser) in
+    let%bind expr = spanned_bind (parse_expression parser) in
     return (name, expr)
   in
   let%bind () = get_specific parser Token.Open_brace in
@@ -154,16 +163,15 @@ and parse_record_literal (parser : t) ~(path : string list Spanned.t) :
   in
   return (Ast.Expr.Record_literal {ty; members})
 
-and parse_expression ?(gt_ends : bool option) (parser : t) : Ast.Expr.t result
-    =
-  match%bind maybe_parse_expression ?gt_ends parser with
+and parse_expression (parser : t) : Ast.Expr.t result =
+  match%bind maybe_parse_expression parser with
   | Some expr -> return expr
   | None ->
       let%bind tok = next_token parser in
       return_err (Error.Unexpected_token (Error.Expected.Expression, tok))
 
-and parse_follow ?(gt_ends : bool = false) (parser : t)
-    ((initial, sp) : Ast.Expr.t Spanned.t) : Ast.Expr.t result =
+and parse_follow (parser : t) ((initial, sp) : Ast.Expr.t Spanned.t) :
+    Ast.Expr.t result =
   let%bind tok, tok_sp = spanned_bind (peek_token parser) in
   let%bind total, cont =
     match tok with
@@ -179,7 +187,7 @@ and parse_follow ?(gt_ends : bool = false) (parser : t)
         ( Error (Error.Unexpected_token (Error.Expected.Expression_follow, tok))
         , tok_sp )
   in
-  if cont then parse_follow ~gt_ends parser (total, sp) else return total
+  if cont then parse_follow parser (total, sp) else return total
 
 and parse_return_type (parser : t) : Ast.Type.t Spanned.t option result =
   match%bind maybe_get_specific parser Token.Arrow with
@@ -260,6 +268,10 @@ and parse_block_no_open (parser : t) : Ast.Expr.block result =
   match%bind peek_token parser with
   | Token.Keyword Token.Keyword.Let ->
       eat_token parser ;
+      let%bind mut_kw =
+        maybe_get_specific parser (Token.Keyword Token.Keyword.Mut)
+      in
+      let is_mut = match mut_kw with Some () -> true | None -> false in
       let%bind name, name_sp = spanned_bind (get_ident parser) in
       let name = (name, name_sp) in
       let%bind ty = maybe_parse_type_annotation parser in
@@ -270,7 +282,7 @@ and parse_block_no_open (parser : t) : Ast.Expr.block result =
       in
       let%bind blk = parse_block_no_open parser in
       let full_sp = Spanned.Span.union name_sp semi_sp in
-      let stmt = (Ast.Stmt.(Let {name; ty; expr}), full_sp) in
+      let stmt = (Ast.Stmt.(Let {name; is_mut; ty; expr}), full_sp) in
       return Ast.Expr.{blk with stmts= stmt :: blk.stmts}
   | _ -> (
       match%bind spanned_bind (maybe_parse_expression parser) with

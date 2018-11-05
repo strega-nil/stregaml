@@ -93,6 +93,7 @@ and Ast_expr : sig
     | Variable of {path: string list; name: string}
     | Block of block Spanned.t
     | Call of t Spanned.t * t Spanned.t list
+    | Assign of {dest: Ast_expr.t Spanned.t; source: Ast_expr.t Spanned.t}
     | Record_literal of
         { ty: Ast_type.t Spanned.t
         ; members: (string * t Spanned.t) Spanned.t list }
@@ -107,6 +108,7 @@ and Ast_stmt : sig
     | Expression of Ast_expr.t Spanned.t
     | Let of
         { name: string Spanned.t
+        ; is_mut: bool
         ; ty: Ast_type.t Spanned.t option
         ; expr: Ast_expr.t Spanned.t }
 end =
