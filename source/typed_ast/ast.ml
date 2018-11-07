@@ -3,7 +3,6 @@ module Binding = Types.Ast_Binding
 
 module Expr = struct
   include Types.Ast_Expr
-
   module Type = Types.Ast_Expr_Type
 
   let base_type {ty= {Type.ty; _}; _} = ty

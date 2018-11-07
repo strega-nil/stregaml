@@ -20,13 +20,9 @@ end = struct
 end
 
 and Expr_result : sig
-  type object_header =
-    { is_mut: bool
-    ; mutable in_scope: bool }
+  type object_header = {is_mut: bool; mutable in_scope: bool}
 
-  type place =
-    { header: object_header
-    ; value: Value.t ref }
+  type place = {header: object_header; value: Value.t ref}
 
   type t = Value of Value.t | Place of place
 end =

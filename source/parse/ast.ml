@@ -149,7 +149,7 @@ include Types.Ast
 
 let to_string self =
   let types =
-    let f (Type.Definition.({name; kind}), _) =
+    let f (Type.Definition.({name= name, _; kind}), _) =
       match kind with
       | Type.Definition.Alias data ->
           String.concat ["alias "; name; " = "; Type.to_string data; ";"]

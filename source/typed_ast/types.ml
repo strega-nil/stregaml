@@ -2,6 +2,7 @@ module rec Error : sig
   type t =
     | Name_not_found of string
     | Type_not_found of string
+    | Type_defined_multiple_times of string
     | Incorrect_let_type of {name: string; let_ty: Type.t; expr_ty: Type.t}
     | Assignment_to_incompatible_type of {dest: Type.t; source: Type.t}
     | Assignment_to_value
@@ -31,43 +32,9 @@ end =
 and Type : sig
   type builtin = Unit | Bool | Int32 | Function of {params: t list; ret_ty: t}
 
-  and t = Builtin of builtin | User_defined of Type_Context.index
+  and t = Builtin of builtin | User_defined of int
 end =
   Type
-
-and Type_Context : sig
-  type t
-
-  type underlying = Cafec_parse.Ast.Type.Definition.t Spanned.t list
-
-  type index
-
-  type index_underlying = int
-
-  val of_underlying : underlying -> t
-
-  val to_underlying : t -> underlying
-
-  val index_of_underlying : index_underlying -> index
-
-  val index_to_underlying : index -> index_underlying
-end = struct
-  type underlying = Cafec_parse.Ast.Type.Definition.t Spanned.t list
-
-  type t = underlying
-
-  type index_underlying = int
-
-  type index = index_underlying
-
-  let of_underlying x = x
-
-  let to_underlying x = x
-
-  let index_of_underlying x = x
-
-  let index_to_underlying x = x
-end
 
 and Type_Structural : sig
   type t = Builtin of Type.builtin | Record of (string * Type.t) list
@@ -79,9 +46,7 @@ and Ast_Expr_Type : sig
 
   (* type owned = Owned | Borrowed *)
 
-  type category =
-    | Value
-    | Place of {mutability: mutability (* owned: owned *)}
+  type category = Value | Place of {mutability: mutability (* owned: owned *)}
 
   type t = {category: category; ty: Type.t}
 end =

@@ -78,7 +78,7 @@ end =
 and Ast_type_definition : sig
   type kind = Alias of Ast_type.t | User_defined of {data: Ast_type_data.t}
 
-  type t = {name: string; kind: kind}
+  type t = {name: string Spanned.t; kind: kind}
 end =
   Ast_type_definition
 

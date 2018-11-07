@@ -141,8 +141,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           let thn_ty = typeof thn in
           let els_ty = typeof els in
           if Type.equal thn_ty els_ty then
-            return
-              T.{variant= If_else {cond; thn; els}; ty= value_type thn_ty}
+            return T.{variant= If_else {cond; thn; els}; ty= value_type thn_ty}
           else
             return_err (Error.If_branches_of_differing_type (thn_ty, els_ty))
       | ty -> return_err (Error.If_non_bool ty) )
@@ -317,9 +316,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Assign {dest; source} -> (
       let%bind dest = spanned_bind (typeck_expression locals ctxt dest) in
       let%bind source = spanned_bind (typeck_expression locals ctxt source) in
-      let T.Type.({category= dest_cat; ty= dest_ty}) =
-        T.full_type_sp dest
-      in
+      let T.Type.({category= dest_cat; ty= dest_ty}) = T.full_type_sp dest in
       let source_ty = T.base_type_sp source in
       if not (Type.equal dest_ty source_ty) then
         return_err

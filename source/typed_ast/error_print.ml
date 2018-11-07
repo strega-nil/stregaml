@@ -5,6 +5,8 @@ let to_string err ~ctxt =
   match err with
   | Name_not_found name -> Printf.sprintf "Name not found: %s" name
   | Type_not_found ty -> Printf.sprintf "Type not found: %s" ty
+  | Type_defined_multiple_times name ->
+      Printf.sprintf "Type declared multiple times: %s" name
   | Incorrect_let_type {name; let_ty; expr_ty} ->
       Printf.sprintf
         {|Let binding of `%s` is typed incorrectly:
@@ -13,6 +15,16 @@ let to_string err ~ctxt =
         name
         (Type.to_string let_ty ~ctxt)
         (Type.to_string expr_ty ~ctxt)
+  | Assignment_to_incompatible_type {dest; source} ->
+      Printf.sprintf
+        {|Attempted to assign to incompatible type:
+value is of type: `%s`
+place is of type: `%s`|}
+        (Type.to_string dest ~ctxt)
+        (Type.to_string source ~ctxt)
+  | Assignment_to_value -> "Attempted to assign to a value"
+  | Assignment_to_immutable_place ->
+      "Attempted to assign to an immutable place"
   | Record_literal_non_record_type ty ->
       Printf.sprintf
         "Attempted to create a record literal of non-record type `%s`"

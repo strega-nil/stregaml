@@ -5,9 +5,7 @@ include module type of struct
 end
 
 module Context : sig
-  type t = Types.Type_Context.t
-
-  type index = Types.Type_Context.index
+  type t
 
   val empty : t
 

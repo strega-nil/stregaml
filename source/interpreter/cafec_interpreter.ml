@@ -20,11 +20,11 @@ module Value = struct
     match imm with
     | Unit | Bool _ | Integer _ | Function _ | Builtin _ -> imm
     | Record r ->
-      let rec helper = function
-        | (name, x) :: xs -> (name, ref (clone !x)) :: helper xs
-        | [] -> []
-      in
-      Record (helper r)
+        let rec helper = function
+          | (name, x) :: xs -> (name, ref (clone !x)) :: helper xs
+          | [] -> []
+        in
+        Record (helper r)
 
   let rec to_string v ctxt =
     match v with
@@ -61,21 +61,18 @@ module Expr_result = struct
 end
 
 module Object = struct
-  type t =
-    { header: Expr_result.object_header
-    ; value: Value.t ref }
+  type t = {header: Expr_result.object_header; value: Value.t ref}
 
-  let place {header; value} =
-    {Expr_result.header; Expr_result.value}
+  let place {header; value} = {Expr_result.header; Expr_result.value}
 
   let obj ~is_mut value =
     let value = ref value in
-    let header = Expr_result.{is_mut; in_scope = true} in
+    let header = Expr_result.{is_mut; in_scope= true} in
     {header; value}
 
   let drop obj =
     assert obj.header.Expr_result.in_scope ;
-    obj.header.Expr_result.in_scope <- true
+    (obj.header).Expr_result.in_scope <- true
 end
 
 let make ast =
@@ -100,7 +97,7 @@ let is_mut = function
   | Ast.Expr.Type.Immutable -> false
   | Ast.Expr.Type.Mutable -> true
 
-let call ctxt (idx: Value.function_index) (args: Value.t list) =
+let call ctxt (idx : Value.function_index) (args : Value.t list) =
   let rec eval_block ctxt locals Expr.({stmts; expr}) =
     let rec helper locals = function
       | [] -> locals
@@ -109,9 +106,10 @@ let call ctxt (idx: Value.function_index) (args: Value.t list) =
         | Stmt.Expression e ->
             let _ = eval ctxt locals e in
             helper locals xs
-        | Stmt.Let {expr= expr, _; binding= Ast.Binding.{mutability; _}; _} ->
+        | Stmt.Let {expr= expr, _; binding= Ast.Binding.({mutability; _}); _}
+          ->
             let v = Expr_result.to_value (eval ctxt locals expr) in
-            let locals = (Object.obj ~is_mut:(is_mut mutability) v) :: locals in
+            let locals = Object.obj ~is_mut:(is_mut mutability) v :: locals in
             helper locals xs )
     in
     let locals = helper locals stmts in
@@ -141,7 +139,7 @@ let call ctxt (idx: Value.function_index) (args: Value.t list) =
             Object.obj ~is_mut:false imm
           in
           let args = List.map args ~f:ready_arg in
-          let ret = (eval_block ctxt args expr) in
+          let ret = eval_block ctxt args expr in
           List.iter ~f:Object.drop args ;
           Expr_result.Value ret
       | Value.Builtin b ->
@@ -169,7 +167,8 @@ let call ctxt (idx: Value.function_index) (args: Value.t list) =
       | _ -> assert false )
     | Expr.Builtin b -> Expr_result.Value (Value.Builtin b)
     | Expr.Block (b, _) -> Expr_result.Value (eval_block ctxt locals b)
-    | Expr.Global_function i -> Expr_result.Value (Value.Function (Value.function_index_of_int i))
+    | Expr.Global_function i ->
+        Expr_result.Value (Value.Function (Value.function_index_of_int i))
     | Expr.Record_literal {members; _} ->
         let members =
           let f ((name, (e, _)), _) =
@@ -186,21 +185,21 @@ let call ctxt (idx: Value.function_index) (args: Value.t list) =
         | Expr_result.Value (Value.Record members) ->
             let _, e = List.find_exn ~f:find_member members in
             Expr_result.Value !e
-        | Expr_result.Place Expr_result.{value; header} -> (
-            match !value with
-            | Value.Record members ->
+        | Expr_result.Place Expr_result.({value; header}) -> (
+          match !value with
+          | Value.Record members ->
               let _, value = List.find_exn ~f:find_member members in
               Expr_result.Place Expr_result.{value; header}
-            | _ -> assert false )
+          | _ -> assert false )
         | _ -> assert false )
-    | Expr.Assign {dest= dest, _; source= source, _} ->
+    | Expr.Assign {dest= dest, _; source= source, _} -> (
         let dest = eval ctxt locals dest in
         let source = Expr_result.to_value (eval ctxt locals source) in
         match dest with
         | Expr_result.Value _ -> assert false
         | Expr_result.Place obj ->
             Expr_result.assign obj source ;
-            Expr_result.Value Value.Unit
+            Expr_result.Value Value.Unit )
   in
   let _, blk = ctxt.funcs.((idx :> int)) in
   let args = List.map ~f:(Object.obj ~is_mut:false) args in

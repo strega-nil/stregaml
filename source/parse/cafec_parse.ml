@@ -309,17 +309,6 @@ and parse_block (parser : t) : Ast.Expr.block result =
   let%bind () = get_specific parser Token.Open_brace in
   parse_block_no_open parser
 
-and parse_user_defined_type (parser : t) : Ast.Type.Definition.t result =
-  let%bind name = get_ident parser in
-  let%bind () = get_specific parser Token.Open_brace in
-  let%bind () = get_specific parser (Token.Keyword Token.Keyword.Data) in
-  let%bind () = get_specific parser Token.Equals in
-  let%bind data = parse_data parser in
-  let%bind () = get_specific parser Token.Semicolon in
-  let%bind () = get_specific parser Token.Close_brace in
-  let kind = Ast.Type.Definition.User_defined {data} in
-  return Ast.Type.Definition.{name; kind}
-
 let parse_item (parser : t) : (Item.t option, Error.t) Spanned.Result.t =
   match%bind next_token parser with
   | Token.Keyword Token.Keyword.Func ->
@@ -329,16 +318,26 @@ let parse_item (parser : t) : (Item.t option, Error.t) Spanned.Result.t =
       let%bind body = spanned_bind (parse_block parser) in
       let func = Ast.Func.{name; params; ret_ty; body} in
       return (Some (Item.Func func))
-  | Token.Keyword Token.Keyword.Alias ->
-      let%bind name = get_ident parser in
-      let%bind () = get_specific parser Token.Equals in
-      let%bind ty = parse_type parser in
-      let%bind () = get_specific parser Token.Semicolon in
-      let kind = Ast.Type.Definition.Alias ty in
-      let def = Ast.Type.Definition.{name; kind} in
-      return (Some (Item.Type_definition def))
   | Token.Keyword Token.Keyword.Type ->
-      let%bind def = parse_user_defined_type parser in
+      let%bind name = spanned_bind (get_ident parser) in
+      let%bind kind =
+        match%bind maybe_get_specific parser Token.Equals with
+        | Some () ->
+            let%bind ty = parse_type parser in
+            let%bind () = get_specific parser Token.Semicolon in
+            return (Ast.Type.Definition.Alias ty)
+        | None ->
+            let%bind () = get_specific parser Token.Open_brace in
+            let%bind () =
+              get_specific parser (Token.Keyword Token.Keyword.Data)
+            in
+            let%bind () = get_specific parser Token.Equals in
+            let%bind data = parse_data parser in
+            let%bind () = get_specific parser Token.Semicolon in
+            let%bind () = get_specific parser Token.Close_brace in
+            return (Ast.Type.Definition.User_defined {data})
+      in
+      let def = Ast.Type.Definition.{name; kind} in
       return (Some (Item.Type_definition def))
   | Token.Eof -> return None
   | tok ->
