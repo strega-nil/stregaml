@@ -65,5 +65,36 @@ module Result = struct
     let with_span sp = (Ok (), sp)
 
     let span_of (_, sp) = sp
+
+    let return_map lst ~f =
+      let open! Let_syntax in
+      let rec helper f = function
+        | [] -> return []
+        | x :: xs ->
+            let%bind x = f x in
+            let%bind rest = helper f xs in
+            return (x :: rest)
+      in
+      helper f lst
+
+    let return_fold lst ~init ~f =
+      let open! Let_syntax in
+      let rec helper f init = function
+      | [] -> return init
+      | x :: xs ->
+          let%bind init' = f init x in
+          helper f init' xs
+      in
+      helper f init lst
+
+    let return_iteri lst ~f =
+      let open! Let_syntax in
+      let rec helper f index = function
+        | [] -> return ()
+        | x :: xs ->
+            let%bind () = f index x in
+            helper f (index + 1) xs
+      in
+      helper f 0 lst
   end
 end

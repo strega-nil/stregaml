@@ -36,6 +36,13 @@ module Result :
       val with_span : Span.t -> (unit, _) t
 
       val span_of : (_, _) t -> Span.t
+
+      val return_map : 'a list -> f:('a -> ('b, 'e) t) -> ('b list, 'e) t
+
+      val return_fold : 'a list -> init:'b -> f:('b -> 'a -> ('b, 'e) t) -> ('b, 'e) t
+
+      val return_iteri :
+        'a list -> f:(int -> 'a -> (unit, 'e) t) -> (unit, 'e) t
     end
   end
   with type 'a spanned := 'a t

@@ -53,14 +53,8 @@ module Context = struct
               | _ -> return_err (Error.Type_not_found name) ) )
         | n -> return (User_defined n) )
       | PType.Function (params, ret_ty) ->
-          let rec map_params = function
-            | [] -> return []
-            | (x, _) :: xs ->
-                let%bind first = get_ast_type x in
-                let%bind rest = map_params xs in
-                return (first :: rest)
-          in
-          let%bind params = map_params params in
+          let f (x, _) = get_ast_type x in
+          let%bind params = return_map ~f params in
           let%bind ret_ty =
             match ret_ty with
             | Some (ty, _) -> get_ast_type ty
@@ -84,42 +78,31 @@ module Context = struct
         if String.equal name_idx name then true
         else exists_duplicate (idx + 1) end_idx name
     in
-    let rec fill_defs index = function
-      | [] ->
-          assert (index = defs_len) ;
-          return ()
-      | ((name, name_sp), def) :: defs ->
-          let module Data = PType.Data in
-          if exists_duplicate 0 index name then
-            return_err (Error.Type_defined_multiple_times name)
-          else
-            let%bind data =
-              match def with Data.Record lst ->
-                let rec helper = function
-                  | [] -> return []
-                  | ((name, ty), _) :: xs ->
-                      let%bind first = get_ast_type ty in
-                      let%bind rest = helper xs in
-                      return ((name, first) :: rest)
-                in
-                let%bind members = helper lst in
-                return (Structural.Record members)
+    let fill_defs index ((name, name_sp), def) =
+      let module Data = PType.Data in
+      if exists_duplicate 0 index name then
+        return_err (Error.Type_defined_multiple_times name)
+      else
+        let%bind data =
+          match def with Data.Record lst ->
+            let f ((name, ty), _) =
+              let%bind ty = get_ast_type ty in
+              return (name, ty)
             in
-            user_defined.(index) <- {data} ;
-            names.(index) <- ((name, name_sp), User_defined index) ;
-            fill_defs (index + 1) defs
+            let%bind members = return_map ~f lst in
+            return (Structural.Record members)
+        in
+        user_defined.(index) <- {data} ;
+        names.(index) <- ((name, name_sp), User_defined index) ;
+        return ()
     in
-    let%bind () = fill_defs 0 defs in
-    let rec fill_aliases index = function
-      | [] ->
-          assert (index = names_len) ;
-          return ()
-      | (name, ty) :: xs ->
-          let%bind ty = get_ast_type ty in
-          names.(index) <- (name, ty) ;
-          fill_aliases (index + 1) xs
+    let%bind () = return_for_eachi ~f:fill_defs defs in
+    let fill_aliases index (name, ty) =
+      let%bind ty = get_ast_type ty in
+      names.(index + defs_len) <- (name, ty) ;
+      return ()
     in
-    let%bind () = fill_aliases defs_len aliases in
+    let%bind () = return_for_eachi ~f:fill_aliases aliases in
     return {user_defined; names}
 
   let empty = {user_defined= [||]; names= [||]}
@@ -143,19 +126,10 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
         | "Int32" -> return (Builtin Int32)
         | name -> return_err (Error.Type_not_found name) ) )
   | U.Function (params, ret_ty) ->
-      let rec map = function
-        | [] -> return []
-        | ty :: xs ->
-            let%bind ty = of_untyped ty ~ctxt in
-            let%bind rest = map xs in
-            return (ty :: rest)
-      in
-      let%bind params = map params in
-      let%bind ret_ty =
-        match ret_ty with
-        | None -> return (Builtin Unit)
-        | Some ty -> of_untyped ty ~ctxt
-      in
+      let f ty = of_untyped ty ~ctxt in
+      let default = return (Builtin Unit) in
+      let%bind params = return_map ~f params in
+      let%bind ret_ty = Option.value_map ~f ~default ret_ty in
       return (Builtin (Function {params; ret_ty}))
 
 let rec equal l r =

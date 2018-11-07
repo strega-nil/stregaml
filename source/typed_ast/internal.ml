@@ -55,15 +55,11 @@ end = struct
 end
 
 let find_local name (lst : Binding.t list) : Local.t option =
-  let rec helper name lst index =
-    match lst with
-    | [] -> None
-    | binding :: xs ->
-        let name', _ = binding.Binding.name in
-        if String.equal name' name then Some Local.{binding; index}
-        else helper name xs (index + 1)
+  let f index binding =
+    let name', _ = binding.Binding.name in
+    if String.equal name' name then Some Local.{binding; index} else None
   in
-  helper name lst 0
+  List.find_mapi ~f lst
 
 let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   let module U = Untyped_ast in
@@ -147,25 +143,16 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       | ty -> return_err (Error.If_non_bool ty) )
   | U.Call (callee, args) ->
       let%bind callee = spanned_bind (typeck_expression locals ctxt callee) in
-      let rec helper = function
-        | [] -> return []
-        | x :: xs ->
-            let%bind x = spanned_bind (typeck_expression locals ctxt x) in
-            let%bind xs = helper xs in
-            return (x :: xs)
-      in
-      let%bind args = helper args in
+      let f x = spanned_bind (typeck_expression locals ctxt x) in
+      let%bind args = return_map ~f args in
       let callee_ty = T.base_type_sp callee in
       let%bind ret_ty =
         match callee_ty with
         | Type.Builtin (Type.Function {params; ret_ty}) ->
-            let rec correct_types args params =
-              match (args, params) with
-              | [], [] -> true
-              | arg :: args, parm :: parms ->
-                  if not (Type.equal (T.base_type_sp arg) parm) then false
-                  else correct_types args parms
-              | _ -> false
+            let correct_types args params =
+              let f a p = Type.equal (T.base_type_sp a) p in
+              if List.length args <> List.length params then false
+              else List.for_all2_exn ~f args params
             in
             if correct_types args params then return ret_ty
             else
@@ -207,11 +194,10 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       | Some idx ->
           let ty =
             let decl, _ = Functions.decl_by_index ctxt.function_context idx in
-            let rec get_params = function
-              | Binding.({ty= ty, _; _}) :: xs -> ty :: get_params xs
-              | [] -> []
+            let params =
+              let f Binding.({ty= ty, _; _}) = ty in
+              List.map ~f decl.Function_declaration.params
             in
-            let params = get_params decl.Function_declaration.params in
             let ret_ty = decl.Function_declaration.ret_ty in
             value_type (Type.Builtin (Type.Function {params; ret_ty}))
           in
@@ -244,8 +230,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ :: xs -> has_dup el xs
       in
       let%bind members =
-        let rec map (xs : (string * U.t Spanned.t) Spanned.t list) =
-          match xs with
+        let rec helper = function
           | [] -> return []
           | ((name, expr), sp) :: xs ->
               let%bind expr =
@@ -269,10 +254,10 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                     return_err (Error.Record_literal_duplicate_members name)
                 | None -> return ()
               in
-              let%bind xs = map xs in
+              let%bind xs = helper xs in
               return (((name, expr), sp) :: xs)
         in
-        map members
+        helper members
       in
       let%bind () =
         let rec check_for_existence type_members members =
@@ -337,14 +322,11 @@ let add_function_declaration (ctxt : t)
   let unt_func, _ = unt_func in
   let {F.name; F.params; F.ret_ty; _} = unt_func in
   let%bind params, parm_sp =
-    let rec helper ctxt = function
-      | [] -> return []
-      | ((name, ty), _) :: xs ->
-          let%bind ty = spanned_bind (Type.of_untyped ~ctxt ty) in
-          let%bind tys = helper ctxt xs in
-          return (Binding.{name; mutability= Expr.Type.Immutable; ty} :: tys)
+    let f ((name, ty), _) =
+      let%bind ty = spanned_bind (Type.of_untyped ~ctxt:ctxt.type_context ty) in
+      return Binding.{name; mutability= Expr.Type.Immutable; ty}
     in
-    spanned_bind (helper ctxt.type_context params)
+    spanned_bind (return_map ~f params)
   in
   let%bind ret_ty =
     match ret_ty with
@@ -397,27 +379,15 @@ let add_function_definition (ctxt : t)
 
 let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
   let module U = Untyped_ast in
-  let rec add_function_declarations ast = function
-    | unt_func :: funcs ->
-        let%bind new_ast = add_function_declaration ast unt_func in
-        add_function_declarations new_ast funcs
-    | [] -> return ast
-  in
-  let rec add_function_definitions ast = function
-    | unt_func :: funcs ->
-        let%bind new_ast = add_function_definition ast unt_func in
-        add_function_definitions new_ast funcs
-    | [] -> return ast
-  in
   let%bind type_context =
     match Type.Context.make unt_ast.U.types with
     | Result.Ok o, sp -> (Result.Ok o, sp)
     | Result.Error e, sp -> (Result.Error (e, Type.Context.empty), sp)
   in
   let ret =
-    let ret = {type_context; function_context= []; function_definitions= []} in
-    let%bind ret = add_function_declarations ret unt_ast.U.funcs in
-    add_function_definitions ret unt_ast.U.funcs
+    let init = {type_context; function_context= []; function_definitions= []} in
+    let%bind init = return_fold unt_ast.U.funcs ~init ~f:add_function_declaration in
+    return_fold unt_ast.U.funcs ~init ~f:add_function_definition
   in
   match ret with
   | Result.Ok o, sp -> (Result.Ok o, sp)
