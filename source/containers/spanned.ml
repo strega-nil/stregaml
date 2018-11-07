@@ -78,14 +78,19 @@ module Result = struct
       helper f lst
 
     let return_fold lst ~init ~f =
-      let open! Let_syntax in
-      let rec helper f init = function
-      | [] -> return init
-      | x :: xs ->
-          let%bind init' = f init x in
-          helper f init' xs
+      let rec helper f folded sp lst =
+        match lst with
+        | [] ->
+            let%bind () = with_span sp in
+            folded
+        | x :: xs ->
+            match folded with
+            | Result.Ok o, sp ->
+                let folded = f o x in
+                helper f folded sp xs
+            | Result.Error e, sp -> Result.Error e, sp
       in
-      helper f init lst
+      helper f (return init) Span.made_up lst
 
     let return_iteri lst ~f =
       let open! Let_syntax in

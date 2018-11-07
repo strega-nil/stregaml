@@ -96,13 +96,13 @@ module Context = struct
         names.(index) <- ((name, name_sp), User_defined index) ;
         return ()
     in
-    let%bind () = return_for_eachi ~f:fill_defs defs in
+    let%bind () = return_iteri ~f:fill_defs defs in
     let fill_aliases index (name, ty) =
       let%bind ty = get_ast_type ty in
       names.(index + defs_len) <- (name, ty) ;
       return ()
     in
-    let%bind () = return_for_eachi ~f:fill_aliases aliases in
+    let%bind () = return_iteri ~f:fill_aliases aliases in
     return {user_defined; names}
 
   let empty = {user_defined= [||]; names= [||]}

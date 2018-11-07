@@ -95,12 +95,12 @@ module Implementation_stmt_expr = struct
     | Let {name; is_mut; ty; expr} ->
         let name, _ = name in
         let ty =
-          match ty with Some (ty, _) -> Type.to_string ty | None -> ""
+          match ty with Some (ty, _) -> ": " ^ Type.to_string ty | None -> ""
         in
         let mut = if is_mut then "mut " else "" in
         let expr, _ = expr in
         String.concat
-          ["let "; mut; name; ": "; ty; " = "; expr_to_string expr ~indent]
+          ["let "; mut; name; ty; " = "; expr_to_string expr ~indent]
 end
 
 module Stmt = struct
