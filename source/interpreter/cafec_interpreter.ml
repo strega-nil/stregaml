@@ -19,7 +19,7 @@ module Value = struct
 
   let rec clone imm =
     match imm with
-    | Unit | Bool _ | Integer _ | Function _ | Builtin _ -> imm
+    | Unit | Bool _ | Integer _ | Function _ | Builtin _ | Reference _ -> imm
     | Record r ->
         let rec helper = function
           | (name, x) :: xs -> (name, ref (clone !x)) :: helper xs
@@ -33,6 +33,10 @@ module Value = struct
     | Integer n -> Int.to_string n
     | Bool true -> "true"
     | Bool false -> "false"
+    | Reference place ->
+        let Types.Expr_result.({is_mut; value; _}) = place in
+        let pointer = if is_mut then "&mut " else "&" in
+        String.concat [pointer; "{"; to_string !value ctxt; "}"]
     | Record members ->
         let members =
           let f (name, e) = String.concat [name; " = "; to_string !e ctxt] in
@@ -55,21 +59,33 @@ module Expr_result = struct
     | Value value -> value
     | Place {value; _} -> Value.clone !value
 
-  let assign obj imm =
-    assert obj.header.is_mut ;
-    assert obj.header.in_scope ;
-    obj.value := imm
+  let reference ~is_mut = function
+    | Value _ -> assert false
+    | Place place ->
+        let is_mut = place.is_mut && is_mut in
+        let place = {place with is_mut} in
+        Value (Value.Reference place)
+
+  let deref r =
+    let r = to_value r in
+    match r with Value.Reference p -> Place p | _ -> assert false
+
+  let assign place imm =
+    assert place.is_mut ;
+    assert place.header.in_scope ;
+    place.value := imm
 end
 
 module Object = struct
-  type t = {header: Expr_result.object_header; value: Value.t ref}
+  type t = {header: Expr_result.object_header; is_mut: bool; value: Value.t ref}
 
-  let place {header; value} = {Expr_result.header; Expr_result.value}
+  let place {header; is_mut; value} =
+    {Expr_result.header; Expr_result.is_mut; Expr_result.value}
 
   let obj ~is_mut value =
     let value = ref value in
-    let header = Expr_result.{is_mut; in_scope= true} in
-    {header; value}
+    let header = Expr_result.{in_scope= true} in
+    {header; is_mut; value}
 
   let drop obj =
     assert obj.header.Expr_result.in_scope ;
@@ -94,9 +110,7 @@ let get_function ctxt ~name =
   | None -> None
   | Some (n, _) -> Some (Value.function_index_of_int n)
 
-let is_mut = function
-  | Type.Immutable -> false
-  | Type.Mutable -> true
+let is_mut = function Type.Immutable -> false | Type.Mutable -> true
 
 let call ctxt (idx : Value.function_index) (args : Value.t list) =
   let rec eval_block ctxt locals Expr.({stmts; expr}) =
@@ -170,6 +184,12 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | Expr.Block (b, _) -> Expr_result.Value (eval_block ctxt locals b)
     | Expr.Global_function i ->
         Expr_result.Value (Value.Function (Value.function_index_of_int i))
+    | Expr.Reference {mutability; place= place, _} ->
+        let place = eval ctxt locals place in
+        Expr_result.reference ~is_mut:(is_mut mutability) place
+    | Expr.Dereference (value, _) ->
+        let value = eval ctxt locals value in
+        Expr_result.deref value
     | Expr.Record_literal {members; _} ->
         let members =
           let f ((name, (e, _)), _) =
@@ -186,11 +206,11 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
         | Expr_result.Value (Value.Record members) ->
             let _, e = List.find_exn ~f:find_member members in
             Expr_result.Value !e
-        | Expr_result.Place Expr_result.({value; header}) -> (
+        | Expr_result.Place Expr_result.({value; is_mut; header}) -> (
           match !value with
           | Value.Record members ->
               let _, value = List.find_exn ~f:find_member members in
-              Expr_result.Place Expr_result.{value; header}
+              Expr_result.Place Expr_result.{value; is_mut; header}
           | _ -> assert false )
         | _ -> assert false )
     | Expr.Assign {dest= dest, _; source= source, _} -> (
@@ -198,8 +218,8 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
         let source = Expr_result.to_value (eval ctxt locals source) in
         match dest with
         | Expr_result.Value _ -> assert false
-        | Expr_result.Place obj ->
-            Expr_result.assign obj source ;
+        | Expr_result.Place place ->
+            Expr_result.assign place source ;
             Expr_result.Value Value.Unit )
   in
   let _, blk = ctxt.funcs.((idx :> int)) in

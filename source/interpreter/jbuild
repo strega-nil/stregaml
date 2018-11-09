@@ -4,4 +4,4 @@
   ((name cafec_interpreter)
   (libraries (base ppx_let cafec_typed_ast cafec_containers))
   (preprocess (pps (ppx_let)))
-  (flags (:standard -w +a-4 -open Base))))
+  (flags (:standard -w +a-4@8 -open Base))))

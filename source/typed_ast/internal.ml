@@ -89,9 +89,7 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
                   return_err
                     (Error.Incorrect_let_type {name; let_ty= ty; expr_ty})
           in
-          let mutability =
-            if is_mut then Type.Mutable else Type.Immutable
-          in
+          let mutability = if is_mut then Type.Mutable else Type.Immutable in
           let binding = Binding.{name; mutability; ty} in
           let locals = binding :: locals in
           let%bind xs, expr_locals = typeck_stmts locals xs in
@@ -162,46 +160,50 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | ty -> return_err (Error.Call_of_non_function ty)
       in
       return T.{variant= Call (callee, args); ty= value_type ret_ty}
-  | U.Variable {path= _; name} -> (
-    match find_local name locals with
-    | Some loc ->
-        let Binding.({ty= ty, _; mutability; _}) = loc.Local.binding in
-        let ty = T.Type.{ty; category= Place {mutability}} in
-        return T.{variant= Local loc; ty}
-    | None -> (
-      match Functions.index_by_name ctxt.function_context name with
+  | U.Variable {path; name} -> (
+      assert (List.length path = 0) ;
+      match find_local name locals with
+      | Some loc ->
+          let Binding.({ty= ty, _; mutability; _}) = loc.Local.binding in
+          let ty = T.Type.{ty; category= Place {mutability}} in
+          return T.{variant= Local loc; ty}
       | None -> (
-          let int32_ty = Type.(Builtin Int32) in
-          let less_eq_ty =
-            value_type
-              Type.(
-                Builtin
-                  (Function {params= [int32_ty; int32_ty]; ret_ty= Builtin Bool}))
-          in
-          let op_ty =
-            value_type
-              Type.(
-                Builtin
-                  (Function {params= [int32_ty; int32_ty]; ret_ty= int32_ty}))
-          in
-          match name with
-          | "LESS_EQ" ->
-              return T.{variant= Builtin T.Builtin.Less_eq; ty= less_eq_ty}
-          | "ADD" -> return T.{variant= Builtin T.Builtin.Add; ty= op_ty}
-          | "SUB" -> return T.{variant= Builtin T.Builtin.Sub; ty= op_ty}
-          | "MUL" -> return T.{variant= Builtin T.Builtin.Mul; ty= op_ty}
-          | _ -> return_err (Error.Name_not_found name) )
-      | Some idx ->
-          let ty =
-            let decl, _ = Functions.decl_by_index ctxt.function_context idx in
-            let params =
-              let f Binding.({ty= ty, _; _}) = ty in
-              List.map ~f decl.Function_declaration.params
+        match Functions.index_by_name ctxt.function_context name with
+        | None -> (
+            let int32_ty = Type.(Builtin Int32) in
+            let less_eq_ty =
+              value_type
+                Type.(
+                  Builtin
+                    (Function
+                       {params= [int32_ty; int32_ty]; ret_ty= Builtin Bool}))
             in
-            let ret_ty = decl.Function_declaration.ret_ty in
-            value_type (Type.Builtin (Type.Function {params; ret_ty}))
-          in
-          return T.{variant= Global_function idx; ty} ) )
+            let op_ty =
+              value_type
+                Type.(
+                  Builtin
+                    (Function {params= [int32_ty; int32_ty]; ret_ty= int32_ty}))
+            in
+            match name with
+            | "LESS_EQ" ->
+                return T.{variant= Builtin T.Builtin.Less_eq; ty= less_eq_ty}
+            | "ADD" -> return T.{variant= Builtin T.Builtin.Add; ty= op_ty}
+            | "SUB" -> return T.{variant= Builtin T.Builtin.Sub; ty= op_ty}
+            | "MUL" -> return T.{variant= Builtin T.Builtin.Mul; ty= op_ty}
+            | _ -> return_err (Error.Name_not_found name) )
+        | Some idx ->
+            let ty =
+              let decl, _ =
+                Functions.decl_by_index ctxt.function_context idx
+              in
+              let params =
+                let f Binding.({ty= ty, _; _}) = ty in
+                List.map ~f decl.Function_declaration.params
+              in
+              let ret_ty = decl.Function_declaration.ret_ty in
+              value_type (Type.Builtin (Type.Function {params; ret_ty}))
+            in
+            return T.{variant= Global_function idx; ty} ) )
   | U.Block blk ->
       let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
       let ty =
@@ -210,6 +212,31 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> value_type (Type.Builtin Type.Unit)
       in
       return T.{variant= Block blk; ty}
+  | U.Reference {is_mut; place} ->
+      let%bind place = spanned_bind (typeck_expression locals ctxt place) in
+      let mutability = if is_mut then Type.Mutable else Type.Immutable in
+      let pointee_ty = T.full_type_sp place in
+      let%bind ty =
+        match pointee_ty with
+        | T.Type.({category= Value; _}) ->
+            return_err (Error.Reference_taken_to_value mutability)
+        | T.Type.({category= Place {mutability= pmut}; ty= pointee}) -> (
+          match (mutability, pmut) with
+          | Type.Immutable, _ | Type.Mutable, Type.Mutable ->
+              return
+                (value_type
+                   (Type.Builtin (Type.Reference {mutability; pointee})))
+          | Type.Mutable, Type.Immutable ->
+              return_err Error.Mutable_reference_taken_to_immutable_place )
+      in
+      return T.{variant= Reference {mutability; place}; ty}
+  | U.Dereference value -> (
+      let%bind value = spanned_bind (typeck_expression locals ctxt value) in
+      match T.base_type_sp value with
+      | Type.Builtin (Type.Reference {mutability; pointee}) ->
+          let ty = T.Type.{category= Place {mutability}; ty= pointee} in
+          return T.{variant= Dereference value; ty}
+      | ty -> return_err (Error.Dereference_of_non_reference ty) )
   | U.Record_literal {ty; members} ->
       let%bind ty, ty_sp =
         spanned_bind (Type.of_untyped ty ~ctxt:ctxt.type_context)

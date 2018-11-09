@@ -7,6 +7,9 @@ module rec Error : sig
     | Assignment_to_incompatible_type of {dest: Type.t; source: Type.t}
     | Assignment_to_value
     | Assignment_to_immutable_place
+    | Reference_taken_to_value of Type.mutability
+    | Mutable_reference_taken_to_immutable_place
+    | Dereference_of_non_reference of Type.t
     | Record_literal_non_record_type of Type.t
     | Record_literal_duplicate_members of string
     | Record_literal_incorrect_type of
@@ -36,7 +39,7 @@ and Type : sig
     | Unit
     | Bool
     | Int32
-    | Pointer of {mutability: mutability; pointee: t}
+    | Reference of {mutability: mutability; pointee: t}
     | Function of {params: t list; ret_ty: t}
 
   and t = Builtin of builtin | User_defined of int
@@ -51,7 +54,9 @@ end =
 and Ast_Expr_Type : sig
   (* type owned = Owned | Borrowed *)
 
-  type category = Value | Place of {mutability: Type.mutability (* ; owned: owned *)}
+  type category =
+    | Value
+    | Place of {mutability: Type.mutability (* ; owned: owned *)}
 
   type t = {category: category; ty: Type.t}
 end =
@@ -59,9 +64,7 @@ end =
 
 and Ast_Binding : sig
   type t =
-    { name: string Spanned.t
-    ; mutability: Type.mutability
-    ; ty: Type.t Spanned.t }
+    {name: string Spanned.t; mutability: Type.mutability; ty: Type.t Spanned.t}
 end =
   Ast_Binding
 
@@ -88,6 +91,8 @@ and Ast_Expr : sig
     | Assign of {dest: t Spanned.t; source: t Spanned.t}
     | Call of t Spanned.t * t Spanned.t list
     | Block of block Spanned.t
+    | Reference of {mutability: Type.mutability; place: t Spanned.t}
+    | Dereference of t Spanned.t
     | Record_literal of
         { ty: Type.t Spanned.t
         ; members: (string * t Spanned.t) Spanned.t list }

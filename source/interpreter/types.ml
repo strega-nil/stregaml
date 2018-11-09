@@ -4,6 +4,7 @@ module rec Value : sig
     | Bool of bool
     | Integer of int
     | Function of Function_index.t
+    | Reference of Expr_result.place
     | Record of (string * t ref) list
     | Builtin of Cafec_typed_ast.Expr.Builtin.t
 end =
@@ -20,9 +21,9 @@ end = struct
 end
 
 and Expr_result : sig
-  type object_header = {is_mut: bool; mutable in_scope: bool}
+  type object_header = {mutable in_scope: bool}
 
-  type place = {header: object_header; value: Value.t ref}
+  type place = {header: object_header; is_mut: bool; value: Value.t ref}
 
   type t = Value of Value.t | Place of place
 end =

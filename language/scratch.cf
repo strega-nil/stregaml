@@ -10,13 +10,13 @@ func double(x: Int32) -> Int32 {
 }
 
 func map(v: &mut V2, f: func(Int32) -> Int32) {
-  ASSIGN(v.x, f(v.x));
-  let y = MUT_REF(v.y);
-  ASSIGN(DEREF(y), f(v.y));
+  ASSIGN(DEREF(v).x, f(DEREF(v).x));
+  let y = MUT_REF(DEREF(v).y);
+  ASSIGN(DEREF(y), f(DEREF(v).y));
 }
 
 func main() -> Int32 {
   let mut v = V2::{x = 20; y = 30};
-  map(MUT_REF(v), double));
+  map(MUT_REF(v), double);
   v.x
 }

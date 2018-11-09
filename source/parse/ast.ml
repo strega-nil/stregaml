@@ -7,7 +7,7 @@ module Type = struct
 
   let rec to_string = function
     | Named s -> s
-    | Pointer {is_mut; pointee= ty, _} ->
+    | Reference {is_mut; pointee= ty, _} ->
         let ptr = if is_mut then "&mut " else "&" in
         ptr ^ to_string ty
     | Function {params; ret_ty} ->
@@ -63,6 +63,11 @@ module Implementation_stmt_expr = struct
           ; ", "
           ; expr_to_string source ~indent:(indent + 1)
           ; ")" ]
+    | Reference {is_mut; place= place, _} ->
+        let name = if is_mut then "MUT_REF(" else "REF(" in
+        String.concat [name; expr_to_string place ~indent:(indent + 1); ")"]
+    | Dereference (value, _) ->
+        String.concat ["DEREF("; expr_to_string value ~indent:(indent + 1); ")"]
     | Record_literal {ty= ty, _; members} ->
         let members =
           let f ((name, (expr, _)), _) =

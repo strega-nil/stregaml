@@ -96,7 +96,7 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
         let%bind () = get_specific parser Token.Keyword_else in
         let%bind els = spanned_bind (parse_block parser) in
         return (Some (Ast.Expr.If_else {cond; thn; els}))
-    (* TODO: remove this hack and switch to using the <- operator *)
+    (* TODO: remove these hacks and switch to using operators *)
     | Token.Identifier "ASSIGN", _ -> (
         eat_token parser ;
         let%bind args = parse_argument_list parser in
@@ -105,6 +105,33 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
         | lst ->
             failwith
               ( "ASSIGN requires 2 arguments; found "
+              ^ Int.to_string (List.length lst) ) )
+    | Token.Identifier "MUT_REF", _ -> (
+        eat_token parser ;
+        let%bind args = parse_argument_list parser in
+        match args with
+        | [place] -> return (Some (Ast.Expr.Reference {is_mut= true; place}))
+        | lst ->
+            failwith
+              ( "MUT_REF requires 1 argument; found "
+              ^ Int.to_string (List.length lst) ) )
+    | Token.Identifier "REF", _ -> (
+        eat_token parser ;
+        let%bind args = parse_argument_list parser in
+        match args with
+        | [place] -> return (Some (Ast.Expr.Reference {is_mut= false; place}))
+        | lst ->
+            failwith
+              ( "REF requires 1 argument; found "
+              ^ Int.to_string (List.length lst) ) )
+    | Token.Identifier "DEREF", _ -> (
+        eat_token parser ;
+        let%bind args = parse_argument_list parser in
+        match args with
+        | [value] -> return (Some (Ast.Expr.Dereference value))
+        | lst ->
+            failwith
+              ( "DEREF requires 1 argument; found "
               ^ Int.to_string (List.length lst) ) )
     | Token.Identifier name, sp -> (
         eat_token parser ;
@@ -200,10 +227,15 @@ and parse_type (parser : t) : Ast.Type.t result =
   let%bind tok = next_token parser in
   match tok with
   | Token.Reference -> (
-      let%bind tok = next_token parser in
+      let%bind tok = peek_token parser in
       match tok with
-      | Token.Keyword_mut -> failwith "unimplemented"
-      | _ -> failwith "unimplemented" )
+      | Token.Keyword_mut ->
+          eat_token parser ;
+          let%bind pointee = spanned_bind (parse_type parser) in
+          return (Ast.Type.Reference {is_mut= true; pointee})
+      | _ ->
+          let%bind pointee = spanned_bind (parse_type parser) in
+          return (Ast.Type.Reference {is_mut= false; pointee}) )
   | Token.Identifier id -> return (Ast.Type.Named id)
   | Token.Keyword_func ->
       let%bind () = get_specific parser Token.Open_paren in

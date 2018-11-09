@@ -25,6 +25,14 @@ place is of type: `%s`|}
   | Assignment_to_value -> "Attempted to assign to a value"
   | Assignment_to_immutable_place ->
       "Attempted to assign to an immutable place"
+  | Reference_taken_to_value Type.Immutable ->
+      "Attempted to take a reference to a value"
+  | Reference_taken_to_value Type.Mutable ->
+      "Attempted to take a mutable reference to a value"
+  | Mutable_reference_taken_to_immutable_place ->
+      "Attempted to take a mutable reference to a mutable place"
+  | Dereference_of_non_reference ty ->
+      "Attempted to dereference non-reference type: " ^ Type.to_string ty ~ctxt
   | Record_literal_non_record_type ty ->
       Printf.sprintf
         "Attempted to create a record literal of non-record type `%s`"

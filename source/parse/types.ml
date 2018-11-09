@@ -61,7 +61,7 @@ end =
 and Ast_type : sig
   type t =
     | Named of string
-    | Pointer of {is_mut: bool; pointee: t Spanned.t}
+    | Reference of {is_mut: bool; pointee: t Spanned.t}
     | Function of {params: t Spanned.t list; ret_ty: t Spanned.t option}
 end =
   Ast_type
@@ -90,6 +90,8 @@ and Ast_expr : sig
     | Block of block Spanned.t
     | Call of t Spanned.t * t Spanned.t list
     | Assign of {dest: Ast_expr.t Spanned.t; source: Ast_expr.t Spanned.t}
+    | Reference of {is_mut: bool; place: Ast_expr.t Spanned.t}
+    | Dereference of Ast_expr.t Spanned.t
     | Record_literal of
         { ty: Ast_type.t Spanned.t
         ; members: (string * t Spanned.t) Spanned.t list }

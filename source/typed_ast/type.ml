@@ -52,9 +52,10 @@ module Context = struct
               | "Int32" -> return (Builtin Int32)
               | _ -> return_err (Error.Type_not_found name) ) )
         | n -> return (User_defined n) )
-      | PType.Pointer {is_mut; pointee= (p, _)} ->
+      | PType.Reference {is_mut; pointee= p, _} ->
           let mutability = if is_mut then Mutable else Immutable in
-          failwith "unimplemented"
+          let%bind pointee = get_ast_type p in
+          return (Builtin (Reference {mutability; pointee}))
       | PType.Function {params; ret_ty} ->
           let f (x, _) = get_ast_type x in
           let%bind params = return_map ~f params in
@@ -128,7 +129,10 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
         | "Bool" -> return (Builtin Bool)
         | "Int32" -> return (Builtin Int32)
         | name -> return_err (Error.Type_not_found name) ) )
-  | U.Pointer {is_mut; pointee} -> failwith "hi"
+  | U.Reference {is_mut; pointee} ->
+      let mutability = if is_mut then Mutable else Immutable in
+      let%bind pointee = of_untyped pointee ~ctxt in
+      return (Builtin (Reference {mutability; pointee}))
   | U.Function {params; ret_ty} ->
       let f ty = of_untyped ty ~ctxt in
       let default = return (Builtin Unit) in
@@ -141,6 +145,10 @@ let rec equal l r =
   | Builtin Unit, Builtin Unit -> true
   | Builtin Bool, Builtin Bool -> true
   | Builtin Int32, Builtin Int32 -> true
+  | Builtin (Reference l), Builtin (Reference r) -> (
+    match (l.mutability, r.mutability) with
+    | Mutable, Mutable | Immutable, Immutable -> equal l.pointee r.pointee
+    | _ -> false )
   | Builtin (Function f1), Builtin (Function f2) ->
       equal f1.ret_ty f2.ret_ty && List.equal f1.params f2.params ~equal
   | User_defined u1, User_defined u2 -> u1 = u2
@@ -156,12 +164,18 @@ let rec to_string ty ~(ctxt : Context.t) =
   | Builtin Unit -> "Unit"
   | Builtin Bool -> "Bool"
   | Builtin Int32 -> "Int32"
+  | Builtin (Reference {mutability; pointee}) ->
+      let pointer =
+        match mutability with Mutable -> "&mut " | Immutable -> "&"
+      in
+      let pointee = to_string pointee ~ctxt in
+      pointer ^ pointee
   | Builtin (Function {params; ret_ty}) ->
       let params =
         let f ty = to_string ty ~ctxt in
         String.concat ~sep:", " (List.map ~f params)
       in
-      String.concat ["func"; params; " -> "; to_string ret_ty ~ctxt]
+      String.concat ["func("; params; ") -> "; to_string ret_ty ~ctxt]
   | User_defined idx ->
       let (name, _), _ = ctxt.Context.names.(idx) in
       name
