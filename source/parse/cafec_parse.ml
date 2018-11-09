@@ -74,10 +74,10 @@ let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
 let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
   let initial =
     match%bind spanned_bind (peek_token parser) with
-    | Token.Keyword Token.Keyword.True, _ ->
+    | Token.Keyword_true, _ ->
         eat_token parser ;
         return (Some (Ast.Expr.Bool_literal true))
-    | Token.Keyword Token.Keyword.False, _ ->
+    | Token.Keyword_false, _ ->
         eat_token parser ;
         return (Some (Ast.Expr.Bool_literal false))
     | Token.Integer_literal n, _ ->
@@ -87,13 +87,13 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
         eat_token parser ;
         let%bind () = get_specific parser Token.Close_paren in
         return (Some Ast.Expr.Unit_literal)
-    | Token.Keyword Token.Keyword.If, _ ->
+    | Token.Keyword_if, _ ->
         eat_token parser ;
         let%bind () = get_specific parser Token.Open_paren in
         let%bind cond = spanned_bind (parse_expression parser) in
         let%bind () = get_specific parser Token.Close_paren in
         let%bind thn = spanned_bind (parse_block parser) in
-        let%bind () = get_specific parser (Token.Keyword Token.Keyword.Else) in
+        let%bind () = get_specific parser Token.Keyword_else in
         let%bind els = spanned_bind (parse_block parser) in
         return (Some (Ast.Expr.If_else {cond; thn; els}))
     (* TODO: remove this hack and switch to using the <- operator *)
@@ -199,8 +199,13 @@ and parse_return_type (parser : t) : Ast.Type.t Spanned.t option result =
 and parse_type (parser : t) : Ast.Type.t result =
   let%bind tok = next_token parser in
   match tok with
+  | Token.Reference -> (
+      let%bind tok = next_token parser in
+      match tok with
+      | Token.Keyword_mut -> failwith "unimplemented"
+      | _ -> failwith "unimplemented" )
   | Token.Identifier id -> return (Ast.Type.Named id)
-  | Token.Keyword Token.Keyword.Func ->
+  | Token.Keyword_func ->
       let%bind () = get_specific parser Token.Open_paren in
       let%bind params =
         parse_list parser ~f:parse_type ~sep:Token.Comma
@@ -208,13 +213,13 @@ and parse_type (parser : t) : Ast.Type.t result =
       in
       let%bind () = get_specific parser Token.Close_paren in
       let%bind ret_ty = parse_return_type parser in
-      return (Ast.Type.Function (params, ret_ty))
+      return (Ast.Type.Function {params; ret_ty})
   | tok -> return_err (Error.Unexpected_token (Error.Expected.Type, tok))
 
 and parse_data (parser : t) : Ast.Type.Data.t result =
   let%bind tok = next_token parser in
   match tok with
-  | Token.Keyword Token.Keyword.Record ->
+  | Token.Keyword_record ->
       let%bind () = get_specific parser Token.Open_brace in
       let%bind members =
         let f parser =
@@ -266,11 +271,9 @@ and parse_argument_list (parser : t) : Ast.Expr.t Spanned.t list result =
 
 and parse_block_no_open (parser : t) : Ast.Expr.block result =
   match%bind peek_token parser with
-  | Token.Keyword Token.Keyword.Let ->
+  | Token.Keyword_let ->
       eat_token parser ;
-      let%bind mut_kw =
-        maybe_get_specific parser (Token.Keyword Token.Keyword.Mut)
-      in
+      let%bind mut_kw = maybe_get_specific parser Token.Keyword_mut in
       let is_mut = match mut_kw with Some () -> true | None -> false in
       let%bind name, name_sp = spanned_bind (get_ident parser) in
       let name = (name, name_sp) in
@@ -311,14 +314,14 @@ and parse_block (parser : t) : Ast.Expr.block result =
 
 let parse_item (parser : t) : (Item.t option, Error.t) Spanned.Result.t =
   match%bind next_token parser with
-  | Token.Keyword Token.Keyword.Func ->
+  | Token.Keyword_func ->
       let%bind name = get_ident parser in
       let%bind params = parse_parameter_list parser in
       let%bind ret_ty = parse_return_type parser in
       let%bind body = spanned_bind (parse_block parser) in
       let func = Ast.Func.{name; params; ret_ty; body} in
       return (Some (Item.Func func))
-  | Token.Keyword Token.Keyword.Type ->
+  | Token.Keyword_type ->
       let%bind name = spanned_bind (get_ident parser) in
       let%bind kind =
         match%bind maybe_get_specific parser Token.Equals with
@@ -328,9 +331,7 @@ let parse_item (parser : t) : (Item.t option, Error.t) Spanned.Result.t =
             return (Ast.Type.Definition.Alias ty)
         | None ->
             let%bind () = get_specific parser Token.Open_brace in
-            let%bind () =
-              get_specific parser (Token.Keyword Token.Keyword.Data)
-            in
+            let%bind () = get_specific parser Token.Keyword_data in
             let%bind () = get_specific parser Token.Equals in
             let%bind data = parse_data parser in
             let%bind () = get_specific parser Token.Semicolon in

@@ -1,6 +1,7 @@
 module Ast = Cafec_typed_ast
 module Expr = Ast.Expr
 module Stmt = Ast.Stmt
+module Type = Ast.Type
 
 (*
   NOTE(ubsan): NEVER modify these arrays.
@@ -94,8 +95,8 @@ let get_function ctxt ~name =
   | Some (n, _) -> Some (Value.function_index_of_int n)
 
 let is_mut = function
-  | Ast.Expr.Type.Immutable -> false
-  | Ast.Expr.Type.Mutable -> true
+  | Type.Immutable -> false
+  | Type.Mutable -> true
 
 let call ctxt (idx : Value.function_index) (args : Value.t list) =
   let rec eval_block ctxt locals Expr.({stmts; expr}) =

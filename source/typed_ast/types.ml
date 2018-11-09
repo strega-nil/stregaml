@@ -30,7 +30,14 @@ end =
   Error
 
 and Type : sig
-  type builtin = Unit | Bool | Int32 | Function of {params: t list; ret_ty: t}
+  type mutability = Immutable | Mutable
+
+  type builtin =
+    | Unit
+    | Bool
+    | Int32
+    | Pointer of {mutability: mutability; pointee: t}
+    | Function of {params: t list; ret_ty: t}
 
   and t = Builtin of builtin | User_defined of int
 end =
@@ -42,11 +49,9 @@ end =
   Type_Structural
 
 and Ast_Expr_Type : sig
-  type mutability = Immutable | Mutable
-
   (* type owned = Owned | Borrowed *)
 
-  type category = Value | Place of {mutability: mutability (* owned: owned *)}
+  type category = Value | Place of {mutability: Type.mutability (* ; owned: owned *)}
 
   type t = {category: category; ty: Type.t}
 end =
@@ -55,7 +60,7 @@ end =
 and Ast_Binding : sig
   type t =
     { name: string Spanned.t
-    ; mutability: Ast_Expr_Type.mutability
+    ; mutability: Type.mutability
     ; ty: Type.t Spanned.t }
 end =
   Ast_Binding

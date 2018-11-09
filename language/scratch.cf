@@ -9,17 +9,14 @@ func double(x: Int32) -> Int32 {
   ADD(x, x)
 }
 
-func map(v: V2, f: func(Int32) -> Int32) -> V2 {
-  V2::{
-    x = f(v.x);
-    y = f(v.y);
-  }
+func map(v: &mut V2, f: func(Int32) -> Int32) {
+  ASSIGN(v.x, f(v.x));
+  let y = MUT_REF(v.y);
+  ASSIGN(DEREF(y), f(v.y));
 }
 
 func main() -> Int32 {
   let mut v = V2::{x = 20; y = 30};
-  ASSIGN(v, map(v, double));
-  //let p = MUT_REF(v);
-  //ASSIGN(p.x, 1);
+  map(MUT_REF(v), double));
   v.x
 }

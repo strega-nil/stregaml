@@ -90,7 +90,7 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
                     (Error.Incorrect_let_type {name; let_ty= ty; expr_ty})
           in
           let mutability =
-            if is_mut then T.Expr.Type.Mutable else T.Expr.Type.Immutable
+            if is_mut then Type.Mutable else Type.Immutable
           in
           let binding = Binding.{name; mutability; ty} in
           let locals = binding :: locals in
@@ -310,9 +310,9 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       else
         match dest_cat with
         | T.Type.Value -> return_err Error.Assignment_to_value
-        | T.Type.Place {mutability= T.Type.Immutable} ->
+        | T.Type.Place {mutability= Type.Immutable} ->
             return_err Error.Assignment_to_immutable_place
-        | T.Type.Place {mutability= T.Type.Mutable} ->
+        | T.Type.Place {mutability= Type.Mutable} ->
             let ty = value_type (Type.Builtin Type.Unit) in
             return T.{variant= Assign {dest; source}; ty} )
 
@@ -323,8 +323,10 @@ let add_function_declaration (ctxt : t)
   let {F.name; F.params; F.ret_ty; _} = unt_func in
   let%bind params, parm_sp =
     let f ((name, ty), _) =
-      let%bind ty = spanned_bind (Type.of_untyped ~ctxt:ctxt.type_context ty) in
-      return Binding.{name; mutability= Expr.Type.Immutable; ty}
+      let%bind ty =
+        spanned_bind (Type.of_untyped ~ctxt:ctxt.type_context ty)
+      in
+      return Binding.{name; mutability= Type.Immutable; ty}
     in
     spanned_bind (return_map ~f params)
   in
@@ -385,8 +387,12 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
     | Result.Error e, sp -> (Result.Error (e, Type.Context.empty), sp)
   in
   let ret =
-    let init = {type_context; function_context= []; function_definitions= []} in
-    let%bind init = return_fold unt_ast.U.funcs ~init ~f:add_function_declaration in
+    let init =
+      {type_context; function_context= []; function_definitions= []}
+    in
+    let%bind init =
+      return_fold unt_ast.U.funcs ~init ~f:add_function_declaration
+    in
     return_fold unt_ast.U.funcs ~init ~f:add_function_definition
   in
   match ret with

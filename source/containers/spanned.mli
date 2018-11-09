@@ -39,7 +39,8 @@ module Result :
 
       val return_map : 'a list -> f:('a -> ('b, 'e) t) -> ('b list, 'e) t
 
-      val return_fold : 'a list -> init:'b -> f:('b -> 'a -> ('b, 'e) t) -> ('b, 'e) t
+      val return_fold :
+        'a list -> init:'b -> f:('b -> 'a -> ('b, 'e) t) -> ('b, 'e) t
 
       val return_iteri :
         'a list -> f:(int -> 'a -> (unit, 'e) t) -> (unit, 'e) t

@@ -52,7 +52,10 @@ module Context = struct
               | "Int32" -> return (Builtin Int32)
               | _ -> return_err (Error.Type_not_found name) ) )
         | n -> return (User_defined n) )
-      | PType.Function (params, ret_ty) ->
+      | PType.Pointer {is_mut; pointee= (p, _)} ->
+          let mutability = if is_mut then Mutable else Immutable in
+          failwith "unimplemented"
+      | PType.Function {params; ret_ty} ->
           let f (x, _) = get_ast_type x in
           let%bind params = return_map ~f params in
           let%bind ret_ty =
@@ -125,7 +128,8 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
         | "Bool" -> return (Builtin Bool)
         | "Int32" -> return (Builtin Int32)
         | name -> return_err (Error.Type_not_found name) ) )
-  | U.Function (params, ret_ty) ->
+  | U.Pointer {is_mut; pointee} -> failwith "hi"
+  | U.Function {params; ret_ty} ->
       let f ty = of_untyped ty ~ctxt in
       let default = return (Builtin Unit) in
       let%bind params = return_map ~f params in

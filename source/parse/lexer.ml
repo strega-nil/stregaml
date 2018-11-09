@@ -45,7 +45,7 @@ let is_operator_start = function
       true
   | _ -> false
 
-let is_operator_continue ch = is_operator_start ch || Char.equal ch '.'
+let is_operator_continue ch = is_operator_start ch
 
 let current_span lex =
   let open Spanned.Span in
@@ -85,20 +85,20 @@ let lex_ident fst sp lex =
         buff := ch :: !buff ;
         helper (Spanned.Span.union sp sp')
     | Some _ | None -> (
-        let kw k = (Ok (Token.Keyword k), sp) in
+        let kw k = (Ok k, sp) in
         match String.of_char_list (List.rev !buff) with
-        | "true" -> kw Token.Keyword.True
-        | "false" -> kw Token.Keyword.False
-        | "if" -> kw Token.Keyword.If
-        | "else" -> kw Token.Keyword.Else
-        | "func" -> kw Token.Keyword.Func
-        | "type" -> kw Token.Keyword.Type
-        | "data" -> kw Token.Keyword.Data
-        | "record" -> kw Token.Keyword.Record
-        | "alias" -> kw Token.Keyword.Alias
-        | "let" -> kw Token.Keyword.Let
-        | "mut" -> kw Token.Keyword.Mut
-        | "_" -> kw Token.Keyword.Underscore
+        | "true" -> kw Token.Keyword_true
+        | "false" -> kw Token.Keyword_false
+        | "if" -> kw Token.Keyword_if
+        | "else" -> kw Token.Keyword_else
+        | "func" -> kw Token.Keyword_func
+        | "type" -> kw Token.Keyword_type
+        | "data" -> kw Token.Keyword_data
+        | "record" -> kw Token.Keyword_record
+        | "alias" -> kw Token.Keyword_alias
+        | "let" -> kw Token.Keyword_let
+        | "mut" -> kw Token.Keyword_mut
+        | "_" -> kw Token.Keyword_underscore
         | "variant" as res -> (Error (Error.Reserved_token res), sp)
         | "opaque" as res -> (Error (Error.Reserved_token res), sp)
         | "public" as res -> (Error (Error.Reserved_token res), sp)
@@ -220,6 +220,7 @@ let rec next_token lex =
         | "=" -> (Ok Token.Equals, sp)
         | "<-" -> (Ok Token.Assign, sp)
         | "->" -> (Ok Token.Arrow, sp)
+        | "&" -> (Ok Token.Reference, sp)
         | "|" as res -> (Error (Error.Reserved_token res), sp)
         | op when includes_operator_token op ->
             (Error (Error.Operator_including_comment_token op), sp)

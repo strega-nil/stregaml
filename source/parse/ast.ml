@@ -7,11 +7,16 @@ module Type = struct
 
   let rec to_string = function
     | Named s -> s
-    | Function (parms, ret) ->
+    | Pointer {is_mut; pointee= ty, _} ->
+        let ptr = if is_mut then "&mut " else "&" in
+        ptr ^ to_string ty
+    | Function {params; ret_ty} ->
         let f (x, _) = to_string x in
-        let ret = match ret with Some x -> ") -> " ^ f x | None -> ")" in
-        let parms = String.concat ~sep:", " (List.map parms ~f) in
-        String.concat ["func("; parms; ret]
+        let ret_ty =
+          match ret_ty with Some x -> ") -> " ^ f x | None -> ")"
+        in
+        let params = String.concat ~sep:", " (List.map params ~f) in
+        String.concat ["func("; params; ret_ty]
 
   module Data = struct
     include Types.Ast_type_data

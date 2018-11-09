@@ -83,12 +83,12 @@ module Result = struct
         | [] ->
             let%bind () = with_span sp in
             folded
-        | x :: xs ->
-            match folded with
-            | Result.Ok o, sp ->
-                let folded = f o x in
-                helper f folded sp xs
-            | Result.Error e, sp -> Result.Error e, sp
+        | x :: xs -> (
+          match folded with
+          | Result.Ok o, sp ->
+              let folded = f o x in
+              helper f folded sp xs
+          | Result.Error e, sp -> (Result.Error e, sp) )
       in
       helper f (return init) Span.made_up lst
 

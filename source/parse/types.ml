@@ -30,43 +30,39 @@ and Token : sig
     | Close_paren
     | Open_brace
     | Close_brace
-    | Keyword of Token_keyword.t
-    | Identifier of string
-    | Operator of string
-    | Integer_literal of int
-    | Assign
-    | Arrow
-    | Colon
-    | Double_colon
-    | Equals
     | Semicolon
     | Dot
     | Comma
+    | Integer_literal of int
+    | Operator of string
+    | Assign
+    | Arrow
+    | Reference
+    | Equals
+    | Colon
+    | Double_colon
+    | Identifier of string
+    | Keyword_true
+    | Keyword_false
+    | Keyword_if
+    | Keyword_else
+    | Keyword_func
+    | Keyword_type
+    | Keyword_data
+    | Keyword_record
+    | Keyword_alias
+    | Keyword_let
+    | Keyword_mut
+    | Keyword_underscore
     | Eof
 end =
   Token
 
-and Token_keyword : sig
-  type t =
-    | True
-    | False
-    | If
-    | Else
-    | Func
-    | Type
-    | Data
-    | Record
-    | Alias
-    | Let
-    | Mut
-    | Underscore
-end =
-  Token_keyword
-
 and Ast_type : sig
   type t =
     | Named of string
-    | Function of t Spanned.t list * t Spanned.t option
+    | Pointer of {is_mut: bool; pointee: t Spanned.t}
+    | Function of {params: t Spanned.t list; ret_ty: t Spanned.t option}
 end =
   Ast_type
 
