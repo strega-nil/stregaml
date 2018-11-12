@@ -1,4 +1,5 @@
 module Ast = Ast
 module Error = Error
+open! Types.Pervasives
 
-val parse : string -> (Ast.t, Error.t) Spanned.Result.t
+val parse : Stdio.In_channel.t -> Ast.t result

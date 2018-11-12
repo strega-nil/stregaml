@@ -6,7 +6,7 @@ module Type = struct
   include Types.Ast_type
 
   let rec to_string = function
-    | Named s -> s
+    | Named s -> (s :> string)
     | Reference {is_mut; pointee= ty, _} ->
         let ptr = if is_mut then "&mut " else "&" in
         ptr ^ to_string ty
@@ -22,8 +22,8 @@ module Type = struct
     include Types.Ast_type_data
 
     let to_string (Record members) =
-      let f ((name, ty), _) =
-        String.concat ["\n    "; name; ": "; to_string ty; ";"]
+      let f (((name : Ident.t), ty), _) =
+        String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
       in
       let members = String.concat (List.map members ~f) in
       String.concat ["record {"; members; "\n  }"]
@@ -48,7 +48,8 @@ module Implementation_stmt_expr = struct
           ; block_to_string thn ~indent
           ; " else "
           ; block_to_string els ~indent ]
-    | Variable {path; name} -> String.concat ~sep:"::" (path @ [name])
+    | Variable {path; name} ->
+        String.concat ~sep:"::" (path @ [name] :> string list)
     | Block (blk, _) -> block_to_string blk ~indent
     | Call ((e, _), args) ->
         let args =
@@ -70,15 +71,18 @@ module Implementation_stmt_expr = struct
         String.concat ["DEREF("; expr_to_string value ~indent:(indent + 1); ")"]
     | Record_literal {ty= ty, _; members} ->
         let members =
-          let f ((name, (expr, _)), _) =
+          let f (((name : Ident.t), (expr, _)), _) =
             String.concat
-              [name; " = "; expr_to_string expr ~indent:(indent + 1)]
+              [ (name :> string)
+              ; " = "
+              ; expr_to_string expr ~indent:(indent + 1) ]
           in
           String.concat ~sep:"; " (List.map ~f members)
         in
         String.concat [Type.to_string ty; "::{ "; members; " }"]
     | Record_access ((e, _), member) ->
-        String.concat [expr_to_string ~indent:(indent + 1) e; "."; member]
+        String.concat
+          [expr_to_string ~indent:(indent + 1) e; "."; (member :> string)]
 
   and block_to_string Types.Ast_expr.({stmts; expr}) ~indent =
     let stmts =
@@ -110,7 +114,12 @@ module Implementation_stmt_expr = struct
         let mut = if is_mut then "mut " else "" in
         let expr, _ = expr in
         String.concat
-          ["let "; mut; name; ty; " = "; expr_to_string expr ~indent]
+          [ "let "
+          ; mut
+          ; (name :> string)
+          ; ty
+          ; " = "
+          ; expr_to_string expr ~indent ]
 end
 
 module Stmt = struct
@@ -132,8 +141,8 @@ module Func = struct
 
   let to_string self =
     let parameters =
-      let f (((name, _), (ty, _)), _) =
-        String.concat [name; ": "; Type.to_string ty]
+      let f ((((name : Ident.t), _), (ty, _)), _) =
+        String.concat [(name :> string); ": "; Type.to_string ty]
       in
       String.concat ~sep:", " (List.map ~f self.params)
     in
@@ -144,7 +153,7 @@ module Func = struct
     in
     String.concat
       [ "func "
-      ; self.name
+      ; (self.name :> string)
       ; "("
       ; parameters
       ; ")"
@@ -162,11 +171,12 @@ let to_string self =
     let f (Type.Definition.({name= name, _; kind}), _) =
       match kind with
       | Type.Definition.Alias data ->
-          String.concat ["alias "; name; " = "; Type.to_string data; ";"]
+          String.concat
+            ["alias "; (name :> string); " = "; Type.to_string data; ";"]
       | Type.Definition.User_defined {data} ->
           String.concat
             [ "type "
-            ; name
+            ; (name :> string)
             ; " {\n"
             ; "  data = "
             ; Type.Data.to_string data

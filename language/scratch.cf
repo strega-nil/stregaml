@@ -15,8 +15,16 @@ func map(v: &mut V2, f: func(Int32) -> Int32) {
   ASSIGN(DEREF(y), f(DEREF(v).y));
 }
 
+func δ(v: V2) -> Int32 {
+  if (LESS_EQ(v.x, v.y)) {
+    SUB(v.y, v.x)
+  } else {
+    SUB(v.x, v.y)
+  }
+}
+
 func main() -> Int32 {
   let mut v = V2::{x = 20; y = 30};
   map(MUT_REF(v), double);
-  v.x
+  δ(v)
 }
