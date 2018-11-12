@@ -10,14 +10,14 @@ let equal lhs rhs =
   | Dot, Dot -> true
   | Comma, Comma -> true
   | Integer_literal i1, Integer_literal i2 -> i1 = i2
-  | Operator op1, Operator op2 -> String.equal op1 op2
+  | Operator op1, Operator op2 -> Ident.equal op1 op2
   | Assign, Assign -> true
   | Arrow, Arrow -> true
   | Reference, Reference -> true
   | Equals, Equals -> true
   | Colon, Colon -> true
   | Double_colon, Double_colon -> true
-  | Identifier id1, Identifier id2 -> String.equal id1 id2
+  | Identifier id1, Identifier id2 -> Ident.equal id1 id2
   | Keyword_true, Keyword_true -> true
   | Keyword_false, Keyword_false -> true
   | Keyword_if, Keyword_if -> true
@@ -42,14 +42,14 @@ let to_string = function
   | Dot -> "dot `.`"
   | Comma -> "comma `,`"
   | Integer_literal i -> Printf.sprintf "int literal: `%d`" i
-  | Operator op -> Printf.sprintf "operator: `%s`" op
+  | Operator op -> Printf.sprintf "operator: `%s`" (Ident.to_string op)
   | Assign -> "assign `<-`"
   | Arrow -> "arrow `->`"
   | Reference -> "reference `&`"
   | Equals -> "equals `=`"
   | Colon -> "colon `:`"
   | Double_colon -> "double colon `::`"
-  | Identifier id -> Printf.sprintf "identifier: `%s`" id
+  | Identifier id -> Printf.sprintf "identifier: `%s`" (Ident.to_string id)
   | Keyword_true -> "true"
   | Keyword_false -> "false"
   | Keyword_if -> "if"

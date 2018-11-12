@@ -1,5 +1,7 @@
+open! Types.Pervasives
+
 type t
 
-val make : string -> t
+val make : Stdio.In_channel.t -> t
 
-val next_token : t -> (Token.t, Error.t) Spanned.Result.t
+val next_token : t -> Token.t result

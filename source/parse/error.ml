@@ -19,13 +19,16 @@ end
 include Types.Error
 
 let to_string = function
+  | Malformed_input s -> String.concat ["malformed utf-8: `"; s; "'"]
   | Malformed_number_literal -> "malformed number literal"
   | Operator_including_comment_token s ->
       Printf.sprintf "operator `%s` includes a sequence of comment characters"
-        s
-  | Reserved_token tok -> Printf.sprintf "reserved token: `%s`" tok
+        (Ident.to_string s)
+  | Reserved_token tok ->
+      Printf.sprintf "reserved token: `%s`" (Ident.to_string tok)
   | Unrecognized_character ch ->
-      Printf.sprintf "unrecognized character: `%c` (%d)" ch (Char.to_int ch)
+      Printf.sprintf "unrecognized character: `%s` (%d)"
+        (Ident.uchar_to_string ch) (Uchar.to_scalar ch)
   | Unclosed_comment -> "unclosed comment"
   | Unexpected_token (exp, tok) ->
       String.concat

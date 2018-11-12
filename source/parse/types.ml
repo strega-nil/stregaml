@@ -15,11 +15,12 @@ end =
 
 and Error : sig
   type t =
+    | Malformed_input of string
     | Unclosed_comment
-    | Operator_including_comment_token of string
+    | Operator_including_comment_token of Ident.t
     | Malformed_number_literal
-    | Reserved_token of string
-    | Unrecognized_character of char
+    | Reserved_token of Ident.t
+    | Unrecognized_character of Uchar.t
     | Unexpected_token of (Error_expected.t * Token.t)
 end =
   Error
@@ -34,14 +35,14 @@ and Token : sig
     | Dot
     | Comma
     | Integer_literal of int
-    | Operator of string
+    | Operator of Ident.t
     | Assign
     | Arrow
     | Reference
     | Equals
     | Colon
     | Double_colon
-    | Identifier of string
+    | Identifier of Ident.t
     | Keyword_true
     | Keyword_false
     | Keyword_if
@@ -60,21 +61,21 @@ end =
 
 and Ast_type : sig
   type t =
-    | Named of string
+    | Named of Ident.t
     | Reference of {is_mut: bool; pointee: t Spanned.t}
     | Function of {params: t Spanned.t list; ret_ty: t Spanned.t option}
 end =
   Ast_type
 
 and Ast_type_data : sig
-  type t = Record of (string * Ast_type.t) Spanned.t list
+  type t = Record of (Ident.t * Ast_type.t) Spanned.t list
 end =
   Ast_type_data
 
 and Ast_type_definition : sig
   type kind = Alias of Ast_type.t | User_defined of {data: Ast_type_data.t}
 
-  type t = {name: string Spanned.t; kind: kind}
+  type t = {name: Ident.t Spanned.t; kind: kind}
 end =
   Ast_type_definition
 
@@ -86,7 +87,7 @@ and Ast_expr : sig
     | Bool_literal of bool
     | Integer_literal of int
     | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
-    | Variable of {path: string list; name: string}
+    | Variable of {path: Ident.t list; name: Ident.t}
     | Block of block Spanned.t
     | Call of t Spanned.t * t Spanned.t list
     | Assign of {dest: Ast_expr.t Spanned.t; source: Ast_expr.t Spanned.t}
@@ -94,8 +95,8 @@ and Ast_expr : sig
     | Dereference of Ast_expr.t Spanned.t
     | Record_literal of
         { ty: Ast_type.t Spanned.t
-        ; members: (string * t Spanned.t) Spanned.t list }
-    | Record_access of t Spanned.t * string
+        ; members: (Ident.t * t Spanned.t) Spanned.t list }
+    | Record_access of t Spanned.t * Ident.t
 end =
   Ast_expr
 
@@ -105,7 +106,7 @@ and Ast_stmt : sig
   type t =
     | Expression of Ast_expr.t Spanned.t
     | Let of
-        { name: string Spanned.t
+        { name: Ident.t Spanned.t
         ; is_mut: bool
         ; ty: Ast_type.t Spanned.t option
         ; expr: Ast_expr.t Spanned.t }
@@ -114,8 +115,8 @@ end =
 
 and Ast_func : sig
   type t =
-    { name: string
-    ; params: (string Spanned.t * Ast_type.t Spanned.t) Spanned.t list
+    { name: Ident.t
+    ; params: (Ident.t Spanned.t * Ast_type.t Spanned.t) Spanned.t list
     ; ret_ty: Ast_type.t Spanned.t option
     ; body: Ast_expr.block Spanned.t }
 end =
@@ -127,3 +128,12 @@ and Ast : sig
     ; types: Ast_type_definition.t Spanned.t list }
 end =
   Ast
+
+module Pervasives = struct
+  include Spanned.Result.Monad
+  module Error = Error
+
+  type error = Error.t
+
+  type 'a result = ('a, error) Spanned.Result.t
+end

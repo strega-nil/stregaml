@@ -1,152 +1,167 @@
-module Error = Error
-open Spanned.Result.Monad
+open! Types.Pervasives
 
 exception Bug_lexer of string
 
-type t =
-  {buffer: string; mutable index: int; mutable line: int; mutable column: int}
+type t = {decoder: Uutf.decoder; mutable peek: Uchar.t option}
 
-let make s = {buffer= s; index= 0; line= 1; column= 1}
+let make ch =
+  let decoder =
+    Uutf.decoder
+      ~nln:(`NLF (Uchar.of_char '\n'))
+      ~encoding:`UTF_8 (`Channel ch)
+  in
+  {decoder; peek= None}
 
 (* the actual lexer functions *)
-let is_whitespace ch =
-  let open! Char.O in
-  ch = ' ' || ch = '\t' || ch = '\n' || ch = '\r'
+let ( =~ ) uch ch = Uchar.equal uch (Uchar.of_char ch)
 
-let is_alpha ch =
-  let open! Char.O in
-  (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+let ( <=~ ) uch ch = Uchar.compare uch (Uchar.of_char ch) <= 0
 
+let ( >=~ ) uch ch = Uchar.compare uch (Uchar.of_char ch) >= 0
+
+let is_whitespace = Uucp.White.is_white_space
+
+(*
+  note: this will eventually support unicode numerals,
+  but that will be added when we add
+  non-english keywords and non-english error messages.
+*)
 let is_number_start ch =
-  let open! Char.O in
-  ch >= '0' && ch <= '9'
+  match Uchar.to_char ch with None -> false | Some ch -> Char.is_digit ch
 
 let is_number_continue ch base =
-  let open! Char.O in
   match base with
-  | 2 -> ch = '0' || ch = '1'
-  | 8 -> ch >= '0' && ch <= '7'
-  | 10 -> ch >= '0' && ch <= '9'
+  | 2 -> ch =~ '0' || ch =~ '1'
+  | 8 -> ch >=~ '0' && ch <=~ '7'
+  | 10 -> ch >=~ '0' && ch <=~ '9'
   | 16 ->
-      (ch >= '0' && ch <= '9')
-      || (ch >= 'a' && ch <= 'f')
-      || (ch >= 'A' && ch <= 'F')
+      (ch >=~ '0' && ch <=~ '9')
+      || (ch >=~ 'a' && ch <=~ 'f')
+      || (ch >=~ 'A' && ch <=~ 'F')
   | base -> raise (Bug_lexer ("Invalid base: " ^ Int.to_string base))
 
-let is_ident_start ch = is_alpha ch || Char.equal ch '_'
+let is_ident_start ch = ch =~ '_' || Uucp.Id.is_xid_start ch
 
-let is_ident_continue_no_prime ch = is_ident_start ch || is_number_start ch
+let is_ident_continue_no_prime ch = Uucp.Id.is_xid_continue ch
 
-let is_ident_continue ch = is_ident_continue_no_prime ch || Char.equal ch '\''
+let is_ident_continue ch = ch =~ '\'' || is_ident_continue_no_prime ch
 
-let is_operator_start = function
-  | '!' | '#' | '$' | '%' | '&' | '*' | '+' | '-' | '/' | '<' | '=' | '>'
-   |'?' | '@' | '\\' | '^' | '|' | '~' ->
-      true
-  | _ -> false
+let is_operator_start ch =
+  let is_non_math_operator = function
+    | '-' | '*' | '/' | '%' | '&' | '!' | '?' | '@' | '\\' | '^' | ':' -> true
+    | _ -> false
+  in
+  match Uucp.Gc.general_category ch with
+  | `Sm -> true
+  | _ -> (
+    match Uchar.to_char ch with
+    | None -> false
+    | Some ch -> is_non_math_operator ch )
 
 let is_operator_continue ch = is_operator_start ch
 
 let current_span lex =
   let open Spanned.Span in
-  { start_line= lex.line
-  ; start_column= lex.column
-  ; end_line= lex.line
-  ; end_column= lex.column + 1 }
+  let line = Uutf.decoder_line lex.decoder in
+  let col = Uutf.decoder_col lex.decoder in
+  {start_line= line; start_column= col; end_line= line; end_column= col + 1}
 
-let peek_ch lex =
-  if String.length lex.buffer <= lex.index then None
-  else Some (lex.buffer.[lex.index], current_span lex)
+let peek_ch lex : Uchar.t option result =
+  match lex.peek with
+  | Some uch -> (Ok (Some uch), current_span lex)
+  | None -> (
+    match Uutf.decode lex.decoder with
+    | `Await -> assert false
+    | `Uchar uch ->
+        let uch = Some uch in
+        lex.peek <- uch ;
+        (Ok uch, current_span lex)
+    | `End -> (Ok None, Spanned.Span.made_up)
+    | `Malformed s -> (Error (Error.Malformed_input s), current_span lex) )
 
 let next_ch lex =
   match peek_ch lex with
-  | Some (ch, sp) ->
-      lex.index <- lex.index + 1 ;
-      if Char.equal ch '\n' then (
-        lex.line <- lex.line + 1 ;
-        lex.column <- 1 )
-      else lex.column <- lex.column + 1 ;
-      Some (ch, sp)
-  | None -> None
+  | (Result.Ok _, _) as o ->
+      lex.peek <- None ;
+      o
+  | (Result.Error _, _) as e -> e
 
-let eat_ch lex = next_ch lex |> ignore
+let eat_ch lex = lex.peek <- None
 
 let rec eat_whitespace lex =
-  match peek_ch lex with
-  | Some (ch, _) when is_whitespace ch -> eat_ch lex ; eat_whitespace lex
-  | Some _ | None -> ()
+  let%bind ch = peek_ch lex in
+  match ch with
+  | Some ch when is_whitespace ch -> eat_ch lex ; eat_whitespace lex
+  | Some _ | None -> return ()
 
 let lex_ident fst sp lex =
-  let buff = ref [fst] in
-  let rec helper sp =
-    match peek_ch lex with
-    | Some (ch, sp') when is_ident_continue ch ->
+  let rec helper lst =
+    let%bind ch = peek_ch lex in
+    match ch with
+    | Some ch when is_ident_continue ch ->
         eat_ch lex ;
-        buff := ch :: !buff ;
-        helper (Spanned.Span.union sp sp')
+        helper (ch :: lst)
     | Some _ | None -> (
-        let kw k = (Ok k, sp) in
-        match String.of_char_list (List.rev !buff) with
-        | "true" -> kw Token.Keyword_true
-        | "false" -> kw Token.Keyword_false
-        | "if" -> kw Token.Keyword_if
-        | "else" -> kw Token.Keyword_else
-        | "func" -> kw Token.Keyword_func
-        | "type" -> kw Token.Keyword_type
-        | "data" -> kw Token.Keyword_data
-        | "record" -> kw Token.Keyword_record
-        | "alias" -> kw Token.Keyword_alias
-        | "let" -> kw Token.Keyword_let
-        | "mut" -> kw Token.Keyword_mut
-        | "_" -> kw Token.Keyword_underscore
-        | "variant" as res -> (Error (Error.Reserved_token res), sp)
-        | "opaque" as res -> (Error (Error.Reserved_token res), sp)
-        | "public" as res -> (Error (Error.Reserved_token res), sp)
-        | id -> (Ok (Token.Identifier id), sp) )
+        let id = Ident.of_uchar_list (List.rev lst) in
+        match Ident.to_string id with
+        | "true" -> return Token.Keyword_true
+        | "false" -> return Token.Keyword_false
+        | "if" -> return Token.Keyword_if
+        | "else" -> return Token.Keyword_else
+        | "func" -> return Token.Keyword_func
+        | "type" -> return Token.Keyword_type
+        | "data" -> return Token.Keyword_data
+        | "record" -> return Token.Keyword_record
+        | "alias" -> return Token.Keyword_alias
+        | "let" -> return Token.Keyword_let
+        | "mut" -> return Token.Keyword_mut
+        | "_" -> return Token.Keyword_underscore
+        | "variant" -> return_err (Error.Reserved_token id)
+        | "opaque" -> return_err (Error.Reserved_token id)
+        | "public" -> return_err (Error.Reserved_token id)
+        | _ -> return (Token.Identifier id) )
   in
-  helper sp
+  helper [fst]
 
-let lex_number fst sp lex =
+let lex_number (fst : Uchar.t) sp lex =
   let open! Char.O in
-  let buff = ref [] in
-  let base, sp =
-    if fst = '0' then (
-      match peek_ch lex with
-      | Some ('x', sp') ->
+  let%bind () = with_span sp in
+  let%bind base, buff =
+    if Uchar.equal fst (Uchar.of_char '0') then
+      let%bind ch = peek_ch lex in
+      match Option.bind ~f:Uchar.to_char ch with
+      | Some 'x' ->
           eat_ch lex ;
-          (16, Spanned.Span.union sp sp')
-      | Some ('o', sp') ->
+          return (16, [])
+      | Some 'o' ->
           eat_ch lex ;
-          (8, Spanned.Span.union sp sp')
-      | Some ('b', sp') ->
+          return (8, [])
+      | Some 'b' ->
           eat_ch lex ;
-          (2, Spanned.Span.union sp sp')
-      | Some _ | None ->
-          buff := [fst] ;
-          (10, sp) )
-    else (
-      buff := [fst] ;
-      (10, sp) )
+          return (2, [])
+      | Some _ | None -> return (10, [fst])
+    else return (10, [fst])
   in
-  let rec helper sp quote_allowed =
-    match peek_ch lex with
-    | Some (ch, sp') when is_number_continue ch base ->
+  let rec helper lst quote_allowed =
+    let%bind ch = peek_ch lex in
+    match ch with
+    | Some ch when is_number_continue ch base ->
         eat_ch lex ;
-        buff := ch :: !buff ;
-        helper (Spanned.Span.union sp sp') true
-    | Some ('\'', sp') ->
-        if quote_allowed then (
-          eat_ch lex ;
-          helper (Spanned.Span.union sp sp') false )
-        else (Error Error.Malformed_number_literal, Spanned.Span.union sp sp')
+        helper (ch :: lst) true
+    | Some ch when Uchar.equal ch (Uchar.of_char '\'') ->
+        if quote_allowed then ( eat_ch lex ; helper lst false )
+        else return_err Error.Malformed_number_literal
     | Some _ | None ->
         let char_to_int ch =
-          if ch >= '0' && ch <= '9' then Char.to_int ch - Char.to_int '0'
-          else if ch >= 'a' && ch <= 'f' then
-            Char.to_int ch - Char.to_int 'a' + 10
-          else if ch >= 'A' && ch <= 'F' then
-            Char.to_int ch - Char.to_int 'A' + 10
-          else assert false
+          match Uchar.to_char ch with
+          | None -> raise (Bug_lexer "malformed number literal")
+          | Some ch ->
+              if ch >= '0' && ch <= '9' then Char.to_int ch - Char.to_int '0'
+              else if ch >= 'a' && ch <= 'f' then
+                Char.to_int ch - Char.to_int 'a' + 10
+              else if ch >= 'A' && ch <= 'F' then
+                Char.to_int ch - Char.to_int 'A' + 10
+              else raise (Bug_lexer "malformed number literal")
         in
         (* TODO(ubsan): fix overflow *)
         let rec to_int pow acc = function
@@ -155,41 +170,44 @@ let lex_number fst sp lex =
               let cur = char_to_int ch * pow in
               to_int (pow * base) (acc + cur) xs
         in
-        (Ok (Token.Integer_literal (to_int 1 0 !buff)), sp)
+        return (Token.Integer_literal (to_int 1 0 lst))
   in
-  helper sp true
+  helper [fst] true
 
 let rec next_token lex =
   let lex_operator fst sp lex =
-    let rec block_comment sp =
+    let rec block_comment () =
       let rec eat_the_things () =
-        match next_ch lex with
-        | Some ('*', _) -> (
-          match next_ch lex with
-          | Some ('/', _) -> return ()
-          | _ -> eat_the_things () )
-        | Some ('/', sp') -> (
-          match next_ch lex with
-          | Some ('*', _) ->
-              let%bind () = block_comment sp' in
-              eat_the_things ()
-          | _ -> eat_the_things () )
+        let%bind ch = next_ch lex in
+        match ch with
+        | Some ch when ch =~ '*' -> (
+            let%bind ch = next_ch lex in
+            match ch with
+            | Some ch when ch =~ '/' -> return ()
+            | _ -> eat_the_things () )
+        | Some ch when ch =~ '/' -> (
+            let%bind ch = next_ch lex in
+            match ch with
+            | Some ch when ch =~ '*' ->
+                let%bind () = block_comment () in
+                eat_the_things ()
+            | _ -> eat_the_things () )
         | Some _ -> eat_the_things ()
-        | None ->
-            ( Error Error.Unclosed_comment
-            , Spanned.Span.union sp (current_span lex) )
+        | None -> return_err Error.Unclosed_comment
       in
       eat_the_things ()
     in
     let line_comment () =
       let rec eat_the_things () =
-        match next_ch lex with
-        | Some ('\n', _) | None -> ()
+        let%bind ch = next_ch lex in
+        match ch with
+        | Some ch when ch =~ '\n' -> return ()
+        | None -> return ()
         | Some _ -> eat_the_things ()
       in
       eat_the_things ()
     in
-    let includes_operator_token s =
+    let includes_comment_token s =
       let is_invalid = function
         | '*', '/' -> true
         | '/', '/' -> true
@@ -203,51 +221,51 @@ let rec next_token lex =
       in
       helper s 0
     in
-    let buff = ref [fst] in
-    let rec helper sp =
-      match peek_ch lex with
-      | Some (ch, sp') when is_operator_continue ch ->
+    let rec helper lst =
+      let%bind ch = peek_ch lex in
+      match ch with
+      | Some ch when is_operator_continue ch ->
           eat_ch lex ;
-          buff := ch :: !buff ;
-          helper (Spanned.Span.union sp sp')
+          helper (ch :: lst)
       | Some _ | None -> (
-        match String.of_char_list (List.rev !buff) with
-        | "/*" -> (
-          match block_comment sp with
-          | Ok (), _ -> next_token lex
-          | Error e, sp -> (Error e, sp) )
-        | "//" -> line_comment () ; next_token lex
-        | "=" -> (Ok Token.Equals, sp)
-        | "<-" -> (Ok Token.Assign, sp)
-        | "->" -> (Ok Token.Arrow, sp)
-        | "&" -> (Ok Token.Reference, sp)
-        | "|" as res -> (Error (Error.Reserved_token res), sp)
-        | op when includes_operator_token op ->
-            (Error (Error.Operator_including_comment_token op), sp)
-        | op -> (Ok (Token.Operator op), sp) )
+          let id = Ident.of_uchar_list (List.rev lst) in
+          match Ident.to_string id with
+          | "/*" ->
+              let%bind () = block_comment () in
+              next_token lex
+          | "//" ->
+              let%bind () = line_comment () in
+              next_token lex
+          | "=" -> return Token.Equals
+          | ":" -> return Token.Colon
+          | "<-" -> return Token.Assign
+          | "->" -> return Token.Arrow
+          | "::" -> return Token.Double_colon
+          | "&" -> return Token.Reference
+          | "|" -> return_err (Error.Reserved_token id)
+          | "\\" -> return_err (Error.Reserved_token id)
+          | op when includes_comment_token op ->
+              return_err (Error.Operator_including_comment_token id)
+          | _ -> return (Token.Operator id) )
     in
-    helper sp
+    helper [fst]
   in
-  eat_whitespace lex ;
-  match next_ch lex with
-  | Some ('(', sp) -> (Ok Token.Open_paren, sp)
-  | Some (')', sp) -> (Ok Token.Close_paren, sp)
-  | Some ('{', sp) -> (Ok Token.Open_brace, sp)
-  | Some ('}', sp) -> (Ok Token.Close_brace, sp)
-  | Some ('[', sp) -> (Error (Error.Reserved_token "["), sp)
-  | Some (']', sp) -> (Error (Error.Reserved_token "]"), sp)
-  | Some (':', sp) -> (
-    match peek_ch lex with
-    | Some (':', sp') ->
-        eat_ch lex ;
-        (Ok Token.Double_colon, Spanned.Span.union sp sp')
-    | _ -> (Ok Token.Colon, sp) )
-  | Some (';', sp) -> (Ok Token.Semicolon, sp)
-  | Some (',', sp) -> (Ok Token.Comma, sp)
-  | Some ('.', sp) -> (Ok Token.Dot, sp)
-  | Some ('\'', sp) -> (Error (Error.Reserved_token "'"), sp)
-  | Some (ch, sp) when is_ident_start ch -> lex_ident ch sp lex
-  | Some (ch, sp) when is_operator_start ch -> lex_operator ch sp lex
-  | Some (ch, sp) when is_number_start ch -> lex_number ch sp lex
-  | Some (ch, sp) -> (Error (Error.Unrecognized_character ch), sp)
-  | None -> (Ok Token.Eof, current_span lex)
+  let%bind () = eat_whitespace lex in
+  let%bind ch, sp = spanned_bind (next_ch lex) in
+  match ch with
+  | Some ch when ch =~ '(' -> return Token.Open_paren
+  | Some ch when ch =~ ')' -> return Token.Close_paren
+  | Some ch when ch =~ '{' -> return Token.Open_brace
+  | Some ch when ch =~ '}' -> return Token.Close_brace
+  | Some ch when ch =~ '[' ->
+      return_err (Error.Reserved_token (Ident.of_string_unsafe "["))
+  | Some ch when ch =~ ']' ->
+      return_err (Error.Reserved_token (Ident.of_string_unsafe "]"))
+  | Some ch when ch =~ ';' -> return Token.Semicolon
+  | Some ch when ch =~ ',' -> return Token.Comma
+  | Some ch when ch =~ '.' -> return Token.Dot
+  | Some ch when is_ident_start ch -> lex_ident ch sp lex
+  | Some ch when is_operator_start ch -> lex_operator ch sp lex
+  | Some ch when is_number_start ch -> lex_number ch sp lex
+  | Some ch -> return_err (Error.Unrecognized_character ch)
+  | None -> return Token.Eof

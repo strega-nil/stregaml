@@ -31,8 +31,6 @@ module Item = struct
   type t = Func of Ast.Func.t | Type_definition of Ast.Type.Definition.t
 end
 
-type 'a result = ('a, Error.t) Spanned.Result.t
-
 let get_ident (parser : t) : string result =
   match%bind next_token parser with
   | Token.Identifier id -> return id
