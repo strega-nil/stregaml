@@ -94,7 +94,7 @@ let rec eat_whitespace lex =
   | Some ch when is_whitespace ch -> eat_ch lex ; eat_whitespace lex
   | Some _ | None -> return ()
 
-let lex_ident fst sp lex =
+let lex_ident fst lex =
   let rec helper lst =
     let%bind ch = peek_ch lex in
     match ch with
@@ -103,7 +103,7 @@ let lex_ident fst sp lex =
         helper (ch :: lst)
     | Some _ | None -> (
         let id = Ident.of_uchar_list (List.rev lst) in
-        match Ident.to_string id with
+        match (id :> string) with
         | "true" -> return Token.Keyword_true
         | "false" -> return Token.Keyword_false
         | "if" -> return Token.Keyword_if
@@ -123,9 +123,8 @@ let lex_ident fst sp lex =
   in
   helper [fst]
 
-let lex_number (fst : Uchar.t) sp lex =
+let lex_number (fst : Uchar.t) lex =
   let open! Char.O in
-  let%bind () = with_span sp in
   let%bind base, buff =
     if Uchar.equal fst (Uchar.of_char '0') then
       let%bind ch = peek_ch lex in
@@ -172,10 +171,10 @@ let lex_number (fst : Uchar.t) sp lex =
         in
         return (Token.Integer_literal (to_int 1 0 lst))
   in
-  helper [fst] true
+  helper buff true
 
 let rec next_token lex =
-  let lex_operator fst sp lex =
+  let lex_operator fst lex =
     let rec block_comment () =
       let rec eat_the_things () =
         let%bind ch = next_ch lex in
@@ -229,7 +228,7 @@ let rec next_token lex =
           helper (ch :: lst)
       | Some _ | None -> (
           let id = Ident.of_uchar_list (List.rev lst) in
-          match Ident.to_string id with
+          match (id :> string) with
           | "/*" ->
               let%bind () = block_comment () in
               next_token lex
@@ -251,7 +250,7 @@ let rec next_token lex =
     helper [fst]
   in
   let%bind () = eat_whitespace lex in
-  let%bind ch, sp = spanned_bind (next_ch lex) in
+  let%bind ch = next_ch lex in
   match ch with
   | Some ch when ch =~ '(' -> return Token.Open_paren
   | Some ch when ch =~ ')' -> return Token.Close_paren
@@ -264,8 +263,8 @@ let rec next_token lex =
   | Some ch when ch =~ ';' -> return Token.Semicolon
   | Some ch when ch =~ ',' -> return Token.Comma
   | Some ch when ch =~ '.' -> return Token.Dot
-  | Some ch when is_ident_start ch -> lex_ident ch sp lex
-  | Some ch when is_operator_start ch -> lex_operator ch sp lex
-  | Some ch when is_number_start ch -> lex_number ch sp lex
+  | Some ch when is_ident_start ch -> lex_ident ch lex
+  | Some ch when is_operator_start ch -> lex_operator ch lex
+  | Some ch when is_number_start ch -> lex_number ch lex
   | Some ch -> return_err (Error.Unrecognized_character ch)
   | None -> return Token.Eof

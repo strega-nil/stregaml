@@ -25,6 +25,6 @@ let uchar_to_string ch =
 
 let of_string_unsafe s = s
 
-let to_string s = s
+let empty = ""
 
 let equal = String.equal

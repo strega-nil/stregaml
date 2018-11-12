@@ -37,8 +37,7 @@ let parse_command_line () : (command_line_arguments, string) Result.t =
     | None -> Error "no filename specified" )
 
 let get_parse_ast args =
-  let program = In.with_file args.filename ~f:In.input_all in
-  match Parse.parse program with
+  match In.with_file args.filename ~f:Parse.parse with
   | Error e, sp ->
       Out.eprintf "Parse error: %s\n"
         (Spanned.to_string ~f:Parse.Error.to_string (e, sp)) ;
@@ -59,7 +58,9 @@ let get_typed_ast args =
 
 let interpret ty_ast _args =
   let ctxt = Interpreter.make ty_ast in
-  match Interpreter.get_function ctxt ~name:"main" with
+  match
+    Interpreter.get_function ctxt ~name:(Ident.of_string_unsafe "main")
+  with
   | Some f ->
       let v = Interpreter.call ctxt f [] in
       Out.output_string Out.stdout "main returned: " ;

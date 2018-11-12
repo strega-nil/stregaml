@@ -1,6 +1,6 @@
+open! Types.Pervasives
 module Error = Error
 module Ast = Ast
-open Spanned.Result.Monad
 
 type t = {lexer: Lexer.t; mutable peek: Token.t Spanned.t option}
 
@@ -31,7 +31,7 @@ module Item = struct
   type t = Func of Ast.Func.t | Type_definition of Ast.Type.Definition.t
 end
 
-let get_ident (parser : t) : string result =
+let get_ident (parser : t) : Ident.t result =
   match%bind next_token parser with
   | Token.Identifier id -> return id
   | tok -> return_err (Error.Unexpected_token (Error.Expected.Identifier, tok))
@@ -70,6 +70,7 @@ let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
   helper parser f expected sep close false
 
 let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
+  let ( =~ ) (id : Ident.t) s = String.equal (id :> string) s in
   let initial =
     match%bind spanned_bind (peek_token parser) with
     | Token.Keyword_true, _ ->
@@ -95,7 +96,7 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
         let%bind els = spanned_bind (parse_block parser) in
         return (Some (Ast.Expr.If_else {cond; thn; els}))
     (* TODO: remove these hacks and switch to using operators *)
-    | Token.Identifier "ASSIGN", _ -> (
+    | Token.Identifier id, _ when id =~ "ASSIGN" -> (
         eat_token parser ;
         let%bind args = parse_argument_list parser in
         match args with
@@ -104,7 +105,7 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
             failwith
               ( "ASSIGN requires 2 arguments; found "
               ^ Int.to_string (List.length lst) ) )
-    | Token.Identifier "MUT_REF", _ -> (
+    | Token.Identifier id, _ when id =~ "MUT_REF" -> (
         eat_token parser ;
         let%bind args = parse_argument_list parser in
         match args with
@@ -113,7 +114,7 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
             failwith
               ( "MUT_REF requires 1 argument; found "
               ^ Int.to_string (List.length lst) ) )
-    | Token.Identifier "REF", _ -> (
+    | Token.Identifier id, _ when id =~ "REF" -> (
         eat_token parser ;
         let%bind args = parse_argument_list parser in
         match args with
@@ -122,7 +123,7 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
             failwith
               ( "REF requires 1 argument; found "
               ^ Int.to_string (List.length lst) ) )
-    | Token.Identifier "DEREF", _ -> (
+    | Token.Identifier id, _ when id =~ "DEREF" -> (
         eat_token parser ;
         let%bind args = parse_argument_list parser in
         match args with
@@ -146,9 +147,9 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
       return (Some x)
   | None, _ -> return None
 
-and parse_path_expression (parser : t) ~(start : string Spanned.t) :
+and parse_path_expression (parser : t) ~(start : Ident.t Spanned.t) :
     Ast.Expr.t result =
-  let rec helper parser ~(path : string list Spanned.t) =
+  let rec helper parser ~(path : Ident.t list Spanned.t) =
     let path, sp = path in
     match%bind spanned_bind (peek_token parser) with
     | Token.Identifier name, sp' -> (
@@ -167,7 +168,7 @@ and parse_path_expression (parser : t) ~(start : string Spanned.t) :
   let start, sp = start in
   helper parser ~path:([start], sp)
 
-and parse_record_literal (parser : t) ~(path : string list Spanned.t) :
+and parse_record_literal (parser : t) ~(path : Ident.t list Spanned.t) :
     Ast.Expr.t result =
   let f parser =
     let%bind name = get_ident parser in
@@ -274,7 +275,7 @@ and maybe_parse_type_annotation (parser : t) :
   | None -> return None
 
 and parse_parameter_list (parser : t) :
-    (string Spanned.t * Ast.Type.t Spanned.t) Spanned.t list result =
+    (Ident.t Spanned.t * Ast.Type.t Spanned.t) Spanned.t list result =
   let f parser =
     let%bind name = spanned_bind (get_ident parser) in
     let%bind () = get_specific parser Token.Colon in

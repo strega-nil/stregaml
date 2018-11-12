@@ -6,7 +6,7 @@ module Local = Ast.Expr.Local
 module Binding = Ast.Binding
 
 module Function_declaration = struct
-  type t = {name: string; params: Binding.t list; ret_ty: Type.t}
+  type t = {name: Ident.t; params: Binding.t list; ret_ty: Type.t}
 end
 
 type t =
@@ -18,7 +18,7 @@ type 'a result = ('a, Error.t) Spanned.Result.t
 
 module Functions : sig
   val index_by_name :
-    Function_declaration.t Spanned.t list -> string -> int option
+    Function_declaration.t Spanned.t list -> Ident.t -> int option
 
   val decl_by_index :
        Function_declaration.t Spanned.t list
@@ -29,7 +29,7 @@ module Functions : sig
 end = struct
   let index_by_name ctxt search =
     let rec helper n = function
-      | ({Function_declaration.name; _}, _) :: _ when String.equal name search
+      | ({Function_declaration.name; _}, _) :: _ when Ident.equal name search
         ->
           Some n
       | _ :: names -> helper (n + 1) names
@@ -57,7 +57,7 @@ end
 let find_local name (lst : Binding.t list) : Local.t option =
   let f index binding =
     let name', _ = binding.Binding.name in
-    if String.equal name' name then Some Local.{binding; index} else None
+    if Ident.equal name' name then Some Local.{binding; index} else None
   in
   List.find_mapi ~f lst
 
@@ -184,7 +184,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                   Builtin
                     (Function {params= [int32_ty; int32_ty]; ret_ty= int32_ty}))
             in
-            match name with
+            match (name :> string) with
             | "LESS_EQ" ->
                 return T.{variant= Builtin T.Builtin.Less_eq; ty= less_eq_ty}
             | "ADD" -> return T.{variant= Builtin T.Builtin.Add; ty= op_ty}
@@ -247,13 +247,13 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> return_err (Error.Record_literal_non_record_type ty)
       in
       let rec find_in_type_members s = function
-        | (name, ty) :: _ when String.equal name s -> Some ty
+        | (name, ty) :: _ when Ident.equal name s -> Some ty
         | _ :: xs -> find_in_type_members s xs
         | [] -> None
       in
       let rec has_dup el = function
         | [] -> None
-        | ((name, _), _) :: _ when String.equal el name -> Some el
+        | ((name, _), _) :: _ when Ident.equal el name -> Some el
         | _ :: xs -> has_dup el xs
       in
       let%bind members =
@@ -293,7 +293,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
             if the type wasn't correct, we'd find it in map
           *)
           let rec check_for_single name = function
-            | ((x, _), _) :: _ when String.equal name x -> true
+            | ((x, _), _) :: _ when Ident.equal name x -> true
             | _ :: xs -> check_for_single name xs
             | [] -> false
           in
@@ -317,7 +317,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         let T.Type.({category= ecat; ty= ebty}) = ety in
         match Type.structural ebty ~ctxt:ctxt.type_context with
         | Type.Structural.Record members -> (
-            let f (n, _) = String.equal n member in
+            let f (n, _) = Ident.equal n member in
             match List.find ~f members with
             | Some (_, ty) -> return T.Type.{category= ecat; ty}
             | None ->
@@ -365,7 +365,7 @@ let add_function_declaration (ctxt : t)
   (* check for duplicates *)
   let rec check_for_duplicates search = function
     | [] -> None
-    | (f, sp) :: _ when String.equal f.Function_declaration.name search ->
+    | (f, sp) :: _ when Ident.equal f.Function_declaration.name search ->
         Some (f, sp)
     | _ :: xs -> check_for_duplicates search xs
   in
@@ -385,7 +385,7 @@ let add_function_definition (ctxt : t)
     let num_funcs = List.length ctxt.function_context in
     let idx = num_funcs - 1 - List.length ctxt.function_definitions in
     let decl, _ = Functions.decl_by_index ctxt.function_context idx in
-    assert (String.equal decl.Function_declaration.name unt_func.F.name) ;
+    assert (Ident.equal decl.Function_declaration.name unt_func.F.name) ;
     decl
   in
   let%bind body, body_sp =

@@ -23,9 +23,8 @@ let to_string = function
   | Malformed_number_literal -> "malformed number literal"
   | Operator_including_comment_token s ->
       Printf.sprintf "operator `%s` includes a sequence of comment characters"
-        (Ident.to_string s)
-  | Reserved_token tok ->
-      Printf.sprintf "reserved token: `%s`" (Ident.to_string tok)
+        (s :> string)
+  | Reserved_token tok -> Printf.sprintf "reserved token: `%s`" (tok :> string)
   | Unrecognized_character ch ->
       Printf.sprintf "unrecognized character: `%s` (%d)"
         (Ident.uchar_to_string ch) (Uchar.to_scalar ch)

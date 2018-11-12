@@ -42,14 +42,14 @@ let to_string = function
   | Dot -> "dot `.`"
   | Comma -> "comma `,`"
   | Integer_literal i -> Printf.sprintf "int literal: `%d`" i
-  | Operator op -> Printf.sprintf "operator: `%s`" (Ident.to_string op)
+  | Operator op -> Printf.sprintf "operator: `%s`" (op :> string)
   | Assign -> "assign `<-`"
   | Arrow -> "arrow `->`"
   | Reference -> "reference `&`"
   | Equals -> "equals `=`"
   | Colon -> "colon `:`"
   | Double_colon -> "double colon `::`"
-  | Identifier id -> Printf.sprintf "identifier: `%s`" (Ident.to_string id)
+  | Identifier id -> Printf.sprintf "identifier: `%s`" (id :> string)
   | Keyword_true -> "true"
   | Keyword_false -> "false"
   | Keyword_if -> "if"

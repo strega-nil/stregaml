@@ -131,7 +131,6 @@ end =
 
 module Pervasives = struct
   include Spanned.Result.Monad
-  module Error = Error
 
   type error = Error.t
 
