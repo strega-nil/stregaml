@@ -31,10 +31,7 @@ module Item = struct
   type t = Func of Ast.Func.t | Type_definition of Ast.Type.Definition.t
 end
 
-let get_ident (parser : t) : Ident.t result =
-  match%bind next_token parser with
-  | Token.Identifier id -> return id
-  | tok -> return_err (Error.Unexpected_token (Error.Expected.Identifier, tok))
+let ( =~ ) (id : Ident.t) s = String.equal (id :> string) s
 
 let maybe_get_specific (parser : t) (token : Token.t) : unit option result =
   let%bind tok = peek_token parser in
@@ -47,6 +44,19 @@ let get_specific (parser : t) (token : Token.t) : unit result =
   | None ->
       let%bind tok = next_token parser in
       return_err (Error.Unexpected_token (Error.Expected.Specific token, tok))
+
+let get_ident (parser : t) : Ident.t result =
+  match%bind next_token parser with
+  | Token.Open_square -> (
+      match%bind next_token parser with
+      | Token.Operator op ->
+          let%bind () = get_specific parser Token.Close_square in
+          return op
+      | tok ->
+          return_err
+            (Error.Unexpected_token (Error.Expected.Real_operator, tok)) )
+  | Token.Identifier ident -> return ident
+  | tok -> return_err (Error.Unexpected_token (Error.Expected.Identifier, tok))
 
 let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
     ~(close : Token.t) ~(expected : Error.Expected.t) :
@@ -70,7 +80,6 @@ let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
   helper parser f expected sep close false
 
 let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
-  let ( =~ ) (id : Ident.t) s = String.equal (id :> string) s in
   let initial =
     match%bind spanned_bind (peek_token parser) with
     | Token.Keyword_true, _ ->
@@ -96,44 +105,40 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
         let%bind els = spanned_bind (parse_block parser) in
         return (Some (Ast.Expr.If_else {cond; thn; els}))
     (* TODO: remove these hacks and switch to using operators *)
-    | Token.Identifier id, _ when id =~ "ASSIGN" -> (
+    | Token.Assign, _ -> (
         eat_token parser ;
         let%bind args = parse_argument_list parser in
         match args with
         | [dest; source] -> return (Some (Ast.Expr.Assign {dest; source}))
         | lst ->
             failwith
-              ( "ASSIGN requires 2 arguments; found "
+              ( "<- requires 2 arguments; found "
               ^ Int.to_string (List.length lst) ) )
-    | Token.Identifier id, _ when id =~ "MUT_REF" -> (
+    | Token.Operator op, _ when op =~ "&" -> (
         eat_token parser ;
+        let%bind is_mut =
+          match%bind maybe_get_specific parser Token.Keyword_mut with
+          | Some () -> return true
+          | None -> return false
+        in
         let%bind args = parse_argument_list parser in
         match args with
-        | [place] -> return (Some (Ast.Expr.Reference {is_mut= true; place}))
+        | [place] -> return (Some (Ast.Expr.Reference {is_mut; place}))
         | lst ->
             failwith
-              ( "MUT_REF requires 1 argument; found "
+              ( "& requires 1 argument; found "
               ^ Int.to_string (List.length lst) ) )
-    | Token.Identifier id, _ when id =~ "REF" -> (
-        eat_token parser ;
-        let%bind args = parse_argument_list parser in
-        match args with
-        | [place] -> return (Some (Ast.Expr.Reference {is_mut= false; place}))
-        | lst ->
-            failwith
-              ( "REF requires 1 argument; found "
-              ^ Int.to_string (List.length lst) ) )
-    | Token.Identifier id, _ when id =~ "DEREF" -> (
+    | Token.Operator op, _ when op =~ "*" -> (
         eat_token parser ;
         let%bind args = parse_argument_list parser in
         match args with
         | [value] -> return (Some (Ast.Expr.Dereference value))
         | lst ->
             failwith
-              ( "DEREF requires 1 argument; found "
+              ( "* requires 1 argument; found "
               ^ Int.to_string (List.length lst) ) )
-    | Token.Identifier name, sp -> (
-        eat_token parser ;
+    | Token.Open_square, _ | Token.Identifier _, _ -> (
+        let%bind name, sp = spanned_bind (get_ident parser) in
         match%bind maybe_get_specific parser Token.Double_colon with
         | Some () ->
             let%bind expr = parse_path_expression parser ~start:(name, sp) in
@@ -223,9 +228,10 @@ and parse_return_type (parser : t) : Ast.Type.t Spanned.t option result =
   | None -> return None
 
 and parse_type (parser : t) : Ast.Type.t result =
-  let%bind tok = next_token parser in
+  let%bind tok = peek_token parser in
   match tok with
-  | Token.Reference -> (
+  | Token.Operator op when op =~ "&" -> (
+      eat_token parser ;
       let%bind tok = peek_token parser in
       match tok with
       | Token.Keyword_mut ->
@@ -235,8 +241,11 @@ and parse_type (parser : t) : Ast.Type.t result =
       | _ ->
           let%bind pointee = spanned_bind (parse_type parser) in
           return (Ast.Type.Reference {is_mut= false; pointee}) )
-  | Token.Identifier id -> return (Ast.Type.Named id)
+  | Token.Open_square | Token.Identifier _ ->
+      let%bind id = get_ident parser in
+      return (Ast.Type.Named id)
   | Token.Keyword_func ->
+      eat_token parser ;
       let%bind () = get_specific parser Token.Open_paren in
       let%bind params =
         parse_list parser ~f:parse_type ~sep:Token.Comma

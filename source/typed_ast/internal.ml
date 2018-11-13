@@ -185,11 +185,11 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                     (Function {params= [int32_ty; int32_ty]; ret_ty= int32_ty}))
             in
             match (name :> string) with
-            | "LESS_EQ" ->
+            | "<=" ->
                 return T.{variant= Builtin T.Builtin.Less_eq; ty= less_eq_ty}
-            | "ADD" -> return T.{variant= Builtin T.Builtin.Add; ty= op_ty}
-            | "SUB" -> return T.{variant= Builtin T.Builtin.Sub; ty= op_ty}
-            | "MUL" -> return T.{variant= Builtin T.Builtin.Mul; ty= op_ty}
+            | "+" -> return T.{variant= Builtin T.Builtin.Add; ty= op_ty}
+            | "-" -> return T.{variant= Builtin T.Builtin.Sub; ty= op_ty}
+            | "*" -> return T.{variant= Builtin T.Builtin.Mul; ty= op_ty}
             | _ -> return_err (Error.Name_not_found name) )
         | Some idx ->
             let ty =

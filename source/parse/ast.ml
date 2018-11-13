@@ -59,16 +59,16 @@ module Implementation_stmt_expr = struct
         String.concat [expr_to_string ~indent e; "("; args; ")"]
     | Assign {source= source, _; dest= dest, _} ->
         String.concat
-          [ "ASSIGN("
+          [ "<-("
           ; expr_to_string dest ~indent:(indent + 1)
           ; ", "
           ; expr_to_string source ~indent:(indent + 1)
           ; ")" ]
     | Reference {is_mut; place= place, _} ->
-        let name = if is_mut then "MUT_REF(" else "REF(" in
+        let name = if is_mut then "&mut(" else "&(" in
         String.concat [name; expr_to_string place ~indent:(indent + 1); ")"]
     | Dereference (value, _) ->
-        String.concat ["DEREF("; expr_to_string value ~indent:(indent + 1); ")"]
+        String.concat ["*("; expr_to_string value ~indent:(indent + 1); ")"]
     | Record_literal {ty= ty, _; members} ->
         let members =
           let f (((name : Ident.t), (expr, _)), _) =

@@ -3,6 +3,7 @@ module rec Error_expected : sig
     | Specific of Token.t
     | Item_declarator
     | Identifier
+    | Real_operator
     | Variable_decl
     | Type
     | Data
@@ -31,17 +32,18 @@ and Token : sig
     | Close_paren
     | Open_brace
     | Close_brace
+    | Open_square
+    | Close_square
     | Semicolon
     | Dot
     | Comma
     | Integer_literal of int
-    | Operator of Ident.t
     | Assign
     | Arrow
-    | Reference
     | Equals
     | Colon
     | Double_colon
+    | Operator of Ident.t
     | Identifier of Ident.t
     | Keyword_true
     | Keyword_false

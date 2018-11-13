@@ -6,17 +6,18 @@ let equal lhs rhs =
   | Close_paren, Close_paren -> true
   | Open_brace, Open_brace -> true
   | Close_brace, Close_brace -> true
+  | Open_square, Open_square -> true
+  | Close_square, Close_square -> true
   | Semicolon, Semicolon -> true
   | Dot, Dot -> true
   | Comma, Comma -> true
   | Integer_literal i1, Integer_literal i2 -> i1 = i2
-  | Operator op1, Operator op2 -> Ident.equal op1 op2
   | Assign, Assign -> true
   | Arrow, Arrow -> true
-  | Reference, Reference -> true
   | Equals, Equals -> true
   | Colon, Colon -> true
   | Double_colon, Double_colon -> true
+  | Operator id1, Operator id2 -> Ident.equal id1 id2
   | Identifier id1, Identifier id2 -> Ident.equal id1 id2
   | Keyword_true, Keyword_true -> true
   | Keyword_false, Keyword_false -> true
@@ -38,18 +39,19 @@ let to_string = function
   | Close_paren -> "close paren `)`"
   | Open_brace -> "open brace `{`"
   | Close_brace -> "close brace `}`"
+  | Open_square -> "open square `[`"
+  | Close_square -> "close square `]`"
   | Semicolon -> "semicolon `;`"
   | Dot -> "dot `.`"
   | Comma -> "comma `,`"
   | Integer_literal i -> Printf.sprintf "int literal: `%d`" i
-  | Operator op -> Printf.sprintf "operator: `%s`" (op :> string)
   | Assign -> "assign `<-`"
   | Arrow -> "arrow `->`"
-  | Reference -> "reference `&`"
   | Equals -> "equals `=`"
   | Colon -> "colon `:`"
   | Double_colon -> "double colon `::`"
-  | Identifier id -> Printf.sprintf "identifier: `%s`" (id :> string)
+  | Operator ident -> Printf.sprintf "operator: `%s`" (ident :> string)
+  | Identifier ident -> Printf.sprintf "identifier: `%s`" (ident :> string)
   | Keyword_true -> "true"
   | Keyword_false -> "false"
   | Keyword_if -> "if"

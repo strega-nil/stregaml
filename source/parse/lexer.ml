@@ -40,25 +40,70 @@ let is_number_continue ch base =
       || (ch >=~ 'A' && ch <=~ 'F')
   | base -> raise (Bug_lexer ("Invalid base: " ^ Int.to_string base))
 
+(*
+  allowed:
+    | _
+    | xid-start
+  continue only:
+    | -
+    | '
+    | xid-continue
+*)
 let is_ident_start ch = ch =~ '_' || Uucp.Id.is_xid_start ch
 
-let is_ident_continue_no_prime ch = Uucp.Id.is_xid_continue ch
+let is_ident_continue_no_prime ch = ch =~ '-' || Uucp.Id.is_xid_continue ch
 
 let is_ident_continue ch = ch =~ '\'' || is_ident_continue_no_prime ch
 
+(*
+  allowed:
+    | symbol-math
+    | common operators of other languages
+      | :
+      | %
+      | +
+      | -
+      | *
+      | /
+      | \
+      | ~
+      | &
+      | |
+      | ˆ
+      | !
+      | ?
+      | @
+  only continue:
+    | '
+
+  note:
+    the programmer may put `[]` braces around operators in order to treat
+    them as identifiers.
+*)
 let is_operator_start ch =
-  let is_non_math_operator = function
-    | '-' | '*' | '/' | '%' | '&' | '!' | '?' | '@' | '\\' | '^' | ':' -> true
+  let is_valid_ascii ch =
+    let ch = Option.value ~default:(Char.unsafe_of_int 0) (Uchar.to_char ch) in
+    match ch with
+    | ':' -> true
+    | '%' -> true
+    | '+' -> true
+    | '-' -> true
+    | '*' -> true
+    | '/' -> true
+    | '\\' -> true
+    | '~' -> true
+    | '&' -> true
+    | '|' -> true
+    | '^' -> true
+    | '!' -> true
+    | '?' -> true
+    | '@' -> true
     | _ -> false
   in
-  match Uucp.Gc.general_category ch with
-  | `Sm -> true
-  | _ -> (
-    match Uchar.to_char ch with
-    | None -> false
-    | Some ch -> is_non_math_operator ch )
+  if is_valid_ascii ch then true
+  else match Uucp.Gc.general_category ch with `Sm -> true | _ -> false
 
-let is_operator_continue ch = is_operator_start ch
+let is_operator_continue ch = ch =~ '\'' || is_operator_start ch
 
 let current_span lex =
   let open Spanned.Span in
@@ -102,8 +147,8 @@ let lex_ident fst lex =
         eat_ch lex ;
         helper (ch :: lst)
     | Some _ | None -> (
-        let id = Ident.of_uchar_list (List.rev lst) in
-        match (id :> string) with
+        let ident = Ident.of_uchar_list (List.rev lst) in
+        match (ident :> string) with
         | "true" -> return Token.Keyword_true
         | "false" -> return Token.Keyword_false
         | "if" -> return Token.Keyword_if
@@ -116,10 +161,10 @@ let lex_ident fst lex =
         | "let" -> return Token.Keyword_let
         | "mut" -> return Token.Keyword_mut
         | "_" -> return Token.Keyword_underscore
-        | "variant" -> return_err (Error.Reserved_token id)
-        | "opaque" -> return_err (Error.Reserved_token id)
-        | "public" -> return_err (Error.Reserved_token id)
-        | _ -> return (Token.Identifier id) )
+        | "variant" -> return_err (Error.Reserved_token ident)
+        | "opaque" -> return_err (Error.Reserved_token ident)
+        | "public" -> return_err (Error.Reserved_token ident)
+        | _ -> return (Token.Identifier ident) )
   in
   helper [fst]
 
@@ -147,7 +192,7 @@ let lex_number (fst : Uchar.t) lex =
     | Some ch when is_number_continue ch base ->
         eat_ch lex ;
         helper (ch :: lst) true
-    | Some ch when Uchar.equal ch (Uchar.of_char '\'') ->
+    | Some ch when ch =~ '\'' ->
         if quote_allowed then ( eat_ch lex ; helper lst false )
         else return_err Error.Malformed_number_literal
     | Some _ | None ->
@@ -174,7 +219,7 @@ let lex_number (fst : Uchar.t) lex =
   helper buff true
 
 let rec next_token lex =
-  let lex_operator fst lex =
+  let lex_op_ident fst lex =
     let rec block_comment () =
       let rec eat_the_things () =
         let%bind ch = next_ch lex in
@@ -227,8 +272,8 @@ let rec next_token lex =
           eat_ch lex ;
           helper (ch :: lst)
       | Some _ | None -> (
-          let id = Ident.of_uchar_list (List.rev lst) in
-          match (id :> string) with
+          let ident = Ident.of_uchar_list (List.rev lst) in
+          match (ident :> string) with
           | "/*" ->
               let%bind () = block_comment () in
               next_token lex
@@ -240,12 +285,11 @@ let rec next_token lex =
           | "<-" -> return Token.Assign
           | "->" -> return Token.Arrow
           | "::" -> return Token.Double_colon
-          | "&" -> return Token.Reference
-          | "|" -> return_err (Error.Reserved_token id)
-          | "\\" -> return_err (Error.Reserved_token id)
+          | "|" -> return_err (Error.Reserved_token ident)
+          | "\\" -> return_err (Error.Reserved_token ident)
           | op when includes_comment_token op ->
-              return_err (Error.Operator_including_comment_token id)
-          | _ -> return (Token.Operator id) )
+              return_err (Error.Operator_including_comment_token ident)
+          | _ -> return (Token.Operator ident) )
     in
     helper [fst]
   in
@@ -256,15 +300,13 @@ let rec next_token lex =
   | Some ch when ch =~ ')' -> return Token.Close_paren
   | Some ch when ch =~ '{' -> return Token.Open_brace
   | Some ch when ch =~ '}' -> return Token.Close_brace
-  | Some ch when ch =~ '[' ->
-      return_err (Error.Reserved_token (Ident.of_string_unsafe "["))
-  | Some ch when ch =~ ']' ->
-      return_err (Error.Reserved_token (Ident.of_string_unsafe "]"))
+  | Some ch when ch =~ '[' -> return Token.Open_square
+  | Some ch when ch =~ ']' -> return Token.Close_square
   | Some ch when ch =~ ';' -> return Token.Semicolon
   | Some ch when ch =~ ',' -> return Token.Comma
   | Some ch when ch =~ '.' -> return Token.Dot
   | Some ch when is_ident_start ch -> lex_ident ch lex
-  | Some ch when is_operator_start ch -> lex_operator ch lex
+  | Some ch when is_operator_start ch -> lex_op_ident ch lex
   | Some ch when is_number_start ch -> lex_number ch lex
   | Some ch -> return_err (Error.Unrecognized_character ch)
   | None -> return Token.Eof
