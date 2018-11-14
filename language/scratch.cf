@@ -1,3 +1,4 @@
+/*
 type V2 {
   data = record {
     x: Int32;
@@ -5,10 +6,16 @@ type V2 {
   };
 }
 
+infix func [+](x: Int32, y: Int32) -> Int32 {
+  __builtin(add)(x, y)
+}
+
 func double(x: Int32) -> Int32 {
   __builtin(add)(x, x)
 }
+*/
 
+/*
 func map-in-place(v: &mut V2, f: func(Int32) -> Int32) {
   <-(*(v).x, f(*(v).x));
   let y = &mut(*(v).y);
@@ -22,9 +29,10 @@ func δ(v: V2) -> Int32 {
     __builtin(sub)(v.x, v.y)
   }
 }
+*/
 
 func main() -> Int32 {
-  let mut v = V2::{x = 20; y = 30};
-  map-in-place(&mut(v), double);
-  δ(v)
+  let mut v = 0;
+  v <- 1;
+  v
 }

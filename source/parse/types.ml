@@ -49,6 +49,8 @@ and Token : sig
     | Keyword_false
     | Keyword_if
     | Keyword_else
+    | Keyword_infix
+    | Keyword_prefix
     | Keyword_func
     | Keyword_type
     | Keyword_data
@@ -83,6 +85,8 @@ end =
   Ast_type_definition
 
 and Ast_expr : sig
+  type infix = Infix_assign | Infix_operator of Ident.t
+
   type block = {stmts: Ast_stmt.t Spanned.t list; expr: t Spanned.t option}
 
   and t =
@@ -94,7 +98,7 @@ and Ast_expr : sig
     | Block of block Spanned.t
     | Builtin of Ident.t Spanned.t * t Spanned.t list
     | Call of t Spanned.t * t Spanned.t list
-    | Assign of {dest: Ast_expr.t Spanned.t; source: Ast_expr.t Spanned.t}
+    | Infix_list of t Spanned.t * (infix Spanned.t * t Spanned.t) list
     | Reference of {is_mut: bool; place: Ast_expr.t Spanned.t}
     | Dereference of Ast_expr.t Spanned.t
     | Record_literal of

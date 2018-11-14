@@ -22,16 +22,27 @@ let next_token parser =
 let eat_token parser =
   match next_token parser with Ok _, _ -> () | Error _, _ -> assert false
 
-let is_expression_end = function
-  | Token.Semicolon | Token.Comma | Token.Close_brace | Token.Close_paren ->
-      true
-  | _ -> false
-
 module Item = struct
   type t = Func of Ast.Func.t | Type_definition of Ast.Type.Definition.t
 end
 
 let ( =~ ) (id : Ident.t) s = String.equal (id :> string) s
+
+let is_postfix_token = function
+  | Token.Dot -> true
+  | Token.Open_paren -> true
+  | _ -> false
+
+let is_infix_token = function
+  | Token.Identifier _ -> true
+  | Token.Operator _ -> true
+  | Token.Assign -> true
+  | _ -> false
+
+let is_identifier_token = function
+  | Token.Identifier _ -> true
+  | Token.Open_square -> true
+  | _ -> false
 
 let maybe_get_specific (parser : t) (token : Token.t) : unit option result =
   let%bind tok = peek_token parser in
@@ -79,8 +90,7 @@ let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
   in
   helper parser f expected sep close false
 
-let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
-  let initial =
+let rec maybe_parse_expression_no_follow (parser : t) : Ast.Expr.t option result =
     match%bind spanned_bind (peek_token parser) with
     | Token.Keyword_true, _ ->
         eat_token parser ;
@@ -104,16 +114,7 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
         let%bind () = get_specific parser Token.Keyword_else in
         let%bind els = spanned_bind (parse_block parser) in
         return (Some (Ast.Expr.If_else {cond; thn; els}))
-    (* TODO: remove these hacks and switch to using operators *)
-    | Token.Assign, _ -> (
-        eat_token parser ;
-        let%bind args = parse_argument_list parser in
-        match args with
-        | [dest; source] -> return (Some (Ast.Expr.Assign {dest; source}))
-        | lst ->
-            failwith
-              ( "<- requires 2 arguments; found "
-              ^ Int.to_string (List.length lst) ) )
+    (* TODO: remove these hacks and switch to using prefix operators *)
     | Token.Operator op, _ when op =~ "&" -> (
         eat_token parser ;
         let%bind is_mut =
@@ -144,7 +145,7 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
         let%bind () = get_specific parser Token.Close_paren in
         let%bind args = parse_argument_list parser in
         return (Some (Ast.Expr.Builtin (name, args)))
-    | Token.Open_square, _ | Token.Identifier _, _ -> (
+    | tok, _ when is_identifier_token tok -> (
         let%bind name, sp = spanned_bind (get_ident parser) in
         match%bind maybe_get_specific parser Token.Double_colon with
         | Some () ->
@@ -152,12 +153,6 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
             return (Some expr)
         | None -> return (Some (Ast.Expr.Variable {path= []; name})) )
     | _ -> return None
-  in
-  match%bind spanned_bind initial with
-  | Some i, sp ->
-      let%bind x = parse_follow parser (i, sp) in
-      return (Some x)
-  | None, _ -> return None
 
 and parse_path_expression (parser : t) ~(start : Ident.t Spanned.t) :
     Ast.Expr.t result =
@@ -201,6 +196,38 @@ and parse_record_literal (parser : t) ~(path : Ident.t list Spanned.t) :
   in
   return (Ast.Expr.Record_literal {ty; members})
 
+and maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result =
+  match%bind spanned_bind (maybe_parse_expression_no_follow parser) with
+  | Some e, sp ->
+      let rec parse_all_postfix (expr: Ast.Expr.t Spanned.t) parser =
+        let%bind tok = peek_token parser in
+        if is_postfix_token tok then
+          let%bind expr = spanned_bind (parse_postfix parser expr) in
+          parse_all_postfix expr parser
+        else
+          let expr, _ = expr in
+          return (Some expr)
+      in
+      parse_all_postfix (e, sp) parser
+  | None, _ -> return None
+
+and maybe_parse_expression (parser : t) : Ast.Expr.t option result =
+  match%bind spanned_bind (maybe_parse_expression_no_infix parser) with
+  | Some e, e_sp ->
+      let%bind tok = peek_token parser in
+      if is_infix_token tok then
+        let%bind infix = parse_infix parser in
+        return (Some (Ast.Expr.Infix_list ((e, e_sp), infix)))
+      else return (Some e)
+  | None, _ -> return None
+
+and parse_expression_no_infix (parser : t) : Ast.Expr.t result =
+  match%bind maybe_parse_expression_no_infix parser with
+  | Some expr -> return expr
+  | None ->
+      let%bind tok = next_token parser in
+      return_err (Error.Unexpected_token (Error.Expected.Expression, tok))
+
 and parse_expression (parser : t) : Ast.Expr.t result =
   match%bind maybe_parse_expression parser with
   | Some expr -> return expr
@@ -208,24 +235,31 @@ and parse_expression (parser : t) : Ast.Expr.t result =
       let%bind tok = next_token parser in
       return_err (Error.Unexpected_token (Error.Expected.Expression, tok))
 
-and parse_follow (parser : t) ((initial, sp) : Ast.Expr.t Spanned.t) :
-    Ast.Expr.t result =
-  let%bind tok, tok_sp = spanned_bind (peek_token parser) in
-  let%bind total, cont =
-    match tok with
-    | Token.Open_paren ->
-        let%bind args = parse_argument_list parser in
-        return (Ast.Expr.Call ((initial, sp), args), true)
-    | Token.Dot ->
-        eat_token parser ;
-        let%bind member = get_ident parser in
-        return (Ast.Expr.Record_access ((initial, sp), member), true)
-    | tok when is_expression_end tok -> (Ok (initial, false), sp)
-    | tok ->
-        ( Error (Error.Unexpected_token (Error.Expected.Expression_follow, tok))
-        , tok_sp )
+and parse_infix (parser : t) :
+    (Ast.Expr.infix Spanned.t * Ast.Expr.t Spanned.t) list result =
+  let%bind tok, tok_sp = spanned_bind (next_token parser) in
+  let infix = match tok with
+  | Token.Assign -> (Ast.Expr.Infix_assign, tok_sp)
+  | Token.Operator op -> (Ast.Expr.Infix_operator op, tok_sp)
+  | Token.Identifier id -> (Ast.Expr.Infix_operator id, tok_sp)
+  | _ -> failwith "this function was called incorrectly"
   in
-  if cont then parse_follow parser (total, sp) else return total
+  let%bind expr = spanned_bind (parse_expression_no_infix parser) in
+  let%bind rest = parse_infix parser in
+  return ((infix, expr) :: rest)
+
+and parse_postfix (parser : t) ((initial, sp) : Ast.Expr.t Spanned.t) :
+    Ast.Expr.t result =
+  let%bind tok = peek_token parser in
+  match tok with
+  | Token.Open_paren ->
+      let%bind args = parse_argument_list parser in
+      return (Ast.Expr.Call ((initial, sp), args))
+  | Token.Dot ->
+      eat_token parser ;
+      let%bind member = get_ident parser in
+      return (Ast.Expr.Record_access ((initial, sp), member))
+  | _ -> failwith "function called incorrectly"
 
 and parse_return_type (parser : t) : Ast.Type.t Spanned.t option result =
   match%bind maybe_get_specific parser Token.Arrow with

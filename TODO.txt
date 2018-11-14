@@ -1,14 +1,13 @@
-* lets
 * recursive types
   - first - check for it
   - second - see pointers
-* add pointers
 * LLVM backend
-* fix issues with incorrect spans
-  - maybe just remove spans? they're kind of a pain
 * externals
 * ADTs + pattern matching
 * linearity
+* figure out user-defined prefix operators
+  - maybe their names start with `#`?
+  - then `-b` = `[#-](b)`
 
 * names for stuff
   * tamper - build

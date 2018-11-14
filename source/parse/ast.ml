@@ -33,8 +33,14 @@ module Type = struct
 end
 
 module Implementation_stmt_expr = struct
-  let rec expr_to_string e ~indent =
+  let infix_to_string = function
+    | Types.Ast_expr.Infix_assign -> "<-"
+    | Types.Ast_expr.Infix_operator id -> (id :> string)
+
+  let rec expr_to_string ?(parens = false) e ~indent =
     let open Types.Ast_expr in
+    let open_paren parens = if parens then "(" else "" in
+    let close_paren parens = if parens then ")" else "" in
     let arg_list args =
       let f (x, _) = expr_to_string x ~indent:(indent + 1) in
       String.concat ~sep:", " (List.map args ~f)
@@ -58,21 +64,23 @@ module Implementation_stmt_expr = struct
     | Builtin ((name, _), args) ->
         let args = arg_list args in
         String.concat ["__builtin("; (name :> string); ")("; args; ")"]
+    | Infix_list ((first, _), rest) ->
+        let f ((op, _), ((expr), _)) =
+          let expr = expr_to_string expr ~parens:true ~indent:(indent + 1) in
+          String.concat [" "; (infix_to_string op); " "; expr]
+        in
+        let first = expr_to_string first ~parens:true ~indent:(indent + 1) in
+        String.concat (first :: List.map ~f rest)
     | Call ((e, _), args) ->
         let args = arg_list args in
         String.concat [expr_to_string ~indent e; "("; args; ")"]
-    | Assign {source= source, _; dest= dest, _} ->
-        String.concat
-          [ "<-("
-          ; expr_to_string dest ~indent:(indent + 1)
-          ; ", "
-          ; expr_to_string source ~indent:(indent + 1)
-          ; ")" ]
     | Reference {is_mut; place= place, _} ->
-        let name = if is_mut then "&mut(" else "&(" in
-        String.concat [name; expr_to_string place ~indent:(indent + 1); ")"]
+        let name = if is_mut then "&mut " else "&" in
+        let place = expr_to_string place ~parens:true ~indent:(indent + 1) in
+        String.concat [name; place]
     | Dereference (value, _) ->
-        String.concat ["*("; expr_to_string value ~indent:(indent + 1); ")"]
+        let place = expr_to_string value ~parens:true ~indent:(indent + 1) in
+        String.concat [open_paren parens; "*"; place; close_paren parens]
     | Record_literal {ty= ty, _; members} ->
         let members =
           let f (((name : Ident.t), (expr, _)), _) =
@@ -85,8 +93,10 @@ module Implementation_stmt_expr = struct
         in
         String.concat [Type.to_string ty; "::{ "; members; " }"]
     | Record_access ((e, _), member) ->
+        let record = expr_to_string e ~parens:true ~indent:(indent + 1) in
+        let member = (member :> string) in
         String.concat
-          [expr_to_string ~indent:(indent + 1) e; "."; (member :> string)]
+          [open_paren parens; record; "."; member; close_paren parens]
 
   and block_to_string Types.Ast_expr.({stmts; expr}) ~indent =
     let stmts =
@@ -135,7 +145,7 @@ end
 module Expr = struct
   include Types.Ast_expr
 
-  let to_string = Implementation_stmt_expr.expr_to_string
+  let to_string = Implementation_stmt_expr.expr_to_string ~parens:false
 
   let block_to_string = Implementation_stmt_expr.block_to_string
 end

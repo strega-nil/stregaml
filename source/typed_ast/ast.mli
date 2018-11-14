@@ -17,6 +17,5 @@ module Expr : sig
   val full_type_sp : t Spanned.t -> Type.t
 
   module Local = Types.Ast_Expr_Local
-
   module Builtin = Types.Ast_Expr_Builtin
 end
