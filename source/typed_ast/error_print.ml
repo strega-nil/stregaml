@@ -2,6 +2,10 @@ open! Types.Pervasives
 include Types.Error
 
 let to_string err ~ctxt =
+  let type_list tys =
+    let f ty = Type.to_string ty ~ctxt in
+    String.concat ~sep:", " (List.map ~f tys)
+  in
   match err with
   | Name_not_found name -> Printf.sprintf "Name not found: %s" (name :> string)
   | Type_not_found ty -> Printf.sprintf "Type not found: %s" (ty :> string)
@@ -77,6 +81,18 @@ place is of type: `%s`|}
   1st branch: `%s`
   2nd branch: `%s`|}
         (Type.to_string t1 ~ctxt) (Type.to_string t2 ~ctxt)
+  | Builtin_mismatched_arity {name; expected; found} ->
+      Printf.sprintf "Builtin `%s` expects %d arguments; found %d"
+        (name :> string)
+        expected found
+  | Builtin_invalid_arguments {name; found} ->
+      Printf.sprintf
+        {|Builtin `%s` passed arguments of incorrect type:
+  found: `(%s)`|}
+        (name :> string)
+        (type_list found)
+  | Unknown_builtin name ->
+      Printf.sprintf "Builtin `%s` is unknown" (name :> string)
   | Call_of_non_function ty ->
       Printf.sprintf "Attempted to call a non-function type `%s`"
         (Type.to_string ty ~ctxt)
@@ -96,12 +112,8 @@ place is of type: `%s`|}
         (Type.to_string expected ~ctxt)
         (Type.to_string found ~ctxt)
   | Invalid_function_arguments {expected; found} ->
-      let helper tys =
-        let f ty = Type.to_string ty ~ctxt in
-        String.concat ~sep:", " (List.map ~f tys)
-      in
       Printf.sprintf
         {|Function arguments did not match the parameter types:
   expected: `(%s)`
   found: `(%s)`|}
-        (helper expected) (helper found)
+        (type_list expected) (type_list found)

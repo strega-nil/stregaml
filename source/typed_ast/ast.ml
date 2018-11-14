@@ -15,15 +15,5 @@ module Expr = struct
 
   module Local = Types.Ast_Expr_Local
 
-  module Builtin = struct
-    include Types.Ast_Expr_Builtin
-
-    let equal lhs rhs =
-      match (lhs, rhs) with
-      | Less_eq, Less_eq -> true
-      | Add, Add -> true
-      | Sub, Sub -> true
-      | Mul, Mul -> true
-      | _ -> false
-  end
+  module Builtin = Types.Ast_Expr_Builtin
 end

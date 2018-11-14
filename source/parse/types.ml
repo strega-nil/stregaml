@@ -56,6 +56,7 @@ and Token : sig
     | Keyword_alias
     | Keyword_let
     | Keyword_mut
+    | Keyword_builtin
     | Keyword_underscore
     | Eof
 end =
@@ -91,6 +92,7 @@ and Ast_expr : sig
     | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
     | Variable of {path: Ident.t list; name: Ident.t}
     | Block of block Spanned.t
+    | Builtin of Ident.t Spanned.t * t Spanned.t list
     | Call of t Spanned.t * t Spanned.t list
     | Assign of {dest: Ast_expr.t Spanned.t; source: Ast_expr.t Spanned.t}
     | Reference of {is_mut: bool; place: Ast_expr.t Spanned.t}

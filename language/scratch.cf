@@ -6,7 +6,7 @@ type V2 {
 }
 
 func double(x: Int32) -> Int32 {
-  [+](x, x)
+  __builtin(add)(x, x)
 }
 
 func map-in-place(v: &mut V2, f: func(Int32) -> Int32) {
@@ -16,10 +16,10 @@ func map-in-place(v: &mut V2, f: func(Int32) -> Int32) {
 }
 
 func δ(v: V2) -> Int32 {
-  if ([<=](v.x, v.y)) {
-    [-](v.y, v.x)
+  if (__builtin(less_eq)(v.x, v.y)) {
+    __builtin(sub)(v.y, v.x)
   } else {
-    [-](v.x, v.y)
+    __builtin(sub)(v.x, v.y)
   }
 }
 

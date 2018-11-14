@@ -30,6 +30,7 @@ let equal lhs rhs =
   | Keyword_alias, Keyword_alias -> true
   | Keyword_let, Keyword_let -> true
   | Keyword_mut, Keyword_mut -> true
+  | Keyword_builtin, Keyword_builtin -> true
   | Keyword_underscore, Keyword_underscore -> true
   | Eof, Eof -> true
   | _ -> false
@@ -63,5 +64,6 @@ let to_string = function
   | Keyword_alias -> "alias"
   | Keyword_let -> "let"
   | Keyword_mut -> "mut"
+  | Keyword_builtin -> "__builtin"
   | Keyword_underscore -> "_"
   | Eof -> "end of file"

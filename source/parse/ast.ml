@@ -35,6 +35,10 @@ end
 module Implementation_stmt_expr = struct
   let rec expr_to_string e ~indent =
     let open Types.Ast_expr in
+    let arg_list args =
+      let f (x, _) = expr_to_string x ~indent:(indent + 1) in
+      String.concat ~sep:", " (List.map args ~f)
+    in
     match e with
     | Unit_literal -> "()"
     | Bool_literal true -> "true"
@@ -51,11 +55,11 @@ module Implementation_stmt_expr = struct
     | Variable {path; name} ->
         String.concat ~sep:"::" (path @ [name] :> string list)
     | Block (blk, _) -> block_to_string blk ~indent
+    | Builtin ((name, _), args) ->
+        let args = arg_list args in
+        String.concat ["__builtin("; (name :> string); ")("; args; ")"]
     | Call ((e, _), args) ->
-        let args =
-          let f (x, _) = expr_to_string x ~indent:(indent + 1) in
-          String.concat ~sep:", " (List.map args ~f)
-        in
+        let args = arg_list args in
         String.concat [expr_to_string ~indent e; "("; args; ")"]
     | Assign {source= source, _; dest= dest, _} ->
         String.concat
@@ -100,7 +104,7 @@ module Implementation_stmt_expr = struct
       | Some (e, _) ->
           indent_to_string (indent + 1) ^ expr_to_string e ~indent:(indent + 1)
     in
-    String.concat ["{\n"; stmts; expr; indent_to_string indent; "\n}"]
+    String.concat ["{\n"; stmts; expr; "\n"; indent_to_string indent; "}"]
 
   and stmt_to_string self ~indent =
     let open Types.Ast_stmt in

@@ -6,7 +6,6 @@ module rec Value : sig
     | Function of Function_index.t
     | Reference of Expr_result.place
     | Record of (Ident.t * t ref) list
-    | Builtin of Cafec_typed_ast.Expr.Builtin.t
 end =
   Value
 

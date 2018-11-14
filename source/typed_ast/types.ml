@@ -22,6 +22,9 @@ module rec Error : sig
     | Record_access_non_member of Type.t * Ident.t
     | If_non_bool of Type.t
     | If_branches_of_differing_type of Type.t * Type.t
+    | Builtin_mismatched_arity of {name: Ident.t; expected: int; found: int}
+    | Builtin_invalid_arguments of {name: Ident.t; found: Type.t list}
+    | Unknown_builtin of Ident.t
     | Call_of_non_function of Type.t
     | Defined_function_multiple_times of
         { name: Ident.t
@@ -89,6 +92,7 @@ and Ast_Expr : sig
     | Integer_literal of int
     | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
     | Assign of {dest: t Spanned.t; source: t Spanned.t}
+    | Builtin of Ast_Expr_Builtin.t
     | Call of t Spanned.t * t Spanned.t list
     | Block of block Spanned.t
     | Reference of {mutability: Type.mutability; place: t Spanned.t}
@@ -97,7 +101,6 @@ and Ast_Expr : sig
         { ty: Type.t Spanned.t
         ; members: (Ident.t * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * Ident.t
-    | Builtin of Ast_Expr_Builtin.t
     | Global_function of int
     | Local of Ast_Expr_Local.t
 
@@ -106,7 +109,11 @@ end =
   Ast_Expr
 
 and Ast_Expr_Builtin : sig
-  type t = Less_eq | Add | Sub | Mul
+  type t =
+    | Less_eq of Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t
+    | Add of Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t
+    | Sub of Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t
+    | Mul of Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t
 end =
   Ast_Expr_Builtin
 

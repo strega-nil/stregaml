@@ -139,6 +139,43 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           else
             return_err (Error.If_branches_of_differing_type (thn_ty, els_ty))
       | ty -> return_err (Error.If_non_bool ty) )
+  | U.Builtin ((name, _), args) -> (
+      let%bind arg1, arg2 =
+        match args with
+        | [a1; a2] -> return (a1, a2)
+        | args ->
+            return_err
+              (Error.Builtin_mismatched_arity
+                 {name; expected= 2; found= List.length args})
+      in
+      let%bind arg1 = spanned_bind (typeck_expression locals ctxt arg1) in
+      let%bind arg2 = spanned_bind (typeck_expression locals ctxt arg2) in
+      let a1_ty, a2_ty = (T.base_type_sp arg1, T.base_type_sp arg2) in
+      let%bind () =
+        match (a1_ty, a2_ty) with
+        | Type.Builtin Type.Int32, Type.Builtin Type.Int32 -> return ()
+        | _ ->
+            return_err
+              (Error.Builtin_invalid_arguments {name; found= [a1_ty; a2_ty]})
+      in
+      match (name :> string) with
+      | "less_eq" ->
+          return
+            { T.variant= T.Builtin (T.Builtin.Less_eq (arg1, arg2))
+            ; T.ty= value_type (Type.Builtin Type.Bool) }
+      | "add" ->
+          return
+            { T.variant= T.Builtin (T.Builtin.Add (arg1, arg2))
+            ; T.ty= value_type (Type.Builtin Type.Int32) }
+      | "sub" ->
+          return
+            { T.variant= T.Builtin (T.Builtin.Sub (arg1, arg2))
+            ; T.ty= value_type (Type.Builtin Type.Int32) }
+      | "mul" ->
+          return
+            { T.variant= T.Builtin (T.Builtin.Mul (arg1, arg2))
+            ; T.ty= value_type (Type.Builtin Type.Int32) }
+      | _ -> return_err (Error.Unknown_builtin name) )
   | U.Call (callee, args) ->
       let%bind callee = spanned_bind (typeck_expression locals ctxt callee) in
       let f x = spanned_bind (typeck_expression locals ctxt x) in
@@ -169,28 +206,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           return T.{variant= Local loc; ty}
       | None -> (
         match Functions.index_by_name ctxt.function_context name with
-        | None -> (
-            let int32_ty = Type.(Builtin Int32) in
-            let less_eq_ty =
-              value_type
-                Type.(
-                  Builtin
-                    (Function
-                       {params= [int32_ty; int32_ty]; ret_ty= Builtin Bool}))
-            in
-            let op_ty =
-              value_type
-                Type.(
-                  Builtin
-                    (Function {params= [int32_ty; int32_ty]; ret_ty= int32_ty}))
-            in
-            match (name :> string) with
-            | "<=" ->
-                return T.{variant= Builtin T.Builtin.Less_eq; ty= less_eq_ty}
-            | "+" -> return T.{variant= Builtin T.Builtin.Add; ty= op_ty}
-            | "-" -> return T.{variant= Builtin T.Builtin.Sub; ty= op_ty}
-            | "*" -> return T.{variant= Builtin T.Builtin.Mul; ty= op_ty}
-            | _ -> return_err (Error.Name_not_found name) )
+        | None -> return_err (Error.Name_not_found name)
         | Some idx ->
             let ty =
               let decl, _ =

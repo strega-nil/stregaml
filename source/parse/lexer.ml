@@ -160,6 +160,7 @@ let lex_ident fst lex =
         | "alias" -> return Token.Keyword_alias
         | "let" -> return Token.Keyword_let
         | "mut" -> return Token.Keyword_mut
+        | "__builtin" -> return Token.Keyword_builtin
         | "_" -> return Token.Keyword_underscore
         | "variant" -> return_err (Error.Reserved_token ident)
         | "opaque" -> return_err (Error.Reserved_token ident)

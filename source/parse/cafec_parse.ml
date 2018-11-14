@@ -137,6 +137,13 @@ let rec maybe_parse_expression (parser : t) : Ast.Expr.t option result =
             failwith
               ( "* requires 1 argument; found "
               ^ Int.to_string (List.length lst) ) )
+    | Token.Keyword_builtin, _ ->
+        eat_token parser ;
+        let%bind () = get_specific parser Token.Open_paren in
+        let%bind name = spanned_bind (get_ident parser) in
+        let%bind () = get_specific parser Token.Close_paren in
+        let%bind args = parse_argument_list parser in
+        return (Some (Ast.Expr.Builtin (name, args)))
     | Token.Open_square, _ | Token.Identifier _, _ -> (
         let%bind name, sp = spanned_bind (get_ident parser) in
         match%bind maybe_get_specific parser Token.Double_colon with

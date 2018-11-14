@@ -19,7 +19,7 @@ module Value = struct
 
   let rec clone imm =
     match imm with
-    | Unit | Bool _ | Integer _ | Function _ | Builtin _ | Reference _ -> imm
+    | Unit | Bool _ | Integer _ | Function _ | Reference _ -> imm
     | Record r ->
         let rec helper = function
           | (name, x) :: xs -> (name, ref (clone !x)) :: helper xs
@@ -48,10 +48,6 @@ module Value = struct
     | Function n ->
         let name, _ = ctxt.funcs.((n :> int)) in
         Printf.sprintf "<function %s>" (name :> string)
-    | Builtin Expr.Builtin.Add -> "<builtin add>"
-    | Builtin Expr.Builtin.Sub -> "<builtin sub>"
-    | Builtin Expr.Builtin.Mul -> "<builtin mul>"
-    | Builtin Expr.Builtin.Less_eq -> "<builtin less_eq>"
 end
 
 module Expr_result = struct
@@ -134,6 +130,18 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | Some (e, _) -> Expr_result.to_value (eval ctxt locals e)
     | None -> Value.Unit
   and eval ctxt locals e =
+    let eval_builtin_args (lhs, _) (rhs, _) =
+      let lhs = match Expr_result.to_value (eval ctxt locals lhs) with
+        | Value.Integer v -> v
+        | _ -> assert false
+      in
+      let rhs =
+        match Expr_result.to_value (eval ctxt locals rhs) with
+        | Value.Integer v -> v
+        | _ -> assert false
+      in
+      (lhs, rhs)
+    in
     let Expr.({variant; _}) = e in
     match variant with
     | Expr.Unit_literal -> Expr_result.Value Value.Unit
@@ -146,6 +154,18 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
       | _ -> assert false )
     | Expr.Local Expr.Local.({index; _}) ->
         Expr_result.Place (Object.place (List.nth_exn locals index))
+    | Expr.Builtin (Expr.Builtin.Add (lhs, rhs)) ->
+        let lhs, rhs = eval_builtin_args lhs rhs in
+        Expr_result.Value (Value.Integer (lhs + rhs))
+    | Expr.Builtin (Expr.Builtin.Sub (lhs, rhs)) ->
+        let lhs, rhs = eval_builtin_args lhs rhs in
+        Expr_result.Value (Value.Integer (lhs - rhs))
+    | Expr.Builtin (Expr.Builtin.Mul (lhs, rhs)) ->
+        let lhs, rhs = eval_builtin_args lhs rhs in
+        Expr_result.Value (Value.Integer (lhs * rhs))
+    | Expr.Builtin (Expr.Builtin.Less_eq (lhs, rhs)) ->
+        let lhs, rhs = eval_builtin_args lhs rhs in
+        Expr_result.Value (Value.Bool (lhs <= rhs))
     | Expr.Call ((e, _), args) -> (
       match Expr_result.to_value (eval ctxt locals e) with
       | Value.Function func ->
@@ -159,30 +179,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           let ret = eval_block ctxt args expr in
           List.iter ~f:Object.drop args ;
           Expr_result.Value ret
-      | Value.Builtin b ->
-          let (lhs, _), (rhs, _) =
-            match args with [lhs; rhs] -> (lhs, rhs) | _ -> assert false
-          in
-          let lhs =
-            match Expr_result.to_value (eval ctxt locals lhs) with
-            | Value.Integer v -> v
-            | _ -> assert false
-          in
-          let rhs =
-            match Expr_result.to_value (eval ctxt locals rhs) with
-            | Value.Integer v -> v
-            | _ -> assert false
-          in
-          let ret =
-            match b with
-            | Expr.Builtin.Add -> Value.Integer (lhs + rhs)
-            | Expr.Builtin.Sub -> Value.Integer (lhs - rhs)
-            | Expr.Builtin.Mul -> Value.Integer (lhs * rhs)
-            | Expr.Builtin.Less_eq -> Value.Bool (lhs <= rhs)
-          in
-          Expr_result.Value ret
       | _ -> assert false )
-    | Expr.Builtin b -> Expr_result.Value (Value.Builtin b)
     | Expr.Block (b, _) -> Expr_result.Value (eval_block ctxt locals b)
     | Expr.Global_function i ->
         Expr_result.Value (Value.Function (Value.function_index_of_int i))
