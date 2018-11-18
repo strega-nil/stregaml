@@ -22,8 +22,39 @@ let next_token parser =
 let eat_token parser =
   match next_token parser with Ok _, _ -> () | Error _, _ -> assert false
 
+(* context sensitive keywords *)
+module Ctxt_keyword = struct
+  let equal = Ident.of_string_unsafe "="
+
+  let less = Ident.of_string_unsafe "<"
+
+  let greater = Ident.of_string_unsafe ">"
+
+  let equal_tok = Token.Operator equal
+
+  (*
+    let less_tok = Token.Operator less
+    let greater_tok = Token.Operator greater
+  *)
+
+  let dir_left = Ident.of_string_unsafe "left"
+
+  let dir_right = Ident.of_string_unsafe "right"
+
+  let dir_none = Ident.of_string_unsafe "none"
+
+  (*
+  let dir_left_tok = Token.Identifier dir_left
+  let dir_right_tok = Token.Identifier dir_right
+  let dir_none_tok = Token.Identifier dir_none
+  *)
+end
+
 module Item = struct
-  type t = Func of Ast.Func.t | Type_definition of Ast.Type.Definition.t
+  type t =
+    | Func of Ast.Func.t
+    | Association of Ast.Association.t
+    | Type_definition of Ast.Type.Definition.t
 end
 
 let ( =~ ) (id : Ident.t) s = String.equal (id :> string) s
@@ -55,16 +86,17 @@ let get_specific (parser : t) (token : Token.t) : unit result =
       let%bind tok = next_token parser in
       return_err (Error.Unexpected_token (Error.Expected.Specific token, tok))
 
+let get_operator (parser : t) : Ident.t result =
+  match%bind next_token parser with
+  | Token.Operator op -> return op
+  | tok -> return_err (Error.Unexpected_token (Error.Expected.Operator, tok))
+
 let get_ident (parser : t) : Ident.t result =
   match%bind next_token parser with
-  | Token.Open_square -> (
-      match%bind next_token parser with
-      | Token.Operator op ->
-          let%bind () = get_specific parser Token.Close_square in
-          return op
-      | tok ->
-          return_err
-            (Error.Unexpected_token (Error.Expected.Real_operator, tok)) )
+  | Token.Open_square ->
+      let%bind op = get_operator parser in
+      let%bind () = get_specific parser Token.Close_square in
+      return op
   | Token.Identifier ident -> return ident
   | tok -> return_err (Error.Unexpected_token (Error.Expected.Identifier, tok))
 
@@ -151,7 +183,7 @@ let rec maybe_parse_expression_no_follow (parser : t) :
       | Some () ->
           let%bind expr = parse_path_expression parser ~start:(name, sp) in
           return (Some expr)
-      | None -> return (Some (Ast.Expr.Variable {path= []; name})) )
+      | None -> return (Some (Ast.Expr.Name {path= []; name})) )
   | _ -> return None
 
 and parse_path_expression (parser : t) ~(start : Ident.t Spanned.t) :
@@ -165,7 +197,7 @@ and parse_path_expression (parser : t) ~(start : Ident.t Spanned.t) :
         | Token.Double_colon ->
             eat_token parser ;
             helper parser ~path:(name :: path, Spanned.Span.union sp sp')
-        | _ -> return (Ast.Expr.Variable {path; name}) )
+        | _ -> return (Ast.Expr.Name {path; name}) )
     | Token.Open_brace, sp' ->
         parse_record_literal parser ~path:(path, Spanned.Span.union sp sp')
     | tok, _ ->
@@ -179,7 +211,7 @@ and parse_record_literal (parser : t) ~(path : Ident.t list Spanned.t) :
     Ast.Expr.t result =
   let f parser =
     let%bind name = get_ident parser in
-    let%bind () = get_specific parser Token.Equals in
+    let%bind () = get_specific parser Ctxt_keyword.equal_tok in
     let%bind expr = spanned_bind (parse_expression parser) in
     return (name, expr)
   in
@@ -241,7 +273,7 @@ and parse_infix (parser : t) :
   let infix =
     match tok with
     | Token.Assign -> (Ast.Expr.Infix_assign, tok_sp)
-    | Token.Operator op -> (Ast.Expr.Infix_operator op, tok_sp)
+    | Token.Operator op -> (Ast.Expr.Infix_name op, tok_sp)
     | _ -> failwith "this function was called incorrectly"
   in
   let%bind expr = spanned_bind (parse_expression_no_infix parser) in
@@ -362,7 +394,7 @@ and parse_block_no_open (parser : t) : Ast.Expr.block result =
       let%bind name, name_sp = spanned_bind (get_ident parser) in
       let name = (name, name_sp) in
       let%bind ty = maybe_parse_type_annotation parser in
-      let%bind () = get_specific parser Token.Equals in
+      let%bind () = get_specific parser Ctxt_keyword.equal_tok in
       let%bind expr = spanned_bind (parse_expression parser) in
       let%bind (), semi_sp =
         spanned_bind (get_specific parser Token.Semicolon)
@@ -405,10 +437,49 @@ let parse_item (parser : t) : (Item.t option, Error.t) Spanned.Result.t =
       let%bind body = spanned_bind (parse_block parser) in
       let func = Ast.Func.{name; params; ret_ty; body} in
       return (Some (Item.Func func))
+  | Token.Keyword_association ->
+      let%bind () = get_specific parser Token.Open_square in
+      let%bind name = spanned_bind (get_operator parser) in
+      let%bind () = get_specific parser Token.Close_square in
+      let%bind kind =
+        match%bind next_token parser with
+        | Token.Colon ->
+            let%bind direction = get_ident parser in
+            if Ident.equal direction Ctxt_keyword.dir_left then
+              return Ast.Association.Direction_left
+            else if Ident.equal direction Ctxt_keyword.dir_right then
+              failwith "not yet implemented - right association"
+            else if Ident.equal direction Ctxt_keyword.dir_none then
+              return Ast.Association.Direction_none
+            else
+              return_err
+                (Error.Unexpected_token
+                   (Error.Expected.Direction, Token.Identifier direction))
+        | Token.Operator relation ->
+            let%bind () = get_specific parser Token.Open_square in
+            let%bind op2 = spanned_bind (get_operator parser) in
+            let%bind () = get_specific parser Token.Close_square in
+            if Ident.equal relation Ctxt_keyword.equal then
+              return (Ast.Association.Equal op2)
+            else if Ident.equal relation Ctxt_keyword.less then
+              return (Ast.Association.Less op2)
+            else if Ident.equal relation Ctxt_keyword.greater then
+              return (Ast.Association.Greater op2)
+            else
+              return_err
+                (Error.Unexpected_token
+                   (Error.Expected.Precedence, Token.Operator relation))
+        | tok ->
+            return_err
+              (Error.Unexpected_token (Error.Expected.Association, tok))
+      in
+      let%bind () = get_specific parser Token.Semicolon in
+      let assoc = Ast.Association.{name; kind} in
+      return (Some (Item.Association assoc))
   | Token.Keyword_type ->
       let%bind name = spanned_bind (get_ident parser) in
       let%bind kind =
-        match%bind maybe_get_specific parser Token.Equals with
+        match%bind maybe_get_specific parser Ctxt_keyword.equal_tok with
         | Some () ->
             let%bind ty = parse_type parser in
             let%bind () = get_specific parser Token.Semicolon in
@@ -416,7 +487,7 @@ let parse_item (parser : t) : (Item.t option, Error.t) Spanned.Result.t =
         | None ->
             let%bind () = get_specific parser Token.Open_brace in
             let%bind () = get_specific parser Token.Keyword_data in
-            let%bind () = get_specific parser Token.Equals in
+            let%bind () = get_specific parser Ctxt_keyword.equal_tok in
             let%bind data = parse_data parser in
             let%bind () = get_specific parser Token.Semicolon in
             let%bind () = get_specific parser Token.Close_brace in
@@ -432,12 +503,14 @@ let parse_program (parser : t) : (Ast.t, Error.t) Spanned.Result.t =
   let rec helper parser =
     let%bind item, sp = spanned_bind (parse_item parser) in
     match item with
-    | None -> return Ast.{funcs= []; types= []}
+    | None -> return Ast.{funcs= []; assocs= []; types= []}
     | Some item -> (
         let%bind rest = helper parser in
         match item with
         | Item.Func func ->
             return Ast.{rest with funcs= (func, sp) :: rest.funcs}
+        | Item.Association assoc ->
+            return Ast.{rest with assocs= (assoc, sp) :: rest.assocs}
         | Item.Type_definition def ->
             return Ast.{rest with types= (def, sp) :: rest.types} )
   in

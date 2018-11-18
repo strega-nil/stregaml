@@ -105,6 +105,9 @@ let is_operator_start ch =
 
 let is_operator_continue ch = ch =~ '\'' || is_operator_start ch
 
+let is_operator_ident id =
+  is_operator_start (Ident.first_codepoint_exn id)
+
 let current_span lex =
   let open Spanned.Span in
   let line = Uutf.decoder_line lex.decoder in
@@ -153,8 +156,7 @@ let lex_ident fst lex =
         | "false" -> return Token.Keyword_false
         | "if" -> return Token.Keyword_if
         | "else" -> return Token.Keyword_else
-        | "infix" -> return Token.Keyword_infix
-        | "prefix" -> return Token.Keyword_prefix
+        | "association" -> return Token.Keyword_association
         | "func" -> return Token.Keyword_func
         | "type" -> return Token.Keyword_type
         | "data" -> return Token.Keyword_data
@@ -222,7 +224,7 @@ let lex_number (fst : Uchar.t) lex =
   helper buff true
 
 let rec next_token lex =
-  let lex_op_ident fst lex =
+  let lex_operator_ident fst lex =
     let rec block_comment () =
       let rec eat_the_things () =
         let%bind ch = next_ch lex in
@@ -283,7 +285,6 @@ let rec next_token lex =
           | "//" ->
               let%bind () = line_comment () in
               next_token lex
-          | "=" -> return Token.Equals
           | ":" -> return Token.Colon
           | "<-" -> return Token.Assign
           | "->" -> return Token.Arrow
@@ -309,7 +310,7 @@ let rec next_token lex =
   | Some ch when ch =~ ',' -> return Token.Comma
   | Some ch when ch =~ '.' -> return Token.Dot
   | Some ch when is_ident_start ch -> lex_ident ch lex
-  | Some ch when is_operator_start ch -> lex_op_ident ch lex
+  | Some ch when is_operator_start ch -> lex_operator_ident ch lex
   | Some ch when is_number_start ch -> lex_number ch lex
   | Some ch -> return_err (Error.Unrecognized_character ch)
   | None -> return Token.Eof

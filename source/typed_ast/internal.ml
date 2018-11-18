@@ -108,6 +108,26 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   in
   (Ok T.Expr.{stmts; expr}, sp)
 
+and typeck_call callee args =
+  let module T = Ast.Expr in
+  let callee_ty = T.base_type_sp callee in
+  let%bind ret_ty =
+    match callee_ty with
+    | Type.Builtin (Type.Function {params; ret_ty}) ->
+        let correct_types args params =
+          let f a p = Type.equal (T.base_type_sp a) p in
+          if List.length args <> List.length params then false
+          else List.for_all2_exn ~f args params
+        in
+        if correct_types args params then return ret_ty
+        else
+          return_err
+            (Error.Invalid_function_arguments
+                {expected= params; found= List.map ~f:T.base_type_sp args})
+    | ty -> return_err (Error.Call_of_non_function ty)
+  in
+  return T.{variant= Call (callee, args); ty= value_type ret_ty}
+
 and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
   let module U = Untyped_ast.Expr in
   let module T = Ast.Expr in
@@ -133,7 +153,10 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
           | T.Type.Place {mutability= Type.Mutable} ->
               let ty = value_type (Type.Builtin Type.Unit) in
               return T.{variant= Assign {dest; source}; ty} )
-    | _ -> failwith "unimplemented - make_op_expr"
+    | U.Infix_name name, sp ->
+        let name = U.Name {path= []; name}, sp in
+        let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
+        typeck_call callee [e0; e1]
   in
   match rest with
   | [] -> spanned_lift e0
@@ -225,27 +248,11 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let%bind callee = spanned_bind (typeck_expression locals ctxt callee) in
       let f x = spanned_bind (typeck_expression locals ctxt x) in
       let%bind args = return_map ~f args in
-      let callee_ty = T.base_type_sp callee in
-      let%bind ret_ty =
-        match callee_ty with
-        | Type.Builtin (Type.Function {params; ret_ty}) ->
-            let correct_types args params =
-              let f a p = Type.equal (T.base_type_sp a) p in
-              if List.length args <> List.length params then false
-              else List.for_all2_exn ~f args params
-            in
-            if correct_types args params then return ret_ty
-            else
-              return_err
-                (Error.Invalid_function_arguments
-                   {expected= params; found= List.map ~f:T.base_type_sp args})
-        | ty -> return_err (Error.Call_of_non_function ty)
-      in
-      return T.{variant= Call (callee, args); ty= value_type ret_ty}
+      typeck_call callee args
   | U.Infix_list (first, rest) ->
       let%bind first = spanned_bind (typeck_expression locals ctxt first) in
       typeck_infix_list locals ctxt first rest
-  | U.Variable {path; name} -> (
+  | U.Name {path; name} -> (
       assert (List.length path = 0) ;
       match find_local name locals with
       | Some loc ->

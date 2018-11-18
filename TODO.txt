@@ -8,6 +8,10 @@
 * figure out user-defined prefix operators
   - maybe their names start with `#`?
   - then `-b` = `[#-](b)`
+* should there be more differences between
+  - association: left
+  - association <=> [operator]
+  - assocation by [func]
 
 * names for stuff
   * tamper - build

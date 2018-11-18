@@ -1,4 +1,3 @@
-/*
 type V2 {
   data = record {
     x: Int32;
@@ -6,33 +5,46 @@ type V2 {
   };
 }
 
-infix func [+](x: Int32, y: Int32) -> Int32 {
+association [+]: left;
+association [-] = [+];
+association [*] > [+];
+
+association [<=]: none;
+
+func [+](x: Int32, y: Int32) -> Int32 {
   __builtin(add)(x, y)
+}
+func [-](x: Int32, y: Int32) -> Int32 {
+  __builtin(sub)(x, y)
+}
+func [*](x: Int32, y: Int32) -> Int32 {
+  __builtin(mul)(x, y)
+}
+
+func [<=](x: Int32, y: Int32) -> Bool {
+  __builtin(less_eq)(x, y)
 }
 
 func double(x: Int32) -> Int32 {
-  __builtin(add)(x, x)
+  x + x
 }
-*/
 
-/*
 func map-in-place(v: &mut V2, f: func(Int32) -> Int32) {
-  <-(*(v).x, f(*(v).x));
+  *(v).x <- f(*(v).x);
   let y = &mut(*(v).y);
-  <-(*(y), f(*(v).y));
+  *(y) <- f(*(v).y);
 }
 
 func δ(v: V2) -> Int32 {
-  if (__builtin(less_eq)(v.x, v.y)) {
-    __builtin(sub)(v.y, v.x)
+  if (v.x <= v.y) {
+    v.y - v.x
   } else {
-    __builtin(sub)(v.x, v.y)
+    v.x - v.y
   }
 }
-*/
 
 func main() -> Int32 {
-  let mut v = 0;
-  v <- 1;
-  v
+  let mut v = V2::{x = 20; y = 30};
+  map-in-place(&mut(v), double);
+  δ(v)
 }

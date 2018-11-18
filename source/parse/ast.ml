@@ -2,11 +2,16 @@ module Spanned = Cafec_containers.Spanned
 
 let indent_to_string indent = String.make (indent * 2) ' '
 
+let normalize_ident id =
+  if Lexer.is_operator_ident id then
+    String.concat ["["; (id :> string); "]"]
+  else (id :> string)
+
 module Type = struct
-  include Types.Ast_type
+  include Types.Ast_Type
 
   let rec to_string = function
-    | Named s -> (s :> string)
+    | Named id -> normalize_ident id
     | Reference {is_mut; pointee= ty, _} ->
         let ptr = if is_mut then "&mut " else "&" in
         ptr ^ to_string ty
@@ -19,26 +24,26 @@ module Type = struct
         String.concat ["func("; params; ret_ty]
 
   module Data = struct
-    include Types.Ast_type_data
+    include Types.Ast_Type_Data
 
     let to_string (Record members) =
       let f (((name : Ident.t), ty), _) =
-        String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
+        String.concat ["\n    "; (normalize_ident name); ": "; to_string ty; ";"]
       in
       let members = String.concat (List.map members ~f) in
       String.concat ["record {"; members; "\n  }"]
   end
 
-  module Definition = Types.Ast_type_definition
+  module Definition = Types.Ast_Type_Definition
 end
 
 module Implementation_stmt_expr = struct
   let infix_to_string = function
-    | Types.Ast_expr.Infix_assign -> "<-"
-    | Types.Ast_expr.Infix_operator id -> (id :> string)
+    | Types.Ast_Expr.Infix_assign -> "<-"
+    | Types.Ast_Expr.Infix_name id -> (id :> string)
 
   let rec expr_to_string ?(parens = false) e ~indent =
-    let open Types.Ast_expr in
+    let open Types.Ast_Expr in
     let open_paren parens = if parens then "(" else "" in
     let close_paren parens = if parens then ")" else "" in
     let arg_list args =
@@ -58,8 +63,9 @@ module Implementation_stmt_expr = struct
           ; block_to_string thn ~indent
           ; " else "
           ; block_to_string els ~indent ]
-    | Variable {path; name} ->
-        String.concat ~sep:"::" (path @ [name] :> string list)
+    | Name {path; name} ->
+        let name = List.map ~f:normalize_ident (path @ [name]) in
+        String.concat ~sep:"::" name
     | Block (blk, _) -> block_to_string blk ~indent
     | Builtin ((name, _), args) ->
         let args = arg_list args in
@@ -85,7 +91,7 @@ module Implementation_stmt_expr = struct
         let members =
           let f (((name : Ident.t), (expr, _)), _) =
             String.concat
-              [ (name :> string)
+              [ (normalize_ident name)
               ; " = "
               ; expr_to_string expr ~indent:(indent + 1) ]
           in
@@ -94,11 +100,11 @@ module Implementation_stmt_expr = struct
         String.concat [Type.to_string ty; "::{ "; members; " }"]
     | Record_access ((e, _), member) ->
         let record = expr_to_string e ~parens:true ~indent:(indent + 1) in
-        let member = (member :> string) in
+        let member = (normalize_ident member) in
         String.concat
           [open_paren parens; record; "."; member; close_paren parens]
 
-  and block_to_string Types.Ast_expr.({stmts; expr}) ~indent =
+  and block_to_string Types.Ast_Expr.({stmts; expr}) ~indent =
     let stmts =
       let f (s, _) =
         String.concat
@@ -117,7 +123,7 @@ module Implementation_stmt_expr = struct
     String.concat ["{\n"; stmts; expr; "\n"; indent_to_string indent; "}"]
 
   and stmt_to_string self ~indent =
-    let open Types.Ast_stmt in
+    let open Types.Ast_Stmt in
     match self with
     | Expression (e, _) -> expr_to_string ~indent e
     | Let {name; is_mut; ty; expr} ->
@@ -130,20 +136,20 @@ module Implementation_stmt_expr = struct
         String.concat
           [ "let "
           ; mut
-          ; (name :> string)
+          ; (normalize_ident name)
           ; ty
           ; " = "
           ; expr_to_string expr ~indent ]
 end
 
 module Stmt = struct
-  include Types.Ast_stmt
+  include Types.Ast_Stmt
 
   let to_string = Implementation_stmt_expr.stmt_to_string
 end
 
 module Expr = struct
-  include Types.Ast_expr
+  include Types.Ast_Expr
 
   let to_string = Implementation_stmt_expr.expr_to_string ~parens:false
 
@@ -151,12 +157,12 @@ module Expr = struct
 end
 
 module Func = struct
-  include Types.Ast_func
+  include Types.Ast_Func
 
   let to_string self =
     let parameters =
       let f ((((name : Ident.t), _), (ty, _)), _) =
-        String.concat [(name :> string); ": "; Type.to_string ty]
+        String.concat [(normalize_ident name); ": "; Type.to_string ty]
       in
       String.concat ~sep:", " (List.map ~f self.params)
     in
@@ -167,7 +173,7 @@ module Func = struct
     in
     String.concat
       [ "func "
-      ; (self.name :> string)
+      ; (normalize_ident self.name)
       ; "("
       ; parameters
       ; ")"
@@ -178,6 +184,21 @@ module Func = struct
       ; "\n" ]
 end
 
+module Association = struct
+  include Types.Ast_Association
+
+  let to_string {name= name, _; kind} =
+    let kind =
+      match kind with
+      | Direction_left -> [": left;"]
+      | Direction_none -> [": none;"]
+      | Equal (op, _) -> [" = ["; (op :> string); "];"]
+      | Less (op, _) -> [" < ["; (op :> string); "];"]
+      | Greater (op, _) -> [" > ["; (op :> string); "];"]
+    in
+    String.concat ("association [" :: (name :> string) :: "]" :: kind)
+end
+
 include Types.Ast
 
 let to_string self =
@@ -186,11 +207,11 @@ let to_string self =
       match kind with
       | Type.Definition.Alias data ->
           String.concat
-            ["alias "; (name :> string); " = "; Type.to_string data; ";"]
+            ["type "; (normalize_ident name); " = "; Type.to_string data; ";"]
       | Type.Definition.User_defined {data} ->
           String.concat
             [ "type "
-            ; (name :> string)
+            ; (normalize_ident name)
             ; " {\n"
             ; "  data = "
             ; Type.Data.to_string data
@@ -198,8 +219,12 @@ let to_string self =
     in
     String.concat ~sep:"\n" (List.map ~f self.types)
   in
+  let assocs =
+    let f (assoc, _) = Association.to_string assoc in
+    String.concat ~sep:"\n" (List.map ~f self.assocs)
+  in
   let funcs =
     let f (func, _) = Func.to_string func in
     String.concat ~sep:"\n" (List.map ~f self.funcs)
   in
-  String.concat [types; "\n\n"; funcs]
+  String.concat [types; "\n\n"; assocs; "\n\n"; funcs]
