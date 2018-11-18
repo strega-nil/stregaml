@@ -31,6 +31,8 @@ module Result :
 
       val spanned_bind : ('o, 'e) t -> ('o spanned, 'e) t
 
+      val spanned_lift : 'o spanned -> ('o, 'e) t
+
       val return_err : 'e -> (_, 'e) t
 
       val with_span : Span.t -> (unit, _) t

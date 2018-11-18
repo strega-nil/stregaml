@@ -61,6 +61,8 @@ let find_local name (lst : Binding.t list) : Local.t option =
   in
   List.find_mapi ~f lst
 
+let value_type ty = Ast.Expr.Type.{category= Value; ty}
+
 let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   let module U = Untyped_ast in
   let module T = Ast in
@@ -106,12 +108,55 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   in
   (Ok T.Expr.{stmts; expr}, sp)
 
+and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
+  let module U = Untyped_ast.Expr in
+  let module T = Ast.Expr in
+  let operator_precedence = function
+    | U.Infix_assign, _ -> return (-1)
+    | _ -> return 0
+  in
+  let make_op_expr op e0 e1 =
+    match op with
+    | U.Infix_assign, _ -> (
+        let source, dest = (e1, e0) in
+        let T.Type.({category= dest_cat; ty= dest_ty}) = T.full_type_sp dest in
+        let source_ty = T.base_type_sp source in
+        if not (Type.equal dest_ty source_ty) then
+          return_err
+            (Error.Assignment_to_incompatible_type
+               {dest= dest_ty; source= source_ty})
+        else
+          match dest_cat with
+          | T.Type.Value -> return_err Error.Assignment_to_value
+          | T.Type.Place {mutability= Type.Immutable} ->
+              return_err Error.Assignment_to_immutable_place
+          | T.Type.Place {mutability= Type.Mutable} ->
+              let ty = value_type (Type.Builtin Type.Unit) in
+              return T.{variant= Assign {dest; source}; ty} )
+    | _ -> failwith "unimplemented - make_op_expr"
+  in
+  match rest with
+  | [] -> spanned_lift e0
+  | (op1, e1) :: rest -> (
+      let%bind e1 = spanned_bind (typeck_expression locals ctxt e1) in
+      match rest with
+      | [] -> make_op_expr op1 e0 e1
+      | (op2, _) :: _ ->
+          let%bind p1 = operator_precedence op1 in
+          let%bind p2 = operator_precedence op2 in
+          if p1 >= p2 then
+            let%bind lhs = spanned_bind (make_op_expr op1 e0 e1) in
+            typeck_infix_list locals ctxt lhs rest
+          else
+            let%bind rhs =
+              spanned_bind (typeck_infix_list locals ctxt e1 rest)
+            in
+            make_op_expr op1 e0 rhs )
+
 and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   let module U = Untyped_ast.Expr in
   let module T = Expr in
-  let unt_expr, sp = unt_expr in
-  let%bind () = with_span sp in
-  let value_type ty = T.Type.{category= Value; ty} in
+  let%bind unt_expr = spanned_lift unt_expr in
   match unt_expr with
   | U.Unit_literal ->
       let ty = value_type (Type.Builtin Type.Unit) in
@@ -197,6 +242,9 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | ty -> return_err (Error.Call_of_non_function ty)
       in
       return T.{variant= Call (callee, args); ty= value_type ret_ty}
+  | U.Infix_list (first, rest) ->
+      let%bind first = spanned_bind (typeck_expression locals ctxt first) in
+      typeck_infix_list locals ctxt first rest
   | U.Variable {path; name} -> (
       assert (List.length path = 0) ;
       match find_local name locals with
@@ -341,23 +389,6 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> return_err (Error.Record_access_non_record_type (ebty, member))
       in
       return T.{variant= Record_access (expr, member); ty}
-  | U.Assign {dest; source} -> (
-      let%bind dest = spanned_bind (typeck_expression locals ctxt dest) in
-      let%bind source = spanned_bind (typeck_expression locals ctxt source) in
-      let T.Type.({category= dest_cat; ty= dest_ty}) = T.full_type_sp dest in
-      let source_ty = T.base_type_sp source in
-      if not (Type.equal dest_ty source_ty) then
-        return_err
-          (Error.Assignment_to_incompatible_type
-             {dest= dest_ty; source= source_ty})
-      else
-        match dest_cat with
-        | T.Type.Value -> return_err Error.Assignment_to_value
-        | T.Type.Place {mutability= Type.Immutable} ->
-            return_err Error.Assignment_to_immutable_place
-        | T.Type.Place {mutability= Type.Mutable} ->
-            let ty = value_type (Type.Builtin Type.Unit) in
-            return T.{variant= Assign {dest; source}; ty} )
 
 let add_function_declaration (ctxt : t)
     (unt_func : Untyped_ast.Func.t Spanned.t) : t result =

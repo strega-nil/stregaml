@@ -34,7 +34,6 @@ let is_postfix_token = function
   | _ -> false
 
 let is_infix_token = function
-  | Token.Identifier _ -> true
   | Token.Operator _ -> true
   | Token.Assign -> true
   | _ -> false
@@ -90,69 +89,70 @@ let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
   in
   helper parser f expected sep close false
 
-let rec maybe_parse_expression_no_follow (parser : t) : Ast.Expr.t option result =
-    match%bind spanned_bind (peek_token parser) with
-    | Token.Keyword_true, _ ->
-        eat_token parser ;
-        return (Some (Ast.Expr.Bool_literal true))
-    | Token.Keyword_false, _ ->
-        eat_token parser ;
-        return (Some (Ast.Expr.Bool_literal false))
-    | Token.Integer_literal n, _ ->
-        eat_token parser ;
-        return (Some (Ast.Expr.Integer_literal n))
-    | Token.Open_paren, _ ->
-        eat_token parser ;
-        let%bind () = get_specific parser Token.Close_paren in
-        return (Some Ast.Expr.Unit_literal)
-    | Token.Keyword_if, _ ->
-        eat_token parser ;
-        let%bind () = get_specific parser Token.Open_paren in
-        let%bind cond = spanned_bind (parse_expression parser) in
-        let%bind () = get_specific parser Token.Close_paren in
-        let%bind thn = spanned_bind (parse_block parser) in
-        let%bind () = get_specific parser Token.Keyword_else in
-        let%bind els = spanned_bind (parse_block parser) in
-        return (Some (Ast.Expr.If_else {cond; thn; els}))
-    (* TODO: remove these hacks and switch to using prefix operators *)
-    | Token.Operator op, _ when op =~ "&" -> (
-        eat_token parser ;
-        let%bind is_mut =
-          match%bind maybe_get_specific parser Token.Keyword_mut with
-          | Some () -> return true
-          | None -> return false
-        in
-        let%bind args = parse_argument_list parser in
-        match args with
-        | [place] -> return (Some (Ast.Expr.Reference {is_mut; place}))
-        | lst ->
-            failwith
-              ( "& requires 1 argument; found "
-              ^ Int.to_string (List.length lst) ) )
-    | Token.Operator op, _ when op =~ "*" -> (
-        eat_token parser ;
-        let%bind args = parse_argument_list parser in
-        match args with
-        | [value] -> return (Some (Ast.Expr.Dereference value))
-        | lst ->
-            failwith
-              ( "* requires 1 argument; found "
-              ^ Int.to_string (List.length lst) ) )
-    | Token.Keyword_builtin, _ ->
-        eat_token parser ;
-        let%bind () = get_specific parser Token.Open_paren in
-        let%bind name = spanned_bind (get_ident parser) in
-        let%bind () = get_specific parser Token.Close_paren in
-        let%bind args = parse_argument_list parser in
-        return (Some (Ast.Expr.Builtin (name, args)))
-    | tok, _ when is_identifier_token tok -> (
-        let%bind name, sp = spanned_bind (get_ident parser) in
-        match%bind maybe_get_specific parser Token.Double_colon with
-        | Some () ->
-            let%bind expr = parse_path_expression parser ~start:(name, sp) in
-            return (Some expr)
-        | None -> return (Some (Ast.Expr.Variable {path= []; name})) )
-    | _ -> return None
+let rec maybe_parse_expression_no_follow (parser : t) :
+    Ast.Expr.t option result =
+  match%bind spanned_bind (peek_token parser) with
+  | Token.Keyword_true, _ ->
+      eat_token parser ;
+      return (Some (Ast.Expr.Bool_literal true))
+  | Token.Keyword_false, _ ->
+      eat_token parser ;
+      return (Some (Ast.Expr.Bool_literal false))
+  | Token.Integer_literal n, _ ->
+      eat_token parser ;
+      return (Some (Ast.Expr.Integer_literal n))
+  | Token.Open_paren, _ ->
+      eat_token parser ;
+      let%bind () = get_specific parser Token.Close_paren in
+      return (Some Ast.Expr.Unit_literal)
+  | Token.Keyword_if, _ ->
+      eat_token parser ;
+      let%bind () = get_specific parser Token.Open_paren in
+      let%bind cond = spanned_bind (parse_expression parser) in
+      let%bind () = get_specific parser Token.Close_paren in
+      let%bind thn = spanned_bind (parse_block parser) in
+      let%bind () = get_specific parser Token.Keyword_else in
+      let%bind els = spanned_bind (parse_block parser) in
+      return (Some (Ast.Expr.If_else {cond; thn; els}))
+  (* TODO: remove these hacks and switch to using prefix operators *)
+  | Token.Operator op, _ when op =~ "&" -> (
+      eat_token parser ;
+      let%bind is_mut =
+        match%bind maybe_get_specific parser Token.Keyword_mut with
+        | Some () -> return true
+        | None -> return false
+      in
+      let%bind args = parse_argument_list parser in
+      match args with
+      | [place] -> return (Some (Ast.Expr.Reference {is_mut; place}))
+      | lst ->
+          failwith
+            ("& requires 1 argument; found " ^ Int.to_string (List.length lst))
+      )
+  | Token.Operator op, _ when op =~ "*" -> (
+      eat_token parser ;
+      let%bind args = parse_argument_list parser in
+      match args with
+      | [value] -> return (Some (Ast.Expr.Dereference value))
+      | lst ->
+          failwith
+            ("* requires 1 argument; found " ^ Int.to_string (List.length lst))
+      )
+  | Token.Keyword_builtin, _ ->
+      eat_token parser ;
+      let%bind () = get_specific parser Token.Open_paren in
+      let%bind name = spanned_bind (get_ident parser) in
+      let%bind () = get_specific parser Token.Close_paren in
+      let%bind args = parse_argument_list parser in
+      return (Some (Ast.Expr.Builtin (name, args)))
+  | tok, _ when is_identifier_token tok -> (
+      let%bind name, sp = spanned_bind (get_ident parser) in
+      match%bind maybe_get_specific parser Token.Double_colon with
+      | Some () ->
+          let%bind expr = parse_path_expression parser ~start:(name, sp) in
+          return (Some expr)
+      | None -> return (Some (Ast.Expr.Variable {path= []; name})) )
+  | _ -> return None
 
 and parse_path_expression (parser : t) ~(start : Ident.t Spanned.t) :
     Ast.Expr.t result =
@@ -199,7 +199,7 @@ and parse_record_literal (parser : t) ~(path : Ident.t list Spanned.t) :
 and maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result =
   match%bind spanned_bind (maybe_parse_expression_no_follow parser) with
   | Some e, sp ->
-      let rec parse_all_postfix (expr: Ast.Expr.t Spanned.t) parser =
+      let rec parse_all_postfix (expr : Ast.Expr.t Spanned.t) parser =
         let%bind tok = peek_token parser in
         if is_postfix_token tok then
           let%bind expr = spanned_bind (parse_postfix parser expr) in
@@ -238,14 +238,17 @@ and parse_expression (parser : t) : Ast.Expr.t result =
 and parse_infix (parser : t) :
     (Ast.Expr.infix Spanned.t * Ast.Expr.t Spanned.t) list result =
   let%bind tok, tok_sp = spanned_bind (next_token parser) in
-  let infix = match tok with
-  | Token.Assign -> (Ast.Expr.Infix_assign, tok_sp)
-  | Token.Operator op -> (Ast.Expr.Infix_operator op, tok_sp)
-  | Token.Identifier id -> (Ast.Expr.Infix_operator id, tok_sp)
-  | _ -> failwith "this function was called incorrectly"
+  let infix =
+    match tok with
+    | Token.Assign -> (Ast.Expr.Infix_assign, tok_sp)
+    | Token.Operator op -> (Ast.Expr.Infix_operator op, tok_sp)
+    | _ -> failwith "this function was called incorrectly"
   in
   let%bind expr = spanned_bind (parse_expression_no_infix parser) in
-  let%bind rest = parse_infix parser in
+  let%bind next = peek_token parser in
+  let%bind rest =
+    if is_infix_token next then parse_infix parser else return []
+  in
   return ((infix, expr) :: rest)
 
 and parse_postfix (parser : t) ((initial, sp) : Ast.Expr.t Spanned.t) :

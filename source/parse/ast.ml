@@ -65,9 +65,9 @@ module Implementation_stmt_expr = struct
         let args = arg_list args in
         String.concat ["__builtin("; (name :> string); ")("; args; ")"]
     | Infix_list ((first, _), rest) ->
-        let f ((op, _), ((expr), _)) =
+        let f ((op, _), (expr, _)) =
           let expr = expr_to_string expr ~parens:true ~indent:(indent + 1) in
-          String.concat [" "; (infix_to_string op); " "; expr]
+          String.concat [" "; infix_to_string op; " "; expr]
         in
         let first = expr_to_string first ~parens:true ~indent:(indent + 1) in
         String.concat (first :: List.map ~f rest)

@@ -108,8 +108,6 @@ and Ast_expr : sig
 end =
   Ast_expr
 
-and Ast_expr_operator : sig end = Ast_expr_operator
-
 and Ast_stmt : sig
   type t =
     | Expression of Ast_expr.t Spanned.t

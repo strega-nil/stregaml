@@ -60,6 +60,8 @@ module Result = struct
     let spanned_bind (t, sp) =
       match t with Error e -> (Error e, sp) | Ok o -> (Ok (o, sp), sp)
 
+    let spanned_lift (o, sp) = (Ok o, sp)
+
     let return_err e = (Error e, Span.made_up)
 
     let with_span sp = (Ok (), sp)
