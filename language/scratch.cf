@@ -5,23 +5,23 @@ type V2 {
   };
 }
 
-association [+]: left;
-association [-] = [+];
-association [*] > [+];
+association (+) : start;
+association (-) = (+);
+association (*) > (+);
 
-association [<=]: none;
+association (<=) : none < (+);
 
-func [+](x: Int32, y: Int32) -> Int32 {
+func (+)(x: Int32, y: Int32) -> Int32 {
   __builtin(add)(x, y)
 }
-func [-](x: Int32, y: Int32) -> Int32 {
+func (-)(x: Int32, y: Int32) -> Int32 {
   __builtin(sub)(x, y)
 }
-func [*](x: Int32, y: Int32) -> Int32 {
+func (*)(x: Int32, y: Int32) -> Int32 {
   __builtin(mul)(x, y)
 }
 
-func [<=](x: Int32, y: Int32) -> Bool {
+func (<=)(x: Int32, y: Int32) -> Bool {
   __builtin(less_eq)(x, y)
 }
 

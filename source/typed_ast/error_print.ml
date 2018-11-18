@@ -93,6 +93,15 @@ place is of type: `%s`|}
         (type_list found)
   | Unknown_builtin name ->
       Printf.sprintf "Builtin `%s` is unknown" (name :> string)
+  | Redefined_operator_association name ->
+      Printf.sprintf "Redefined association of `%s` operator" (name :> string)
+  | Unordered_assigns (_, _) ->
+      "Used two assigns in one expression without disambiguating parentheses"
+  | Unordered_operators {op1= op1, _; op2= op2, _} ->
+      Printf.sprintf
+        "Used mutually unordered operators `%s` and `%s` in the same expression"
+        (op1 :> string)
+        (op2 :> string)
   | Call_of_non_function ty ->
       Printf.sprintf "Attempted to call a non-function type `%s`"
         (Type.to_string ty ~ctxt)

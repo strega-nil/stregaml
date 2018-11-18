@@ -54,6 +54,25 @@ end = struct
     if idx < 0 then assert false else helper (idx, func_defs)
 end
 
+module Bind_order = struct
+  type t = Start | End
+
+  let order ~ctxt op1 op2 =
+    let module I = Untyped_ast.Expr in
+    let order_named _ op1 op2 =
+      return_err (Error.Unordered_operators {op1; op2})
+    in
+    match op1, op2 with
+    | (I.Infix_assign, sp1), (I.Infix_assign, sp2) ->
+        return_err (Error.Unordered_assigns (sp1, sp2))
+    | (I.Infix_assign, _), _ ->
+        return End
+    | _, (I.Infix_assign, _) ->
+        return Start
+    | (I.Infix_name op1, sp1), (I.Infix_name op2, sp2) ->
+        order_named ctxt (op1, sp1) (op2, sp2)
+end
+
 let find_local name (lst : Binding.t list) : Local.t option =
   let f index binding =
     let name', _ = binding.Binding.name in
@@ -123,7 +142,7 @@ and typeck_call callee args =
         else
           return_err
             (Error.Invalid_function_arguments
-                {expected= params; found= List.map ~f:T.base_type_sp args})
+               {expected= params; found= List.map ~f:T.base_type_sp args})
     | ty -> return_err (Error.Call_of_non_function ty)
   in
   return T.{variant= Call (callee, args); ty= value_type ret_ty}
@@ -131,10 +150,6 @@ and typeck_call callee args =
 and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
   let module U = Untyped_ast.Expr in
   let module T = Ast.Expr in
-  let operator_precedence = function
-    | U.Infix_assign, _ -> return (-1)
-    | _ -> return 0
-  in
   let make_op_expr op e0 e1 =
     match op with
     | U.Infix_assign, _ -> (
@@ -154,7 +169,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
               let ty = value_type (Type.Builtin Type.Unit) in
               return T.{variant= Assign {dest; source}; ty} )
     | U.Infix_name name, sp ->
-        let name = U.Name {path= []; name}, sp in
+        let name = (U.Name {path= []; name}, sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
         typeck_call callee [e0; e1]
   in
@@ -164,17 +179,16 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
       let%bind e1 = spanned_bind (typeck_expression locals ctxt e1) in
       match rest with
       | [] -> make_op_expr op1 e0 e1
-      | (op2, _) :: _ ->
-          let%bind p1 = operator_precedence op1 in
-          let%bind p2 = operator_precedence op2 in
-          if p1 >= p2 then
-            let%bind lhs = spanned_bind (make_op_expr op1 e0 e1) in
-            typeck_infix_list locals ctxt lhs rest
-          else
-            let%bind rhs =
-              spanned_bind (typeck_infix_list locals ctxt e1 rest)
-            in
-            make_op_expr op1 e0 rhs )
+      | (op2, _) :: _ -> (
+          match%bind Bind_order.order ~ctxt op1 op2 with
+          | Bind_order.Start ->
+              let%bind lhs = spanned_bind (make_op_expr op1 e0 e1) in
+              typeck_infix_list locals ctxt lhs rest
+          | Bind_order.End ->
+              let%bind rhs =
+                spanned_bind (typeck_infix_list locals ctxt e1 rest)
+              in
+              make_op_expr op1 e0 rhs ) )
 
 and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   let module U = Untyped_ast.Expr in

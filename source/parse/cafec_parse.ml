@@ -37,15 +37,15 @@ module Ctxt_keyword = struct
     let greater_tok = Token.Operator greater
   *)
 
-  let dir_left = Ident.of_string_unsafe "left"
+  let dir_start = Ident.of_string_unsafe "start"
 
-  let dir_right = Ident.of_string_unsafe "right"
+  let dir_end = Ident.of_string_unsafe "end"
 
   let dir_none = Ident.of_string_unsafe "none"
 
   (*
-  let dir_left_tok = Token.Identifier dir_left
-  let dir_right_tok = Token.Identifier dir_right
+  let dir_start_tok = Token.Identifier dir_start
+  let dir_end_tok = Token.Identifier dir_end
   let dir_none_tok = Token.Identifier dir_none
   *)
 end
@@ -71,7 +71,7 @@ let is_infix_token = function
 
 let is_identifier_token = function
   | Token.Identifier _ -> true
-  | Token.Open_square -> true
+  | Token.Open_paren -> true
   | _ -> false
 
 let maybe_get_specific (parser : t) (token : Token.t) : unit option result =
@@ -86,16 +86,23 @@ let get_specific (parser : t) (token : Token.t) : unit result =
       let%bind tok = next_token parser in
       return_err (Error.Unexpected_token (Error.Expected.Specific token, tok))
 
+let maybe_get_operator (parser : t) : Ident.t option result =
+  match%bind peek_token parser with
+  | Token.Operator op -> eat_token parser ; return (Some op)
+  | _ -> return None
+
 let get_operator (parser : t) : Ident.t result =
-  match%bind next_token parser with
-  | Token.Operator op -> return op
-  | tok -> return_err (Error.Unexpected_token (Error.Expected.Operator, tok))
+  match%bind maybe_get_operator parser with
+  | Some op -> return op
+  | None ->
+      let%bind tok = next_token parser in
+      return_err (Error.Unexpected_token (Error.Expected.Operator, tok))
 
 let get_ident (parser : t) : Ident.t result =
   match%bind next_token parser with
-  | Token.Open_square ->
+  | Token.Open_paren ->
       let%bind op = get_operator parser in
-      let%bind () = get_specific parser Token.Close_square in
+      let%bind () = get_specific parser Token.Close_paren in
       return op
   | Token.Identifier ident -> return ident
   | tok -> return_err (Error.Unexpected_token (Error.Expected.Identifier, tok))
@@ -317,7 +324,17 @@ and parse_type (parser : t) : Ast.Type.t result =
       | _ ->
           let%bind pointee = spanned_bind (parse_type parser) in
           return (Ast.Type.Reference {is_mut= false; pointee}) )
-  | Token.Open_square | Token.Identifier _ ->
+  | Token.Open_paren -> (
+      eat_token parser ;
+      match%bind maybe_get_operator parser with
+      | None ->
+          return_err
+            (Error.Unexpected_token (Error.Expected.Type, Token.Open_paren))
+      | Some id ->
+          eat_token parser ;
+          let%bind () = get_specific parser Token.Close_paren in
+          return (Ast.Type.Named id) )
+  | Token.Identifier _ ->
       let%bind id = get_ident parser in
       return (Ast.Type.Named id)
   | Token.Keyword_func ->
@@ -429,6 +446,40 @@ and parse_block (parser : t) : Ast.Expr.block result =
   parse_block_no_open parser
 
 let parse_item (parser : t) : (Item.t option, Error.t) Spanned.Result.t =
+  let get_association_direction parser =
+    match%bind maybe_get_specific parser Token.Colon with
+    | None -> return None
+    | Some () ->
+        let%bind direction = get_ident parser in
+        if Ident.equal direction Ctxt_keyword.dir_start then
+          return (Some Ast.Association.Direction_start)
+        else if Ident.equal direction Ctxt_keyword.dir_end then
+          failwith "not yet implemented - end association"
+        else if Ident.equal direction Ctxt_keyword.dir_none then
+          return (Some Ast.Association.Direction_none)
+        else
+          return_err
+            (Error.Unexpected_token
+               (Error.Expected.Direction, Token.Identifier direction))
+  in
+  let get_association_order parser =
+    match%bind maybe_get_operator parser with
+    | None -> return None
+    | Some relation ->
+        let%bind () = get_specific parser Token.Open_paren in
+        let%bind op2 = spanned_bind (get_operator parser) in
+        let%bind () = get_specific parser Token.Close_paren in
+        if Ident.equal relation Ctxt_keyword.equal then
+          return (Some (Ast.Association.Equal op2))
+        else if Ident.equal relation Ctxt_keyword.less then
+          return (Some (Ast.Association.Less op2))
+        else if Ident.equal relation Ctxt_keyword.greater then
+          return (Some (Ast.Association.Greater op2))
+        else
+          return_err
+            (Error.Unexpected_token
+               (Error.Expected.Precedence, Token.Operator relation))
+  in
   match%bind next_token parser with
   | Token.Keyword_func ->
       let%bind name = get_ident parser in
@@ -438,43 +489,13 @@ let parse_item (parser : t) : (Item.t option, Error.t) Spanned.Result.t =
       let func = Ast.Func.{name; params; ret_ty; body} in
       return (Some (Item.Func func))
   | Token.Keyword_association ->
-      let%bind () = get_specific parser Token.Open_square in
+      let%bind () = get_specific parser Token.Open_paren in
       let%bind name = spanned_bind (get_operator parser) in
-      let%bind () = get_specific parser Token.Close_square in
-      let%bind kind =
-        match%bind next_token parser with
-        | Token.Colon ->
-            let%bind direction = get_ident parser in
-            if Ident.equal direction Ctxt_keyword.dir_left then
-              return Ast.Association.Direction_left
-            else if Ident.equal direction Ctxt_keyword.dir_right then
-              failwith "not yet implemented - right association"
-            else if Ident.equal direction Ctxt_keyword.dir_none then
-              return Ast.Association.Direction_none
-            else
-              return_err
-                (Error.Unexpected_token
-                   (Error.Expected.Direction, Token.Identifier direction))
-        | Token.Operator relation ->
-            let%bind () = get_specific parser Token.Open_square in
-            let%bind op2 = spanned_bind (get_operator parser) in
-            let%bind () = get_specific parser Token.Close_square in
-            if Ident.equal relation Ctxt_keyword.equal then
-              return (Ast.Association.Equal op2)
-            else if Ident.equal relation Ctxt_keyword.less then
-              return (Ast.Association.Less op2)
-            else if Ident.equal relation Ctxt_keyword.greater then
-              return (Ast.Association.Greater op2)
-            else
-              return_err
-                (Error.Unexpected_token
-                   (Error.Expected.Precedence, Token.Operator relation))
-        | tok ->
-            return_err
-              (Error.Unexpected_token (Error.Expected.Association, tok))
-      in
+      let%bind () = get_specific parser Token.Close_paren in
+      let%bind direction = get_association_direction parser in
+      let%bind order = get_association_order parser in
       let%bind () = get_specific parser Token.Semicolon in
-      let assoc = Ast.Association.{name; kind} in
+      let assoc = Ast.Association.{name; direction; order} in
       return (Some (Item.Association assoc))
   | Token.Keyword_type ->
       let%bind name = spanned_bind (get_ident parser) in

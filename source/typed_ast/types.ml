@@ -24,6 +24,11 @@ module rec Error : sig
     | If_branches_of_differing_type of Type.t * Type.t
     | Builtin_mismatched_arity of {name: Ident.t; expected: int; found: int}
     | Builtin_invalid_arguments of {name: Ident.t; found: Type.t list}
+    | Redefined_operator_association of Ident.t
+    | Unordered_assigns of Spanned.Span.t * Spanned.Span.t
+    | Unordered_operators of
+        { op1: Ident.t Spanned.t
+        ; op2: Ident.t Spanned.t }
     | Unknown_builtin of Ident.t
     | Call_of_non_function of Type.t
     | Defined_function_multiple_times of

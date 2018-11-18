@@ -3,8 +3,7 @@ module Spanned = Cafec_containers.Spanned
 let indent_to_string indent = String.make (indent * 2) ' '
 
 let normalize_ident id =
-  if Lexer.is_operator_ident id then
-    String.concat ["["; (id :> string); "]"]
+  if Lexer.is_operator_ident id then String.concat ["("; (id :> string); ")"]
   else (id :> string)
 
 module Type = struct
@@ -28,7 +27,7 @@ module Type = struct
 
     let to_string (Record members) =
       let f (((name : Ident.t), ty), _) =
-        String.concat ["\n    "; (normalize_ident name); ": "; to_string ty; ";"]
+        String.concat ["\n    "; normalize_ident name; ": "; to_string ty; ";"]
       in
       let members = String.concat (List.map members ~f) in
       String.concat ["record {"; members; "\n  }"]
@@ -91,7 +90,7 @@ module Implementation_stmt_expr = struct
         let members =
           let f (((name : Ident.t), (expr, _)), _) =
             String.concat
-              [ (normalize_ident name)
+              [ normalize_ident name
               ; " = "
               ; expr_to_string expr ~indent:(indent + 1) ]
           in
@@ -100,7 +99,7 @@ module Implementation_stmt_expr = struct
         String.concat [Type.to_string ty; "::{ "; members; " }"]
     | Record_access ((e, _), member) ->
         let record = expr_to_string e ~parens:true ~indent:(indent + 1) in
-        let member = (normalize_ident member) in
+        let member = normalize_ident member in
         String.concat
           [open_paren parens; record; "."; member; close_paren parens]
 
@@ -136,7 +135,7 @@ module Implementation_stmt_expr = struct
         String.concat
           [ "let "
           ; mut
-          ; (normalize_ident name)
+          ; normalize_ident name
           ; ty
           ; " = "
           ; expr_to_string expr ~indent ]
@@ -162,7 +161,7 @@ module Func = struct
   let to_string self =
     let parameters =
       let f ((((name : Ident.t), _), (ty, _)), _) =
-        String.concat [(normalize_ident name); ": "; Type.to_string ty]
+        String.concat [normalize_ident name; ": "; Type.to_string ty]
       in
       String.concat ~sep:", " (List.map ~f self.params)
     in
@@ -173,7 +172,7 @@ module Func = struct
     in
     String.concat
       [ "func "
-      ; (normalize_ident self.name)
+      ; normalize_ident self.name
       ; "("
       ; parameters
       ; ")"
@@ -187,16 +186,22 @@ end
 module Association = struct
   include Types.Ast_Association
 
-  let to_string {name= name, _; kind} =
-    let kind =
-      match kind with
-      | Direction_left -> [": left;"]
-      | Direction_none -> [": none;"]
-      | Equal (op, _) -> [" = ["; (op :> string); "];"]
-      | Less (op, _) -> [" < ["; (op :> string); "];"]
-      | Greater (op, _) -> [" > ["; (op :> string); "];"]
+  let to_string {name= name, _; direction; order} =
+    let direction =
+      match direction with
+      | Some Direction_start -> " : start"
+      | Some Direction_none -> " : none"
+      | None -> ""
     in
-    String.concat ("association [" :: (name :> string) :: "]" :: kind)
+    let order =
+      match order with
+      | Some (Equal (op, _)) -> [" = ("; (op :> string); ");"]
+      | Some (Less (op, _)) -> [" < ("; (op :> string); ");"]
+      | Some (Greater (op, _)) -> [" > ("; (op :> string); ");"]
+      | None -> [";"]
+    in
+    String.concat
+      ("association (" :: (name :> string) :: ")" :: direction :: order)
 end
 
 include Types.Ast
@@ -207,11 +212,11 @@ let to_string self =
       match kind with
       | Type.Definition.Alias data ->
           String.concat
-            ["type "; (normalize_ident name); " = "; Type.to_string data; ";"]
+            ["type "; normalize_ident name; " = "; Type.to_string data; ";"]
       | Type.Definition.User_defined {data} ->
           String.concat
             [ "type "
-            ; (normalize_ident name)
+            ; normalize_ident name
             ; " {\n"
             ; "  data = "
             ; Type.Data.to_string data

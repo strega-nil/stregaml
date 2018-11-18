@@ -35,9 +35,7 @@ let first_codepoint id =
   | _ -> assert false
 
 let first_codepoint_exn id =
-  match first_codepoint id with
-  | Some u -> u
-  | None -> failwith "empty string"
+  match first_codepoint id with Some u -> u | None -> failwith "empty string"
 
 let empty = ""
 

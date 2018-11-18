@@ -7,7 +7,6 @@ module rec Error_Expected : sig
     | Variable_decl
     | Type
     | Data
-    | Association
     | Direction
     | Precedence
     | Expression
@@ -131,14 +130,15 @@ end =
   Ast_Func
 
 and Ast_Association : sig
-  type kind =
-    | Direction_left
-    | Direction_none
+  type direction = Direction_start | Direction_none
+
+  type order =
     | Equal of Ident.t Spanned.t
     | Less of Ident.t Spanned.t
     | Greater of Ident.t Spanned.t
 
-  type t = {name: Ident.t Spanned.t; kind: kind}
+  type t =
+    {name: Ident.t Spanned.t; direction: direction option; order: order option}
 end =
   Ast_Association
 

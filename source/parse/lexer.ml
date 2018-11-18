@@ -105,8 +105,7 @@ let is_operator_start ch =
 
 let is_operator_continue ch = ch =~ '\'' || is_operator_start ch
 
-let is_operator_ident id =
-  is_operator_start (Ident.first_codepoint_exn id)
+let is_operator_ident id = is_operator_start (Ident.first_codepoint_exn id)
 
 let current_span lex =
   let open Spanned.Span in

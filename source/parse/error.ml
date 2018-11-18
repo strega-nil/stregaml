@@ -9,8 +9,7 @@ module Expected = struct
     | Variable_decl -> "a variable declaration"
     | Type -> "the start of a type"
     | Data -> "either `record` or `variant`"
-    | Association -> "either `:` or `=`"
-    | Direction -> "either `left`, `right`, or `none`"
+    | Direction -> "either `start, `end`, or `none`"
     | Precedence -> "either `<`, `=`, or `>`"
     | Expression -> "the start of an expression"
     | Expression_follow ->
