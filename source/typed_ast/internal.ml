@@ -9,8 +9,21 @@ module Function_declaration = struct
   type t = {name: Ident.t; params: Binding.t list; ret_ty: Type.t}
 end
 
+module Infix_group = struct
+  type associativity = Untyped_ast.Infix_group.associativity =
+    | Assoc_start
+    | Assoc_none
+
+  type precedence = Less of int
+
+  type t = {associativity: associativity; precedence: precedence list}
+end
+
 type t =
   { type_context: Type.Context.t
+  ; infix_group_names: Ident.t list
+  ; infix_groups: Infix_group.t list
+  ; infix_decls: (Ident.t * int) list
   ; function_context: Function_declaration.t Spanned.t list
   ; function_definitions: Expr.block Spanned.t list }
 
@@ -59,16 +72,29 @@ module Bind_order = struct
 
   let order ~ctxt op1 op2 =
     let module I = Untyped_ast.Expr in
-    let order_named _ op1 op2 =
-      return_err (Error.Unordered_operators {op1; op2})
+    let get_infix_group op =
+      let op, _ = op in
+      let f (name, _) = Ident.equal op name in
+      match List.find ~f ctxt.infix_decls with
+      | Some (_, idx) -> Some (idx, List.nth_exn ctxt.infix_groups)
+      | None -> None
     in
-    match op1, op2 with
+    let order_named _ op1 op2 =
+      let order_infix_groups _ig1 _ig2 =
+        return_err (Error.Unordered_operators {op1; op2})
+      in
+      let%bind ig1, ig2 =
+        match get_infix_group op1, get_infix_group op2 with
+        | Some ig1, Some ig2 -> return (ig1, ig2)
+        | _ -> return_err (Error.Unordered_operators {op1; op2})
+      in
+      order_infix_groups ig1 ig2
+    in
+    match (op1, op2) with
     | (I.Infix_assign, sp1), (I.Infix_assign, sp2) ->
         return_err (Error.Unordered_assigns (sp1, sp2))
-    | (I.Infix_assign, _), _ ->
-        return End
-    | _, (I.Infix_assign, _) ->
-        return Start
+    | (I.Infix_assign, _), _ -> return End
+    | _, (I.Infix_assign, _) -> return Start
     | (I.Infix_name op1, sp1), (I.Infix_name op2, sp2) ->
         order_named ctxt (op1, sp1) (op2, sp2)
 end
@@ -411,6 +437,43 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       in
       return T.{variant= Record_access (expr, member); ty}
 
+let find_infix_group_name ctxt id =
+  let f _ name = Ident.equal id name in
+  match List.findi ~f ctxt.infix_group_names with
+  | Some (i, _) -> Some i
+  | None -> None
+
+let add_infix_group_name (ctxt : t)
+    (group : Untyped_ast.Infix_group.t Spanned.t) : t result =
+  let module U = Untyped_ast.Infix_group in
+  let {U.name= name, _; _}, _ = group in
+  match find_infix_group_name ctxt name with
+  | Some _ -> return_err (Error.Infix_group_defined_multiple_times name)
+  | None -> return {ctxt with infix_group_names= name :: ctxt.infix_group_names}
+
+let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
+    t result =
+  let module U = Untyped_ast.Infix_group in
+  let {U.associativity; U.precedence; _}, _ = group in
+  let f (U.Less (id, _)) =
+    match find_infix_group_name ctxt id with
+    | Some idx -> return (Infix_group.Less idx)
+    | None -> return_err (Error.Infix_group_not_found id)
+  in
+  let%bind precedence = return_map ~f precedence in
+  let group = Infix_group.{associativity; precedence} in
+  return {ctxt with infix_groups= group :: ctxt.infix_groups}
+
+let add_infix_decl (ctxt : t)
+    (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) : t result =
+  let module U = Untyped_ast.Infix_declaration in
+  let%bind {U.name= name, _; U.group= group, _} = spanned_lift unt_infix_decl in
+  match find_infix_group_name ctxt group with
+  | None -> return_err (Error.Infix_group_not_found group)
+  | Some idx ->
+      let decl = (name, idx) in
+      return {ctxt with infix_decls= decl :: ctxt.infix_decls}
+
 let add_function_declaration (ctxt : t)
     (unt_func : Untyped_ast.Func.t Spanned.t) : t result =
   let module F = Untyped_ast.Func in
@@ -483,7 +546,21 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
   in
   let ret =
     let init =
-      {type_context; function_context= []; function_definitions= []}
+      { type_context
+      ; infix_group_names= []
+      ; infix_groups= []
+      ; infix_decls= []
+      ; function_context= []
+      ; function_definitions= [] }
+    in
+    let%bind init =
+      return_fold unt_ast.U.infix_groups ~init ~f:add_infix_group_name
+    in
+    let%bind init =
+      return_fold unt_ast.U.infix_groups ~init ~f:add_infix_group
+    in
+    let%bind init =
+      return_fold unt_ast.U.infix_decls ~init ~f:add_infix_decl
     in
     let%bind init =
       return_fold unt_ast.U.funcs ~init ~f:add_function_declaration

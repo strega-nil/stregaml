@@ -155,7 +155,8 @@ let lex_ident fst lex =
         | "false" -> return Token.Keyword_false
         | "if" -> return Token.Keyword_if
         | "else" -> return Token.Keyword_else
-        | "association" -> return Token.Keyword_association
+        | "infix" -> return Token.Keyword_infix
+        | "group" -> return Token.Keyword_group
         | "func" -> return Token.Keyword_func
         | "type" -> return Token.Keyword_type
         | "data" -> return Token.Keyword_data

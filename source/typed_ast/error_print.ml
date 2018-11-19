@@ -11,6 +11,10 @@ let to_string err ~ctxt =
   | Type_not_found ty -> Printf.sprintf "Type not found: %s" (ty :> string)
   | Type_defined_multiple_times name ->
       Printf.sprintf "Type declared multiple times: %s" (name :> string)
+  | Infix_group_not_found name ->
+      Printf.sprintf "Infix group not found: %s" (name :> string)
+  | Infix_group_defined_multiple_times name ->
+      Printf.sprintf "Infix group declared multiple times: %s" (name :> string)
   | Incorrect_let_type {name; let_ty; expr_ty} ->
       Printf.sprintf
         {|Let binding of `%s` is typed incorrectly:
@@ -93,8 +97,6 @@ place is of type: `%s`|}
         (type_list found)
   | Unknown_builtin name ->
       Printf.sprintf "Builtin `%s` is unknown" (name :> string)
-  | Redefined_operator_association name ->
-      Printf.sprintf "Redefined association of `%s` operator" (name :> string)
   | Unordered_assigns (_, _) ->
       "Used two assigns in one expression without disambiguating parentheses"
   | Unordered_operators {op1= op1, _; op2= op2, _} ->

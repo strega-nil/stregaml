@@ -183,25 +183,30 @@ module Func = struct
       ; "\n" ]
 end
 
-module Association = struct
-  include Types.Ast_Association
+module Infix_group = struct
+  include Types.Ast_Infix_group
 
-  let to_string {name= name, _; direction; order} =
-    let direction =
-      match direction with
-      | Some Direction_start -> " : start"
-      | Some Direction_none -> " : none"
-      | None -> ""
+  let to_string {name= name, _; associativity; precedence} =
+    let associativity =
+      match associativity with Assoc_start -> "start" | Assoc_none -> "none"
     in
-    let order =
-      match order with
-      | Some (Equal (op, _)) -> [" = ("; (op :> string); ");"]
-      | Some (Less (op, _)) -> [" < ("; (op :> string); ");"]
-      | Some (Greater (op, _)) -> [" > ("; (op :> string); ");"]
-      | None -> [";"]
+    let precedence =
+      let f (Less (id, _)) = "precedence < " ^ normalize_ident id in
+      String.concat ~sep:"\n  " (List.map precedence ~f)
     in
+    Printf.sprintf {|infix group %s {
+  associativity = %s;
+  %s
+}|}
+      (normalize_ident name) associativity precedence
+end
+
+module Infix_declaration = struct
+  include Types.Ast_Infix_declaration
+
+  let to_string {name= name, _; group= group, _} =
     String.concat
-      ("association (" :: (name :> string) :: ")" :: direction :: order)
+      ["infix "; normalize_ident name; ": "; normalize_ident group; ";"]
 end
 
 include Types.Ast
@@ -224,12 +229,16 @@ let to_string self =
     in
     String.concat ~sep:"\n" (List.map ~f self.types)
   in
-  let assocs =
-    let f (assoc, _) = Association.to_string assoc in
-    String.concat ~sep:"\n" (List.map ~f self.assocs)
+  let infix_groups =
+    let f (infix_group, _) = Infix_group.to_string infix_group in
+    String.concat ~sep:"\n" (List.map ~f self.infix_groups)
+  in
+  let infix_decls =
+    let f (infix_decl, _) = Infix_declaration.to_string infix_decl in
+    String.concat ~sep:"\n\n" (List.map ~f self.infix_decls)
   in
   let funcs =
     let f (func, _) = Func.to_string func in
     String.concat ~sep:"\n" (List.map ~f self.funcs)
   in
-  String.concat [types; "\n\n"; assocs; "\n\n"; funcs]
+  String.concat ~sep:"\n\n" [types; infix_groups; infix_decls; funcs]

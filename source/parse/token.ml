@@ -22,7 +22,8 @@ let equal lhs rhs =
   | Keyword_false, Keyword_false -> true
   | Keyword_if, Keyword_if -> true
   | Keyword_else, Keyword_else -> true
-  | Keyword_association, Keyword_association -> true
+  | Keyword_infix, Keyword_infix -> true
+  | Keyword_group, Keyword_group -> true
   | Keyword_func, Keyword_func -> true
   | Keyword_type, Keyword_type -> true
   | Keyword_data, Keyword_data -> true
@@ -56,7 +57,8 @@ let to_string = function
   | Keyword_false -> "keyword `false`"
   | Keyword_if -> "keyword `if`"
   | Keyword_else -> "keyword `else`"
-  | Keyword_association -> "keyword `association`"
+  | Keyword_infix -> "keyword `infix`"
+  | Keyword_group -> "keyword `group`"
   | Keyword_func -> "keyword `func`"
   | Keyword_type -> "keyword `type`"
   | Keyword_data -> "keyword `data`"

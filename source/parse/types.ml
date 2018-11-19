@@ -7,8 +7,10 @@ module rec Error_Expected : sig
     | Variable_decl
     | Type
     | Data
-    | Direction
+    | Associativity
     | Precedence
+    | Infix_group_member
+    | Infix_follow
     | Expression
     | Expression_follow
     | Statement_end
@@ -22,7 +24,7 @@ and Error : sig
     | Unclosed_comment
     | Operator_including_comment_token of Ident.t
     | Malformed_number_literal
-    | Unrecognized_direction of Ident.t
+    | Associativity_defined_twice of Ident.t
     | Reserved_token of Ident.t
     | Unrecognized_character of Uchar.t
     | Unexpected_token of (Error_Expected.t * Token.t)
@@ -51,7 +53,8 @@ and Token : sig
     | Keyword_false
     | Keyword_if
     | Keyword_else
-    | Keyword_association
+    | Keyword_infix
+    | Keyword_group
     | Keyword_func
     | Keyword_type
     | Keyword_data
@@ -129,23 +132,28 @@ and Ast_Func : sig
 end =
   Ast_Func
 
-and Ast_Association : sig
-  type direction = Direction_start | Direction_none
+and Ast_Infix_group : sig
+  type associativity = Assoc_start | Assoc_none
 
-  type order =
-    | Equal of Ident.t Spanned.t
-    | Less of Ident.t Spanned.t
-    | Greater of Ident.t Spanned.t
+  type order = Less of Ident.t Spanned.t
 
   type t =
-    {name: Ident.t Spanned.t; direction: direction option; order: order option}
+    { name: Ident.t Spanned.t
+    ; associativity: associativity
+    ; precedence: order list }
 end =
-  Ast_Association
+  Ast_Infix_group
+
+and Ast_Infix_declaration : sig
+  type t = {name: Ident.t Spanned.t; group: Ident.t Spanned.t}
+end =
+  Ast_Infix_declaration
 
 and Ast : sig
   type t =
     { funcs: Ast_Func.t Spanned.t list
-    ; assocs: Ast_Association.t Spanned.t list
+    ; infix_decls: Ast_Infix_declaration.t Spanned.t list
+    ; infix_groups: Ast_Infix_group.t Spanned.t list
     ; types: Ast_Type_Definition.t Spanned.t list }
 end =
   Ast

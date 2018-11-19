@@ -37,23 +37,31 @@ module Ctxt_keyword = struct
     let greater_tok = Token.Operator greater
   *)
 
-  let dir_start = Ident.of_string_unsafe "start"
+  let assoc_start = Ident.of_string_unsafe "start"
 
-  let dir_end = Ident.of_string_unsafe "end"
+  let assoc_end = Ident.of_string_unsafe "end"
 
-  let dir_none = Ident.of_string_unsafe "none"
+  let assoc_none = Ident.of_string_unsafe "none"
+
+  let precedence = Ident.of_string_unsafe "precedence"
+
+  let associativity = Ident.of_string_unsafe "associativity"
 
   (*
-  let dir_start_tok = Token.Identifier dir_start
-  let dir_end_tok = Token.Identifier dir_end
-  let dir_none_tok = Token.Identifier dir_none
+  let assoc_start_tok = Token.Identifier assoc_start
+  let assoc_end_tok = Token.Identifier assoc_end
+  let assoc_none_tok = Token.Identifier assoc_none
+
+  let precedence_tok = Token.Identifier precedence
+  let associativity_tok = Token.Identifier associativity
   *)
 end
 
 module Item = struct
   type t =
     | Func of Ast.Func.t
-    | Association of Ast.Association.t
+    | Infix_group of Ast.Infix_group.t
+    | Infix_declaration of Ast.Infix_declaration.t
     | Type_definition of Ast.Type.Definition.t
 end
 
@@ -445,58 +453,84 @@ and parse_block (parser : t) : Ast.Expr.block result =
   let%bind () = get_specific parser Token.Open_brace in
   parse_block_no_open parser
 
-let parse_item (parser : t) : (Item.t option, Error.t) Spanned.Result.t =
-  let get_association_direction parser =
-    match%bind maybe_get_specific parser Token.Colon with
-    | None -> return None
-    | Some () ->
-        let%bind direction = get_ident parser in
-        if Ident.equal direction Ctxt_keyword.dir_start then
-          return (Some Ast.Association.Direction_start)
-        else if Ident.equal direction Ctxt_keyword.dir_end then
-          failwith "not yet implemented - end association"
-        else if Ident.equal direction Ctxt_keyword.dir_none then
-          return (Some Ast.Association.Direction_none)
+let parse_infix_group (parser : t) : Ast.Infix_group.t result =
+  let module I = Ast.Infix_group in
+  let rec helper name associativity precedence =
+    match%bind next_token parser with
+    | Token.Close_brace ->
+        let associativity =
+          match associativity with None -> I.Assoc_none | Some a -> a
+        in
+        return I.{name; associativity; precedence}
+    | Token.Identifier id when Ident.equal id Ctxt_keyword.precedence ->
+        let%bind relation =
+          match%bind next_token parser with
+          | Token.Operator id when Ident.equal id Ctxt_keyword.less ->
+              let%bind other = spanned_bind (get_ident parser) in
+              return (I.Less other)
+          | Token.Operator id when Ident.equal id Ctxt_keyword.greater ->
+              failwith "greater precedence not yet supported"
+          | tok ->
+              return_err
+                (Error.Unexpected_token (Error.Expected.Precedence, tok))
+        in
+        let%bind () = get_specific parser Token.Semicolon in
+        helper name associativity (relation :: precedence)
+    | Token.Identifier id when Ident.equal id Ctxt_keyword.associativity ->
+        let%bind () = get_specific parser Ctxt_keyword.equal_tok in
+        let%bind associativity' =
+          match%bind next_token parser with
+          | Token.Identifier id when Ident.equal id Ctxt_keyword.assoc_start ->
+              return I.Assoc_start
+          | Token.Identifier id when Ident.equal id Ctxt_keyword.assoc_end ->
+              failwith "end association not yet supported"
+          | Token.Identifier id when Ident.equal id Ctxt_keyword.assoc_none ->
+              return I.Assoc_none
+          | tok ->
+              return_err
+                (Error.Unexpected_token (Error.Expected.Associativity, tok))
+        in
+        let%bind () = get_specific parser Token.Semicolon in
+        if Option.is_none associativity then
+          helper name (Some associativity') precedence
         else
-          return_err
-            (Error.Unexpected_token
-               (Error.Expected.Direction, Token.Identifier direction))
+          let name, _ = name in
+          return_err (Error.Associativity_defined_twice name)
+    | tok ->
+        return_err
+          (Error.Unexpected_token (Error.Expected.Infix_group_member, tok))
   in
-  let get_association_order parser =
-    match%bind maybe_get_operator parser with
-    | None -> return None
-    | Some relation ->
-        let%bind () = get_specific parser Token.Open_paren in
-        let%bind op2 = spanned_bind (get_operator parser) in
-        let%bind () = get_specific parser Token.Close_paren in
-        if Ident.equal relation Ctxt_keyword.equal then
-          return (Some (Ast.Association.Equal op2))
-        else if Ident.equal relation Ctxt_keyword.less then
-          return (Some (Ast.Association.Less op2))
-        else if Ident.equal relation Ctxt_keyword.greater then
-          return (Some (Ast.Association.Greater op2))
-        else
-          return_err
-            (Error.Unexpected_token
-               (Error.Expected.Precedence, Token.Operator relation))
-  in
+  let%bind name = spanned_bind (get_ident parser) in
+  let%bind () = get_specific parser Token.Open_brace in
+  helper name None []
+
+let parse_infix_declaration (parser : t) : Ast.Infix_declaration.t result =
+  let%bind name = spanned_bind (get_ident parser) in
+  let%bind () = get_specific parser Token.Colon in
+  let%bind group = spanned_bind (get_ident parser) in
+  let%bind () = get_specific parser Token.Semicolon in
+  return Ast.Infix_declaration.{name; group}
+
+let parse_func (parser : t) : Ast.Func.t result =
+  let%bind name = get_ident parser in
+  let%bind params = parse_parameter_list parser in
+  let%bind ret_ty = parse_return_type parser in
+  let%bind body = spanned_bind (parse_block parser) in
+  return Ast.Func.{name; params; ret_ty; body}
+
+let parse_item (parser : t) : Item.t option result =
   match%bind next_token parser with
   | Token.Keyword_func ->
-      let%bind name = get_ident parser in
-      let%bind params = parse_parameter_list parser in
-      let%bind ret_ty = parse_return_type parser in
-      let%bind body = spanned_bind (parse_block parser) in
-      let func = Ast.Func.{name; params; ret_ty; body} in
+      let%bind func = parse_func parser in
       return (Some (Item.Func func))
-  | Token.Keyword_association ->
-      let%bind () = get_specific parser Token.Open_paren in
-      let%bind name = spanned_bind (get_operator parser) in
-      let%bind () = get_specific parser Token.Close_paren in
-      let%bind direction = get_association_direction parser in
-      let%bind order = get_association_order parser in
-      let%bind () = get_specific parser Token.Semicolon in
-      let assoc = Ast.Association.{name; direction; order} in
-      return (Some (Item.Association assoc))
+  | Token.Keyword_infix -> (
+      match%bind maybe_get_specific parser Token.Keyword_group with
+      | Some () ->
+          let%bind infix_group = parse_infix_group parser in
+          return (Some (Item.Infix_group infix_group))
+      | None ->
+          let%bind infix_decl = parse_infix_declaration parser in
+          return (Some (Item.Infix_declaration infix_decl)) )
   | Token.Keyword_type ->
       let%bind name = spanned_bind (get_ident parser) in
       let%bind kind =
@@ -524,14 +558,18 @@ let parse_program (parser : t) : (Ast.t, Error.t) Spanned.Result.t =
   let rec helper parser =
     let%bind item, sp = spanned_bind (parse_item parser) in
     match item with
-    | None -> return Ast.{funcs= []; assocs= []; types= []}
+    | None ->
+        return Ast.{funcs= []; infix_groups= []; infix_decls= []; types= []}
     | Some item -> (
         let%bind rest = helper parser in
         match item with
         | Item.Func func ->
             return Ast.{rest with funcs= (func, sp) :: rest.funcs}
-        | Item.Association assoc ->
-            return Ast.{rest with assocs= (assoc, sp) :: rest.assocs}
+        | Item.Infix_group group ->
+            return
+              Ast.{rest with infix_groups= (group, sp) :: rest.infix_groups}
+        | Item.Infix_declaration decl ->
+            return Ast.{rest with infix_decls= (decl, sp) :: rest.infix_decls}
         | Item.Type_definition def ->
             return Ast.{rest with types= (def, sp) :: rest.types} )
   in

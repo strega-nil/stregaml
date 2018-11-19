@@ -1,15 +1,19 @@
-type V2 {
-  data = record {
-    x: Int32;
-    y: Int32;
-  };
+infix group Additive {
+  associativity = start;
+  precedence < Multiplicative;
+}
+infix group Multiplicative {
+  associativity = start;
+}
+infix group Relational {
+  associativity = none;
+  precedence < Additive;
 }
 
-association (+) : start;
-association (-) = (+);
-association (*) > (+);
-
-association (<=) : none < (+);
+infix (+): Additive;
+infix (-): Additive;
+infix (*): Multiplicative;
+infix (<=): Relational;
 
 func (+)(x: Int32, y: Int32) -> Int32 {
   __builtin(add)(x, y)
@@ -25,26 +29,14 @@ func (<=)(x: Int32, y: Int32) -> Bool {
   __builtin(less_eq)(x, y)
 }
 
-func double(x: Int32) -> Int32 {
-  x + x
-}
-
-func map-in-place(v: &mut V2, f: func(Int32) -> Int32) {
-  *(v).x <- f(*(v).x);
-  let y = &mut(*(v).y);
-  *(y) <- f(*(v).y);
-}
-
-func δ(v: V2) -> Int32 {
-  if (v.x <= v.y) {
-    v.y - v.x
-  } else {
-    v.x - v.y
-  }
-}
-
 func main() -> Int32 {
-  let mut v = V2::{x = 20; y = 30};
-  map-in-place(&mut(v), double);
-  δ(v)
+  if (1 * 2 - 1 <= 2) {
+    if (2 <= 1 * 2 - 1) {
+      1 + 2 * 3
+    } else {
+      1
+    }
+  } else {
+    0
+  }
 }

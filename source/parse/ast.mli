@@ -44,9 +44,17 @@ module Func : sig
   val to_string : t -> string
 end
 
-module Association : sig
+module Infix_group : sig
   include module type of struct
-      include Types.Ast_Association
+      include Types.Ast_Infix_group
+  end
+
+  val to_string : t -> string
+end
+
+module Infix_declaration : sig
+  include module type of struct
+      include Types.Ast_Infix_declaration
   end
 
   val to_string : t -> string

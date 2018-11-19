@@ -9,8 +9,10 @@ module Expected = struct
     | Variable_decl -> "a variable declaration"
     | Type -> "the start of a type"
     | Data -> "either `record` or `variant`"
-    | Direction -> "either `start, `end`, or `none`"
-    | Precedence -> "either `<`, `=`, or `>`"
+    | Associativity -> "either `start, `end`, or `none`"
+    | Precedence -> "either `<` or `>`"
+    | Infix_group_member -> "either `precedence` or `associativity`"
+    | Infix_follow -> "either `group`, or an open parenthesis"
     | Expression -> "the start of an expression"
     | Expression_follow ->
         "an operator, semicolon, comma, dot, or closing brace (`}`, `)`)"
@@ -27,11 +29,10 @@ let to_string = function
   | Operator_including_comment_token s ->
       Printf.sprintf "operator `%s` includes a sequence of comment characters"
         (s :> string)
-  | Unrecognized_direction s ->
+  | Associativity_defined_twice name ->
       Printf.sprintf
-        {|unrecognized association direction `%s`
-  valid association directions are: left, right, none|}
-        (s :> string)
+        "Attempted to define the associativity of infix group `%s` twice"
+        (name :> string)
   | Reserved_token tok -> Printf.sprintf "reserved token: `%s`" (tok :> string)
   | Unrecognized_character ch ->
       Printf.sprintf "unrecognized character: `%s` (%d)"
