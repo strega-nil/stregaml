@@ -14,6 +14,5 @@ module Expr = struct
   let full_type_sp ({ty; _}, _) = ty
 
   module Local = Types.Ast_Expr_Local
-
   module Builtin = Types.Ast_Expr_Builtin
 end

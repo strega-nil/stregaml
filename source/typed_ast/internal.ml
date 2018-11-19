@@ -9,8 +9,21 @@ module Function_declaration = struct
   type t = {name: Ident.t; params: Binding.t list; ret_ty: Type.t}
 end
 
+module Infix_group = struct
+  type associativity = Untyped_ast.Infix_group.associativity =
+    | Assoc_start
+    | Assoc_none
+
+  type precedence = Less of int
+
+  type t = {associativity: associativity; precedence: precedence list}
+end
+
 type t =
   { type_context: Type.Context.t
+  ; infix_group_names: Ident.t list
+  ; infix_groups: Infix_group.t list
+  ; infix_decls: (Ident.t * int) list
   ; function_context: Function_declaration.t Spanned.t list
   ; function_definitions: Expr.block Spanned.t list }
 
@@ -54,12 +67,71 @@ end = struct
     if idx < 0 then assert false else helper (idx, func_defs)
 end
 
+module Bind_order = struct
+  type t = Start | End | Unordered
+
+  let negate = function
+  | Start -> End
+  | End -> Start
+  | Unordered -> Unordered
+
+  let order ~ctxt op1 op2 =
+    let module U = Untyped_ast.Expr in
+    let module T = Infix_group in
+    let get_infix_group ctxt op =
+      let f (name, _) = Ident.equal op name in
+      match List.find ~f ctxt.infix_decls with
+      | Some (_, idx) -> Some (idx, List.nth_exn ctxt.infix_groups idx)
+      | None -> None
+    in
+    let order_named ctxt op1 op2 =
+      let rec order_infix_groups idx info idx2 =
+        if idx = idx2 then
+          match info.T.associativity with
+          | T.Assoc_start -> Some Start
+          | T.Assoc_none -> Some Unordered
+        else
+          let rec check_all_sub_precedences = function
+          | [] -> None
+          | T.Less idx :: xs -> (
+            let info = List.nth_exn ctxt.infix_groups idx in
+            (*
+              note: since ig < ig2, this means that no matter what,
+              ig binds looser than ig2
+            *)
+            match order_infix_groups idx info idx2 with
+            | Some _ -> Some End
+            | None -> check_all_sub_precedences xs )
+          in
+          check_all_sub_precedences info.T.precedence
+      in
+      let order_infix_groups_comm (idx1, info1) (idx2, info2) =
+        match order_infix_groups idx1 info1 idx2 with
+        | Some order -> order
+        | None -> (
+          match order_infix_groups idx2 info2 idx1 with
+          | Some order -> negate order
+          | None -> Unordered )
+      in
+      match get_infix_group ctxt op1, get_infix_group ctxt op2 with
+      | Some ig1, Some ig2 -> order_infix_groups_comm ig1 ig2
+      | _ -> Unordered
+    in
+    match (op1, op2) with
+    | U.Infix_assign, U.Infix_assign -> Unordered
+    | U.Infix_assign, _ -> End
+    | _, U.Infix_assign -> Start
+    | (U.Infix_name op1), (U.Infix_name op2) -> order_named ctxt op1 op2
+end
+
 let find_local name (lst : Binding.t list) : Local.t option =
   let f index binding =
     let name', _ = binding.Binding.name in
     if Ident.equal name' name then Some Local.{binding; index} else None
   in
   List.find_mapi ~f lst
+
+let value_type ty = Ast.Expr.Type.{category= Value; ty}
 
 let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   let module U = Untyped_ast in
@@ -106,12 +178,75 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   in
   (Ok T.Expr.{stmts; expr}, sp)
 
+and typeck_call callee args =
+  let module T = Ast.Expr in
+  let callee_ty = T.base_type_sp callee in
+  let%bind ret_ty =
+    match callee_ty with
+    | Type.Builtin (Type.Function {params; ret_ty}) ->
+        let correct_types args params =
+          let f a p = Type.equal (T.base_type_sp a) p in
+          if List.length args <> List.length params then false
+          else List.for_all2_exn ~f args params
+        in
+        if correct_types args params then return ret_ty
+        else
+          return_err
+            (Error.Invalid_function_arguments
+               {expected= params; found= List.map ~f:T.base_type_sp args})
+    | ty -> return_err (Error.Call_of_non_function ty)
+  in
+  return T.{variant= Call (callee, args); ty= value_type ret_ty}
+
+and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
+  let module U = Untyped_ast.Expr in
+  let module T = Ast.Expr in
+  let make_op_expr op e0 e1 =
+    match op with
+    | U.Infix_assign, _ -> (
+        let source, dest = (e1, e0) in
+        let T.Type.({category= dest_cat; ty= dest_ty}) = T.full_type_sp dest in
+        let source_ty = T.base_type_sp source in
+        if not (Type.equal dest_ty source_ty) then
+          return_err
+            (Error.Assignment_to_incompatible_type
+               {dest= dest_ty; source= source_ty})
+        else
+          match dest_cat with
+          | T.Type.Value -> return_err Error.Assignment_to_value
+          | T.Type.Place {mutability= Type.Immutable} ->
+              return_err Error.Assignment_to_immutable_place
+          | T.Type.Place {mutability= Type.Mutable} ->
+              let ty = value_type (Type.Builtin Type.Unit) in
+              return T.{variant= Assign {dest; source}; ty} )
+    | U.Infix_name name, sp ->
+        let name = (U.Name {path= []; name}, sp) in
+        let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
+        typeck_call callee [e0; e1]
+  in
+  match rest with
+  | [] -> spanned_lift e0
+  | ((op1, sp1), e1) :: rest -> (
+      let%bind e1 = spanned_bind (typeck_expression locals ctxt e1) in
+      match rest with
+      | [] -> make_op_expr (op1, sp1) e0 e1
+      | ((op2, sp2), _) :: _ -> (
+          match Bind_order.order ~ctxt op1 op2 with
+          | Bind_order.Start ->
+              let%bind lhs = spanned_bind (make_op_expr (op1, sp1) e0 e1) in
+              typeck_infix_list locals ctxt lhs rest
+          | Bind_order.End ->
+              let%bind rhs =
+                spanned_bind (typeck_infix_list locals ctxt e1 rest)
+              in
+              make_op_expr (op1, sp1) e0 rhs
+          | Bind_order.Unordered ->
+              return_err (Error.Unordered_operators {op1= op1, sp1; op2= op2, sp2}) ) )
+
 and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   let module U = Untyped_ast.Expr in
   let module T = Expr in
-  let unt_expr, sp = unt_expr in
-  let%bind () = with_span sp in
-  let value_type ty = T.Type.{category= Value; ty} in
+  let%bind unt_expr = spanned_lift unt_expr in
   match unt_expr with
   | U.Unit_literal ->
       let ty = value_type (Type.Builtin Type.Unit) in
@@ -180,24 +315,11 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let%bind callee = spanned_bind (typeck_expression locals ctxt callee) in
       let f x = spanned_bind (typeck_expression locals ctxt x) in
       let%bind args = return_map ~f args in
-      let callee_ty = T.base_type_sp callee in
-      let%bind ret_ty =
-        match callee_ty with
-        | Type.Builtin (Type.Function {params; ret_ty}) ->
-            let correct_types args params =
-              let f a p = Type.equal (T.base_type_sp a) p in
-              if List.length args <> List.length params then false
-              else List.for_all2_exn ~f args params
-            in
-            if correct_types args params then return ret_ty
-            else
-              return_err
-                (Error.Invalid_function_arguments
-                   {expected= params; found= List.map ~f:T.base_type_sp args})
-        | ty -> return_err (Error.Call_of_non_function ty)
-      in
-      return T.{variant= Call (callee, args); ty= value_type ret_ty}
-  | U.Variable {path; name} -> (
+      typeck_call callee args
+  | U.Infix_list (first, rest) ->
+      let%bind first = spanned_bind (typeck_expression locals ctxt first) in
+      typeck_infix_list locals ctxt first rest
+  | U.Name {path; name} -> (
       assert (List.length path = 0) ;
       match find_local name locals with
       | Some loc ->
@@ -341,23 +463,43 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> return_err (Error.Record_access_non_record_type (ebty, member))
       in
       return T.{variant= Record_access (expr, member); ty}
-  | U.Assign {dest; source} -> (
-      let%bind dest = spanned_bind (typeck_expression locals ctxt dest) in
-      let%bind source = spanned_bind (typeck_expression locals ctxt source) in
-      let T.Type.({category= dest_cat; ty= dest_ty}) = T.full_type_sp dest in
-      let source_ty = T.base_type_sp source in
-      if not (Type.equal dest_ty source_ty) then
-        return_err
-          (Error.Assignment_to_incompatible_type
-             {dest= dest_ty; source= source_ty})
-      else
-        match dest_cat with
-        | T.Type.Value -> return_err Error.Assignment_to_value
-        | T.Type.Place {mutability= Type.Immutable} ->
-            return_err Error.Assignment_to_immutable_place
-        | T.Type.Place {mutability= Type.Mutable} ->
-            let ty = value_type (Type.Builtin Type.Unit) in
-            return T.{variant= Assign {dest; source}; ty} )
+
+let find_infix_group_name ctxt id =
+  let f _ name = Ident.equal id name in
+  match List.findi ~f ctxt.infix_group_names with
+  | Some (i, _) -> Some i
+  | None -> None
+
+let add_infix_group_name (ctxt : t)
+    (group : Untyped_ast.Infix_group.t Spanned.t) : t result =
+  let module U = Untyped_ast.Infix_group in
+  let {U.name= name, _; _}, _ = group in
+  match find_infix_group_name ctxt name with
+  | Some _ -> return_err (Error.Infix_group_defined_multiple_times name)
+  | None -> return {ctxt with infix_group_names= name :: ctxt.infix_group_names}
+
+let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
+    t result =
+  let module U = Untyped_ast.Infix_group in
+  let {U.associativity; U.precedence; _}, _ = group in
+  let f (U.Less (id, _)) =
+    match find_infix_group_name ctxt id with
+    | Some idx -> return (Infix_group.Less idx)
+    | None -> return_err (Error.Infix_group_not_found id)
+  in
+  let%bind precedence = return_map ~f precedence in
+  let group = Infix_group.{associativity; precedence} in
+  return {ctxt with infix_groups= group :: ctxt.infix_groups}
+
+let add_infix_decl (ctxt : t)
+    (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) : t result =
+  let module U = Untyped_ast.Infix_declaration in
+  let%bind {U.name= name, _; U.group= group, _} = spanned_lift unt_infix_decl in
+  match find_infix_group_name ctxt group with
+  | None -> return_err (Error.Infix_group_not_found group)
+  | Some idx ->
+      let decl = (name, idx) in
+      return {ctxt with infix_decls= decl :: ctxt.infix_decls}
 
 let add_function_declaration (ctxt : t)
     (unt_func : Untyped_ast.Func.t Spanned.t) : t result =
@@ -431,7 +573,21 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
   in
   let ret =
     let init =
-      {type_context; function_context= []; function_definitions= []}
+      { type_context
+      ; infix_group_names= []
+      ; infix_groups= []
+      ; infix_decls= []
+      ; function_context= []
+      ; function_definitions= [] }
+    in
+    let%bind init =
+      return_fold unt_ast.U.infix_groups ~init ~f:add_infix_group_name
+    in
+    let%bind init =
+      return_fold unt_ast.U.infix_groups ~init ~f:add_infix_group
+    in
+    let%bind init =
+      return_fold unt_ast.U.infix_decls ~init ~f:add_infix_decl
     in
     let%bind init =
       return_fold unt_ast.U.funcs ~init ~f:add_function_declaration

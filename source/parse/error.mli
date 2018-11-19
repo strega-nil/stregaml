@@ -1,6 +1,6 @@
 module Expected : sig
   include module type of struct
-      include Types.Error_expected
+      include Types.Error_Expected
   end
 
   val to_string : t -> string

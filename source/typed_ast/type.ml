@@ -117,8 +117,7 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
     t result =
   let module U = Parse.Ast.Type in
   let module D = U.Definition in
-  let unt_ty, sp = unt_ty in
-  let%bind _ = with_span sp in
+  let%bind unt_ty = spanned_lift unt_ty in
   match unt_ty with
   | U.Named name -> (
       let f ((name', _), _) = Ident.equal name' name in

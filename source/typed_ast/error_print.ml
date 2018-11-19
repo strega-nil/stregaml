@@ -11,6 +11,10 @@ let to_string err ~ctxt =
   | Type_not_found ty -> Printf.sprintf "Type not found: %s" (ty :> string)
   | Type_defined_multiple_times name ->
       Printf.sprintf "Type declared multiple times: %s" (name :> string)
+  | Infix_group_not_found name ->
+      Printf.sprintf "Infix group not found: %s" (name :> string)
+  | Infix_group_defined_multiple_times name ->
+      Printf.sprintf "Infix group declared multiple times: %s" (name :> string)
   | Incorrect_let_type {name; let_ty; expr_ty} ->
       Printf.sprintf
         {|Let binding of `%s` is typed incorrectly:
@@ -93,6 +97,15 @@ place is of type: `%s`|}
         (type_list found)
   | Unknown_builtin name ->
       Printf.sprintf "Builtin `%s` is unknown" (name :> string)
+  | Unordered_operators {op1= op1, _; op2= op2, _} ->
+      let op_to_string = function
+      | Cafec_parse.Ast.Expr.Infix_assign -> "<-"
+      | Cafec_parse.Ast.Expr.Infix_name id -> (id :> string)
+      in
+      Printf.sprintf
+        "Used mutually unordered operators `%s` and `%s` in the same expression"
+        (op_to_string op1)
+        (op_to_string op2)
   | Call_of_non_function ty ->
       Printf.sprintf "Attempted to call a non-function type `%s`"
         (Type.to_string ty ~ctxt)

@@ -27,6 +27,16 @@ let of_uchar_list lst =
 
 let of_string_unsafe s = s
 
+let first_codepoint id =
+  let decoder = Uutf.decoder ~encoding:`UTF_8 (`String id) in
+  match Uutf.decode decoder with
+  | `End -> None
+  | `Uchar u -> Some u
+  | _ -> assert false
+
+let first_codepoint_exn id =
+  match first_codepoint id with Some u -> u | None -> failwith "empty string"
+
 let empty = ""
 
 let equal = String.equal

@@ -131,7 +131,8 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | None -> Value.Unit
   and eval ctxt locals e =
     let eval_builtin_args (lhs, _) (rhs, _) =
-      let lhs = match Expr_result.to_value (eval ctxt locals lhs) with
+      let lhs =
+        match Expr_result.to_value (eval ctxt locals lhs) with
         | Value.Integer v -> v
         | _ -> assert false
       in
