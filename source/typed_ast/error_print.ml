@@ -97,13 +97,15 @@ place is of type: `%s`|}
         (type_list found)
   | Unknown_builtin name ->
       Printf.sprintf "Builtin `%s` is unknown" (name :> string)
-  | Unordered_assigns (_, _) ->
-      "Used two assigns in one expression without disambiguating parentheses"
   | Unordered_operators {op1= op1, _; op2= op2, _} ->
+      let op_to_string = function
+      | Cafec_parse.Ast.Expr.Infix_assign -> "<-"
+      | Cafec_parse.Ast.Expr.Infix_name id -> (id :> string)
+      in
       Printf.sprintf
         "Used mutually unordered operators `%s` and `%s` in the same expression"
-        (op1 :> string)
-        (op2 :> string)
+        (op_to_string op1)
+        (op_to_string op2)
   | Call_of_non_function ty ->
       Printf.sprintf "Attempted to call a non-function type `%s`"
         (Type.to_string ty ~ctxt)

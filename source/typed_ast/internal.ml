@@ -68,35 +68,60 @@ end = struct
 end
 
 module Bind_order = struct
-  type t = Start | End
+  type t = Start | End | Unordered
+
+  let negate = function
+  | Start -> End
+  | End -> Start
+  | Unordered -> Unordered
 
   let order ~ctxt op1 op2 =
-    let module I = Untyped_ast.Expr in
-    let get_infix_group op =
-      let op, _ = op in
+    let module U = Untyped_ast.Expr in
+    let module T = Infix_group in
+    let get_infix_group ctxt op =
       let f (name, _) = Ident.equal op name in
       match List.find ~f ctxt.infix_decls with
-      | Some (_, idx) -> Some (idx, List.nth_exn ctxt.infix_groups)
+      | Some (_, idx) -> Some (idx, List.nth_exn ctxt.infix_groups idx)
       | None -> None
     in
-    let order_named _ op1 op2 =
-      let order_infix_groups _ig1 _ig2 =
-        return_err (Error.Unordered_operators {op1; op2})
+    let order_named ctxt op1 op2 =
+      let rec order_infix_groups idx info idx2 =
+        if idx = idx2 then
+          match info.T.associativity with
+          | T.Assoc_start -> Some Start
+          | T.Assoc_none -> Some Unordered
+        else
+          let rec check_all_sub_precedences = function
+          | [] -> None
+          | T.Less idx :: xs -> (
+            let info = List.nth_exn ctxt.infix_groups idx in
+            (*
+              note: since ig < ig2, this means that no matter what,
+              ig binds looser than ig2
+            *)
+            match order_infix_groups idx info idx2 with
+            | Some _ -> Some End
+            | None -> check_all_sub_precedences xs )
+          in
+          check_all_sub_precedences info.T.precedence
       in
-      let%bind ig1, ig2 =
-        match get_infix_group op1, get_infix_group op2 with
-        | Some ig1, Some ig2 -> return (ig1, ig2)
-        | _ -> return_err (Error.Unordered_operators {op1; op2})
+      let order_infix_groups_comm (idx1, info1) (idx2, info2) =
+        match order_infix_groups idx1 info1 idx2 with
+        | Some order -> order
+        | None -> (
+          match order_infix_groups idx2 info2 idx1 with
+          | Some order -> negate order
+          | None -> Unordered )
       in
-      order_infix_groups ig1 ig2
+      match get_infix_group ctxt op1, get_infix_group ctxt op2 with
+      | Some ig1, Some ig2 -> order_infix_groups_comm ig1 ig2
+      | _ -> Unordered
     in
     match (op1, op2) with
-    | (I.Infix_assign, sp1), (I.Infix_assign, sp2) ->
-        return_err (Error.Unordered_assigns (sp1, sp2))
-    | (I.Infix_assign, _), _ -> return End
-    | _, (I.Infix_assign, _) -> return Start
-    | (I.Infix_name op1, sp1), (I.Infix_name op2, sp2) ->
-        order_named ctxt (op1, sp1) (op2, sp2)
+    | U.Infix_assign, U.Infix_assign -> Unordered
+    | U.Infix_assign, _ -> End
+    | _, U.Infix_assign -> Start
+    | (U.Infix_name op1), (U.Infix_name op2) -> order_named ctxt op1 op2
 end
 
 let find_local name (lst : Binding.t list) : Local.t option =
@@ -201,20 +226,22 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
   in
   match rest with
   | [] -> spanned_lift e0
-  | (op1, e1) :: rest -> (
+  | ((op1, sp1), e1) :: rest -> (
       let%bind e1 = spanned_bind (typeck_expression locals ctxt e1) in
       match rest with
-      | [] -> make_op_expr op1 e0 e1
-      | (op2, _) :: _ -> (
-          match%bind Bind_order.order ~ctxt op1 op2 with
+      | [] -> make_op_expr (op1, sp1) e0 e1
+      | ((op2, sp2), _) :: _ -> (
+          match Bind_order.order ~ctxt op1 op2 with
           | Bind_order.Start ->
-              let%bind lhs = spanned_bind (make_op_expr op1 e0 e1) in
+              let%bind lhs = spanned_bind (make_op_expr (op1, sp1) e0 e1) in
               typeck_infix_list locals ctxt lhs rest
           | Bind_order.End ->
               let%bind rhs =
                 spanned_bind (typeck_infix_list locals ctxt e1 rest)
               in
-              make_op_expr op1 e0 rhs ) )
+              make_op_expr (op1, sp1) e0 rhs
+          | Bind_order.Unordered ->
+              return_err (Error.Unordered_operators {op1= op1, sp1; op2= op2, sp2}) ) )
 
 and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   let module U = Untyped_ast.Expr in
