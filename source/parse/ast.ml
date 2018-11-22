@@ -65,6 +65,12 @@ module Implementation_stmt_expr = struct
     | Builtin ((name, _), args) ->
         let args = arg_list args in
         String.concat ["__builtin("; (name :> string); ")("; args; ")"]
+    | Prefix_operator ((name, _), (expr, _)) ->
+        String.concat
+          [ open_paren parens
+          ; (name :> string)
+          ; expr_to_string ~indent expr
+          ; close_paren parens ]
     | Infix_list ((first, _), rest) ->
         let f ((op, _), (expr, _)) =
           let expr = expr_to_string expr ~parens:true ~indent:(indent + 1) in
@@ -194,15 +200,15 @@ module Infix_group = struct
   associativity = %s;
   %s
 }|}
-      (name :> string) associativity precedence
+      (name :> string)
+      associativity precedence
 end
 
 module Infix_declaration = struct
   include Types.Ast_Infix_declaration
 
   let to_string {name= name, _; group= group, _} =
-    String.concat
-      ["infix ("; (name :> string); "): "; (group :> string); ";"]
+    String.concat ["infix ("; (name :> string); "): "; (group :> string); ";"]
 end
 
 include Types.Ast

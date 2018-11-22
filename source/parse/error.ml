@@ -37,7 +37,8 @@ let to_string = function
   | Reserved_token tok -> Printf.sprintf "reserved token: `%s`" (tok :> string)
   | Unrecognized_character ch ->
       Printf.sprintf "unrecognized character: `%s` (%d)"
-        (Nfc_string.uchar_to_string ch) (Uchar.to_scalar ch)
+        (Nfc_string.uchar_to_string ch)
+        (Uchar.to_scalar ch)
   | Unclosed_comment -> "unclosed comment"
   | Unexpected_token (exp, tok) ->
       String.concat

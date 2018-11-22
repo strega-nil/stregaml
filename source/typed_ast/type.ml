@@ -73,7 +73,9 @@ module Context = struct
       Array.create ~len:defs_len default
     in
     let names =
-      let default = ((Nfc_string.empty, Spanned.Span.made_up), User_defined (-1)) in
+      let default =
+        ((Nfc_string.empty, Spanned.Span.made_up), User_defined (-1))
+      in
       Array.create ~len:names_len default
     in
     let rec exists_duplicate idx end_idx name =

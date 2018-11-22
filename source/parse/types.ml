@@ -104,6 +104,7 @@ and Ast_Expr : sig
     | Block of block Spanned.t
     | Builtin of Nfc_string.t Spanned.t * t Spanned.t list
     | Call of t Spanned.t * t Spanned.t list
+    | Prefix_operator of Nfc_string.t Spanned.t * t Spanned.t
     | Infix_list of t Spanned.t * (infix Spanned.t * t Spanned.t) list
     | Reference of {is_mut: bool; place: Ast_Expr.t Spanned.t}
     | Dereference of Ast_Expr.t Spanned.t

@@ -1,7 +1,4 @@
-type kind =
-  | Identifier
-  | Infix
-  | Prefix
+type kind = Identifier | Infix | Prefix
 
 type t = {string: Nfc_string.t; kind: kind}
 

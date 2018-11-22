@@ -24,7 +24,10 @@ module rec Error : sig
     | Record_access_non_member of Type.t * Nfc_string.t
     | If_non_bool of Type.t
     | If_branches_of_differing_type of Type.t * Type.t
-    | Builtin_mismatched_arity of {name: Nfc_string.t; expected: int; found: int}
+    | Builtin_mismatched_arity of
+        { name: Nfc_string.t
+        ; expected: int
+        ; found: int }
     | Builtin_invalid_arguments of {name: Nfc_string.t; found: Type.t list}
     | Unordered_operators of
         { op1: Cafec_parse.Ast.Expr.infix Spanned.t
@@ -126,7 +129,6 @@ module Pervasives = struct
   include Cafec_containers
   include Spanned.Result.Monad
   module Error = Error
-
 
   type error = Error.t
 
