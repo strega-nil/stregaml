@@ -8,7 +8,7 @@ module Type = Ast.Type
   They should be immutable,
   but ocaml doesn't have immutable arrays
 *)
-type t = {funcs: (Ident.t * Expr.block) array}
+type t = {funcs: (Name.t * Expr.block) array}
 
 module Value = struct
   include Types.Value
@@ -39,7 +39,7 @@ module Value = struct
         String.concat [pointer; "{"; to_string !value ctxt; "}"]
     | Record members ->
         let members =
-          let f ((name : Ident.t), e) =
+          let f ((name : Nfc_string.t), e) =
             String.concat [(name :> string); " = "; to_string !e ctxt]
           in
           String.concat ~sep:"; " (List.map ~f members)
@@ -47,7 +47,7 @@ module Value = struct
         String.concat ["{ "; members; " }"]
     | Function n ->
         let name, _ = ctxt.funcs.((n :> int)) in
-        Printf.sprintf "<function %s>" (name :> string)
+        Printf.sprintf "<function %s>" (Name.to_string name)
 end
 
 module Expr_result = struct
@@ -103,7 +103,7 @@ let make ast =
 
 let get_function ctxt ~name =
   match
-    Array.findi ctxt.funcs ~f:(fun _ (name', _) -> Ident.equal name name')
+    Array.findi ctxt.funcs ~f:(fun _ (name', _) -> Name.equal name name')
   with
   | None -> None
   | Some (n, _) -> Some (Value.function_index_of_int n)
@@ -200,7 +200,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
         in
         Expr_result.Value (Value.Record members)
     | Expr.Record_access ((e, _), member) -> (
-        let find_member (name, _) = Ident.equal name member in
+        let find_member (name, _) = Nfc_string.equal name member in
         let v = eval ctxt locals e in
         match v with
         | Expr_result.Value (Value.Record members) ->

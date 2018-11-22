@@ -7,7 +7,8 @@ let to_string err ~ctxt =
     String.concat ~sep:", " (List.map ~f tys)
   in
   match err with
-  | Name_not_found name -> Printf.sprintf "Name not found: %s" (name :> string)
+  | Name_not_found name ->
+      Printf.sprintf "Name not found: %s" (Name.to_string name)
   | Type_not_found ty -> Printf.sprintf "Type not found: %s" (ty :> string)
   | Type_defined_multiple_times name ->
       Printf.sprintf "Type declared multiple times: %s" (name :> string)
@@ -20,7 +21,7 @@ let to_string err ~ctxt =
         {|Let binding of `%s` is typed incorrectly:
   let binding expected : %s
   expression is of type: %s|}
-        (name :> string)
+        (Name.to_string name)
         (Type.to_string let_ty ~ctxt)
         (Type.to_string expr_ty ~ctxt)
   | Assignment_to_incompatible_type {dest; source} ->
@@ -99,13 +100,12 @@ place is of type: `%s`|}
       Printf.sprintf "Builtin `%s` is unknown" (name :> string)
   | Unordered_operators {op1= op1, _; op2= op2, _} ->
       let op_to_string = function
-      | Cafec_parse.Ast.Expr.Infix_assign -> "<-"
-      | Cafec_parse.Ast.Expr.Infix_name id -> (id :> string)
+        | Cafec_parse.Ast.Expr.Infix_assign -> "<-"
+        | Cafec_parse.Ast.Expr.Infix_name id -> (id :> string)
       in
       Printf.sprintf
         "Used mutually unordered operators `%s` and `%s` in the same expression"
-        (op_to_string op1)
-        (op_to_string op2)
+        (op_to_string op1) (op_to_string op2)
   | Call_of_non_function ty ->
       Printf.sprintf "Attempted to call a non-function type `%s`"
         (Type.to_string ty ~ctxt)
@@ -113,7 +113,7 @@ place is of type: `%s`|}
       Printf.sprintf
         {|Defined function `%s` multiple times
   (original declaration at %s)|}
-        (name :> string)
+        (Name.to_string name)
         (Spanned.Span.to_string original_declaration)
   | Defined_type_multiple_times name ->
       Printf.sprintf "Defined type `%s` multiple times" (name :> string)

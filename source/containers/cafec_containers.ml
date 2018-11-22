@@ -1,2 +1,3 @@
 module Spanned = Spanned
-module Ident = Ident
+module Nfc_string = Nfc_string
+module Name = Name

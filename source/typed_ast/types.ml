@@ -1,11 +1,11 @@
 module rec Error : sig
   type t =
-    | Name_not_found of Ident.t
-    | Type_not_found of Ident.t
-    | Type_defined_multiple_times of Ident.t
-    | Infix_group_not_found of Ident.t
-    | Infix_group_defined_multiple_times of Ident.t
-    | Incorrect_let_type of {name: Ident.t; let_ty: Type.t; expr_ty: Type.t}
+    | Name_not_found of Name.t
+    | Type_not_found of Nfc_string.t
+    | Type_defined_multiple_times of Nfc_string.t
+    | Infix_group_not_found of Nfc_string.t
+    | Infix_group_defined_multiple_times of Nfc_string.t
+    | Incorrect_let_type of {name: Name.t; let_ty: Type.t; expr_ty: Type.t}
     | Assignment_to_incompatible_type of {dest: Type.t; source: Type.t}
     | Assignment_to_value
     | Assignment_to_immutable_place
@@ -13,28 +13,31 @@ module rec Error : sig
     | Mutable_reference_taken_to_immutable_place
     | Dereference_of_non_reference of Type.t
     | Record_literal_non_record_type of Type.t
-    | Record_literal_duplicate_members of Ident.t
+    | Record_literal_duplicate_members of Nfc_string.t
     | Record_literal_incorrect_type of
-        { field: Ident.t
+        { field: Nfc_string.t
         ; field_ty: Type.t
         ; member_ty: Type.t }
-    | Record_literal_extra_field of Type.t * Ident.t
-    | Record_literal_missing_field of Type.t * Ident.t
-    | Record_access_non_record_type of Type.t * Ident.t
-    | Record_access_non_member of Type.t * Ident.t
+    | Record_literal_extra_field of Type.t * Nfc_string.t
+    | Record_literal_missing_field of Type.t * Nfc_string.t
+    | Record_access_non_record_type of Type.t * Nfc_string.t
+    | Record_access_non_member of Type.t * Nfc_string.t
     | If_non_bool of Type.t
     | If_branches_of_differing_type of Type.t * Type.t
-    | Builtin_mismatched_arity of {name: Ident.t; expected: int; found: int}
-    | Builtin_invalid_arguments of {name: Ident.t; found: Type.t list}
+    | Builtin_mismatched_arity of
+        { name: Nfc_string.t
+        ; expected: int
+        ; found: int }
+    | Builtin_invalid_arguments of {name: Nfc_string.t; found: Type.t list}
     | Unordered_operators of
         { op1: Cafec_parse.Ast.Expr.infix Spanned.t
         ; op2: Cafec_parse.Ast.Expr.infix Spanned.t }
-    | Unknown_builtin of Ident.t
+    | Unknown_builtin of Nfc_string.t
     | Call_of_non_function of Type.t
     | Defined_function_multiple_times of
-        { name: Ident.t
+        { name: Name.t
         ; original_declaration: Spanned.Span.t }
-    | Defined_type_multiple_times of Ident.t
+    | Defined_type_multiple_times of Nfc_string.t
     | Return_type_mismatch of {expected: Type.t; found: Type.t}
     | Invalid_function_arguments of {expected: Type.t list; found: Type.t list}
 end =
@@ -55,7 +58,7 @@ end =
   Type
 
 and Type_Structural : sig
-  type t = Builtin of Type.builtin | Record of (Ident.t * Type.t) list
+  type t = Builtin of Type.builtin | Record of (Nfc_string.t * Type.t) list
 end =
   Type_Structural
 
@@ -72,7 +75,7 @@ end =
 
 and Ast_Binding : sig
   type t =
-    {name: Ident.t Spanned.t; mutability: Type.mutability; ty: Type.t Spanned.t}
+    {name: Name.t Spanned.t; mutability: Type.mutability; ty: Type.t Spanned.t}
 end =
   Ast_Binding
 
@@ -104,8 +107,8 @@ and Ast_Expr : sig
     | Dereference of t Spanned.t
     | Record_literal of
         { ty: Type.t Spanned.t
-        ; members: (Ident.t * t Spanned.t) Spanned.t list }
-    | Record_access of t Spanned.t * Ident.t
+        ; members: (Nfc_string.t * t Spanned.t) Spanned.t list }
+    | Record_access of t Spanned.t * Nfc_string.t
     | Global_function of int
     | Local of Ast_Expr_Local.t
 

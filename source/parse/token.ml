@@ -16,8 +16,8 @@ let equal lhs rhs =
   | Arrow, Arrow -> true
   | Colon, Colon -> true
   | Double_colon, Double_colon -> true
-  | Operator id1, Operator id2 -> Ident.equal id1 id2
-  | Identifier id1, Identifier id2 -> Ident.equal id1 id2
+  | Operator id1, Operator id2 -> Nfc_string.equal id1 id2
+  | Identifier id1, Identifier id2 -> Nfc_string.equal id1 id2
   | Keyword_true, Keyword_true -> true
   | Keyword_false, Keyword_false -> true
   | Keyword_if, Keyword_if -> true
@@ -58,6 +58,7 @@ let to_string = function
   | Keyword_if -> "keyword `if`"
   | Keyword_else -> "keyword `else`"
   | Keyword_infix -> "keyword `infix`"
+  | Keyword_prefix -> "keyword `prefix`"
   | Keyword_group -> "keyword `group`"
   | Keyword_func -> "keyword `func`"
   | Keyword_type -> "keyword `type`"

@@ -24,11 +24,11 @@ let eat_token parser =
 
 (* context sensitive keywords *)
 module Ctxt_keyword = struct
-  let equal = Ident.of_string_unsafe "="
+  let equal = Nfc_string.of_string_unsafe "="
 
-  let less = Ident.of_string_unsafe "<"
+  let less = Nfc_string.of_string_unsafe "<"
 
-  let greater = Ident.of_string_unsafe ">"
+  let greater = Nfc_string.of_string_unsafe ">"
 
   let equal_tok = Token.Operator equal
 
@@ -37,15 +37,25 @@ module Ctxt_keyword = struct
     let greater_tok = Token.Operator greater
   *)
 
-  let assoc_start = Ident.of_string_unsafe "start"
+  let reference = Nfc_string.of_string_unsafe "&"
 
-  let assoc_end = Ident.of_string_unsafe "end"
+  let dereference = Nfc_string.of_string_unsafe "*"
 
-  let assoc_none = Ident.of_string_unsafe "none"
+  (*
+  let reference_tok = Token.Operator reference
 
-  let precedence = Ident.of_string_unsafe "precedence"
+  let dereference_tok = Token.Operator dereference
+  *)
 
-  let associativity = Ident.of_string_unsafe "associativity"
+  let assoc_start = Nfc_string.of_string_unsafe "start"
+
+  let assoc_end = Nfc_string.of_string_unsafe "end"
+
+  let assoc_none = Nfc_string.of_string_unsafe "none"
+
+  let precedence = Nfc_string.of_string_unsafe "precedence"
+
+  let associativity = Nfc_string.of_string_unsafe "associativity"
 
   (*
   let assoc_start_tok = Token.Identifier assoc_start
@@ -64,8 +74,6 @@ module Item = struct
     | Infix_declaration of Ast.Infix_declaration.t
     | Type_definition of Ast.Type.Definition.t
 end
-
-let ( =~ ) (id : Ident.t) s = String.equal (id :> string) s
 
 let is_postfix_token = function
   | Token.Dot -> true
@@ -94,26 +102,39 @@ let get_specific (parser : t) (token : Token.t) : unit result =
       let%bind tok = next_token parser in
       return_err (Error.Unexpected_token (Error.Expected.Specific token, tok))
 
-let maybe_get_operator (parser : t) : Ident.t option result =
+let maybe_get_operator (parser : t) : Nfc_string.t option result =
   match%bind peek_token parser with
   | Token.Operator op -> eat_token parser ; return (Some op)
   | _ -> return None
 
-let get_operator (parser : t) : Ident.t result =
+let get_operator (parser : t) : Nfc_string.t result =
   match%bind maybe_get_operator parser with
   | Some op -> return op
   | None ->
       let%bind tok = next_token parser in
       return_err (Error.Unexpected_token (Error.Expected.Operator, tok))
 
-let get_ident (parser : t) : Ident.t result =
+let get_ident (parser : t) : Nfc_string.t result =
   match%bind next_token parser with
-  | Token.Open_paren ->
-      let%bind op = get_operator parser in
-      let%bind () = get_specific parser Token.Close_paren in
-      return op
   | Token.Identifier ident -> return ident
   | tok -> return_err (Error.Unexpected_token (Error.Expected.Identifier, tok))
+
+let get_name (parser : t) : Name.t result =
+  match%bind next_token parser with
+  | Token.Open_paren ->
+      let%bind name =
+        match%bind next_token parser with
+        | Token.Operator op -> return Name.{string= op; kind= Infix}
+        | Token.Keyword_prefix ->
+            let%bind op = get_operator parser in
+            return Name.{string= op; kind= Prefix}
+        | tok ->
+            return_err (Error.Unexpected_token (Error.Expected.Operator, tok))
+      in
+      let%bind () = get_specific parser Token.Close_paren in
+      return name
+  | Token.Identifier string -> return Name.{string; kind= Identifier}
+  | tok -> return_err (Error.Unexpected_token (Error.Expected.Name, tok))
 
 let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
     ~(close : Token.t) ~(expected : Error.Expected.t) :
@@ -136,23 +157,44 @@ let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
   in
   helper parser f expected sep close false
 
-let rec maybe_parse_expression_no_follow (parser : t) :
-    Ast.Expr.t option result =
+let rec maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result
+    =
+  let get_postfix expr =
+    let rec parse_all_postfix (expr : Ast.Expr.t Spanned.t) parser =
+      let%bind tok = peek_token parser in
+      if is_postfix_token tok then
+        let%bind expr = spanned_bind (parse_postfix parser expr) in
+        parse_all_postfix expr parser
+      else
+        let expr, _ = expr in
+        return expr
+    in
+    parse_all_postfix expr parser
+  in
   match%bind spanned_bind (peek_token parser) with
-  | Token.Keyword_true, _ ->
+  | Token.Keyword_true, sp ->
       eat_token parser ;
-      return (Some (Ast.Expr.Bool_literal true))
-  | Token.Keyword_false, _ ->
+      let%bind expr = get_postfix (Ast.Expr.Bool_literal true, sp) in
+      return (Some expr)
+  | Token.Keyword_false, sp ->
       eat_token parser ;
-      return (Some (Ast.Expr.Bool_literal false))
-  | Token.Integer_literal n, _ ->
+      let%bind expr = get_postfix (Ast.Expr.Bool_literal false, sp) in
+      return (Some expr)
+  | Token.Integer_literal n, sp ->
       eat_token parser ;
-      return (Some (Ast.Expr.Integer_literal n))
-  | Token.Open_paren, _ ->
+      let%bind expr = get_postfix (Ast.Expr.Integer_literal n, sp) in
+      return (Some expr)
+  | Token.Open_paren, sp ->
       eat_token parser ;
-      let%bind () = get_specific parser Token.Close_paren in
-      return (Some Ast.Expr.Unit_literal)
-  | Token.Keyword_if, _ ->
+      let%bind (), sp' = spanned_bind (get_specific parser Token.Close_paren) in
+      let sp = Spanned.Span.union sp sp' in
+      let%bind expr = get_postfix (Ast.Expr.Unit_literal, sp) in
+      return (Some expr)
+  | Token.Open_brace, _ ->
+      let%bind blk, sp = spanned_bind (parse_block parser) in
+      let%bind expr = get_postfix (Ast.Expr.Block (blk, sp), sp) in
+      return (Some expr)
+  | Token.Keyword_if, sp ->
       eat_token parser ;
       let%bind () = get_specific parser Token.Open_paren in
       let%bind cond = spanned_bind (parse_expression parser) in
@@ -160,50 +202,42 @@ let rec maybe_parse_expression_no_follow (parser : t) :
       let%bind thn = spanned_bind (parse_block parser) in
       let%bind () = get_specific parser Token.Keyword_else in
       let%bind els = spanned_bind (parse_block parser) in
-      return (Some (Ast.Expr.If_else {cond; thn; els}))
-  (* TODO: remove these hacks and switch to using prefix operators *)
-  | Token.Operator op, _ when op =~ "&" -> (
+      let _, sp' = els in
+      let sp = Spanned.Span.union sp sp' in
+      let%bind expr = get_postfix (Ast.Expr.If_else {cond; thn; els}, sp) in
+      return (Some expr)
+  | Token.Operator op, _ when Nfc_string.equal op Ctxt_keyword.reference ->
       eat_token parser ;
       let%bind is_mut =
         match%bind maybe_get_specific parser Token.Keyword_mut with
         | Some () -> return true
         | None -> return false
       in
-      let%bind args = parse_argument_list parser in
-      match args with
-      | [place] -> return (Some (Ast.Expr.Reference {is_mut; place}))
-      | lst ->
-          failwith
-            ("& requires 1 argument; found " ^ Int.to_string (List.length lst))
-      )
-  | Token.Operator op, _ when op =~ "*" -> (
+      let%bind place = spanned_bind (parse_expression_no_infix parser) in
+      return (Some (Ast.Expr.Reference {is_mut; place}))
+  | Token.Operator op, sp ->
       eat_token parser ;
-      let%bind args = parse_argument_list parser in
-      match args with
-      | [value] -> return (Some (Ast.Expr.Dereference value))
-      | lst ->
-          failwith
-            ("* requires 1 argument; found " ^ Int.to_string (List.length lst))
-      )
-  | Token.Keyword_builtin, _ ->
+      let%bind expr = spanned_bind (parse_expression_no_infix parser) in
+      if Nfc_string.equal op Ctxt_keyword.dereference then
+        return (Some (Ast.Expr.Dereference expr))
+      else return (Some (Ast.Expr.Prefix_operator ((op, sp), expr)))
+  | Token.Keyword_builtin, sp ->
       eat_token parser ;
       let%bind () = get_specific parser Token.Open_paren in
       let%bind name = spanned_bind (get_ident parser) in
       let%bind () = get_specific parser Token.Close_paren in
-      let%bind args = parse_argument_list parser in
-      return (Some (Ast.Expr.Builtin (name, args)))
-  | tok, _ when is_identifier_token tok -> (
-      let%bind name, sp = spanned_bind (get_ident parser) in
-      match%bind maybe_get_specific parser Token.Double_colon with
-      | Some () ->
-          let%bind expr = parse_path_expression parser ~start:(name, sp) in
-          return (Some expr)
-      | None -> return (Some (Ast.Expr.Name {path= []; name})) )
+      let%bind args, sp' = spanned_bind (parse_argument_list parser) in
+      let sp = Spanned.Span.union sp sp' in
+      let%bind expr = get_postfix (Ast.Expr.Builtin (name, args), sp) in
+      return (Some expr)
+  | tok, _ when is_identifier_token tok ->
+      let%bind path, sp = spanned_bind (parse_path_expression parser) in
+      let%bind expr = get_postfix (path, sp) in
+      return (Some expr)
   | _ -> return None
 
-and parse_path_expression (parser : t) ~(start : Ident.t Spanned.t) :
-    Ast.Expr.t result =
-  let rec helper parser ~(path : Ident.t list Spanned.t) =
+and parse_path_expression (parser : t) : Ast.Expr.t result =
+  let rec helper parser ~(path : Nfc_string.t list Spanned.t) =
     let path, sp = path in
     match%bind spanned_bind (peek_token parser) with
     | Token.Identifier name, sp' -> (
@@ -212,17 +246,21 @@ and parse_path_expression (parser : t) ~(start : Ident.t Spanned.t) :
         | Token.Double_colon ->
             eat_token parser ;
             helper parser ~path:(name :: path, Spanned.Span.union sp sp')
-        | _ -> return (Ast.Expr.Name {path; name}) )
+        | _ ->
+            let name = Name.{string= name; kind= Identifier} in
+            return (Ast.Expr.Name {path; name}) )
+    | Token.Open_paren, _ ->
+        let%bind name = get_name parser in
+        return (Ast.Expr.Name {path; name})
     | Token.Open_brace, sp' ->
         parse_record_literal parser ~path:(path, Spanned.Span.union sp sp')
     | tok, _ ->
         return_err
           (Error.Unexpected_token (Error.Expected.Path_expression, tok))
   in
-  let start, sp = start in
-  helper parser ~path:([start], sp)
+  helper parser ~path:([], Spanned.Span.made_up)
 
-and parse_record_literal (parser : t) ~(path : Ident.t list Spanned.t) :
+and parse_record_literal (parser : t) ~(path : Nfc_string.t list Spanned.t) :
     Ast.Expr.t result =
   let f parser =
     let%bind name = get_ident parser in
@@ -242,21 +280,6 @@ and parse_record_literal (parser : t) ~(path : Ident.t list Spanned.t) :
     | _ -> failwith "no paths in types yet"
   in
   return (Ast.Expr.Record_literal {ty; members})
-
-and maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result =
-  match%bind spanned_bind (maybe_parse_expression_no_follow parser) with
-  | Some e, sp ->
-      let rec parse_all_postfix (expr : Ast.Expr.t Spanned.t) parser =
-        let%bind tok = peek_token parser in
-        if is_postfix_token tok then
-          let%bind expr = spanned_bind (parse_postfix parser expr) in
-          parse_all_postfix expr parser
-        else
-          let expr, _ = expr in
-          return (Some expr)
-      in
-      parse_all_postfix (e, sp) parser
-  | None, _ -> return None
 
 and maybe_parse_expression (parser : t) : Ast.Expr.t option result =
   match%bind spanned_bind (maybe_parse_expression_no_infix parser) with
@@ -321,7 +344,7 @@ and parse_return_type (parser : t) : Ast.Type.t Spanned.t option result =
 and parse_type (parser : t) : Ast.Type.t result =
   let%bind tok = peek_token parser in
   match tok with
-  | Token.Operator op when op =~ "&" -> (
+  | Token.Operator op when Nfc_string.equal op Ctxt_keyword.reference -> (
       eat_token parser ;
       let%bind tok = peek_token parser in
       match tok with
@@ -332,16 +355,6 @@ and parse_type (parser : t) : Ast.Type.t result =
       | _ ->
           let%bind pointee = spanned_bind (parse_type parser) in
           return (Ast.Type.Reference {is_mut= false; pointee}) )
-  | Token.Open_paren -> (
-      eat_token parser ;
-      match%bind maybe_get_operator parser with
-      | None ->
-          return_err
-            (Error.Unexpected_token (Error.Expected.Type, Token.Open_paren))
-      | Some id ->
-          eat_token parser ;
-          let%bind () = get_specific parser Token.Close_paren in
-          return (Ast.Type.Named id) )
   | Token.Identifier _ ->
       let%bind id = get_ident parser in
       return (Ast.Type.Named id)
@@ -385,9 +398,9 @@ and maybe_parse_type_annotation (parser : t) :
   | None -> return None
 
 and parse_parameter_list (parser : t) :
-    (Ident.t Spanned.t * Ast.Type.t Spanned.t) Spanned.t list result =
+    (Name.t Spanned.t * Ast.Type.t Spanned.t) Spanned.t list result =
   let f parser =
-    let%bind name = spanned_bind (get_ident parser) in
+    let%bind name = spanned_bind (get_name parser) in
     let%bind () = get_specific parser Token.Colon in
     let%bind ty = spanned_bind (parse_type parser) in
     return (name, ty)
@@ -416,7 +429,7 @@ and parse_block_no_open (parser : t) : Ast.Expr.block result =
       eat_token parser ;
       let%bind mut_kw = maybe_get_specific parser Token.Keyword_mut in
       let is_mut = match mut_kw with Some () -> true | None -> false in
-      let%bind name, name_sp = spanned_bind (get_ident parser) in
+      let%bind name, name_sp = spanned_bind (get_name parser) in
       let name = (name, name_sp) in
       let%bind ty = maybe_parse_type_annotation parser in
       let%bind () = get_specific parser Ctxt_keyword.equal_tok in
@@ -462,13 +475,13 @@ let parse_infix_group (parser : t) : Ast.Infix_group.t result =
           match associativity with None -> I.Assoc_none | Some a -> a
         in
         return I.{name; associativity; precedence}
-    | Token.Identifier id when Ident.equal id Ctxt_keyword.precedence ->
+    | Token.Identifier id when Nfc_string.equal id Ctxt_keyword.precedence ->
         let%bind relation =
           match%bind next_token parser with
-          | Token.Operator id when Ident.equal id Ctxt_keyword.less ->
+          | Token.Operator id when Nfc_string.equal id Ctxt_keyword.less ->
               let%bind other = spanned_bind (get_ident parser) in
               return (I.Less other)
-          | Token.Operator id when Ident.equal id Ctxt_keyword.greater ->
+          | Token.Operator id when Nfc_string.equal id Ctxt_keyword.greater ->
               failwith "greater precedence not yet supported"
           | tok ->
               return_err
@@ -476,15 +489,19 @@ let parse_infix_group (parser : t) : Ast.Infix_group.t result =
         in
         let%bind () = get_specific parser Token.Semicolon in
         helper name associativity (relation :: precedence)
-    | Token.Identifier id when Ident.equal id Ctxt_keyword.associativity ->
+    | Token.Identifier id when Nfc_string.equal id Ctxt_keyword.associativity
+      ->
         let%bind () = get_specific parser Ctxt_keyword.equal_tok in
         let%bind associativity' =
           match%bind next_token parser with
-          | Token.Identifier id when Ident.equal id Ctxt_keyword.assoc_start ->
+          | Token.Identifier id
+            when Nfc_string.equal id Ctxt_keyword.assoc_start ->
               return I.Assoc_start
-          | Token.Identifier id when Ident.equal id Ctxt_keyword.assoc_end ->
+          | Token.Identifier id when Nfc_string.equal id Ctxt_keyword.assoc_end
+            ->
               failwith "end association not yet supported"
-          | Token.Identifier id when Ident.equal id Ctxt_keyword.assoc_none ->
+          | Token.Identifier id
+            when Nfc_string.equal id Ctxt_keyword.assoc_none ->
               return I.Assoc_none
           | tok ->
               return_err
@@ -505,14 +522,16 @@ let parse_infix_group (parser : t) : Ast.Infix_group.t result =
   helper name None []
 
 let parse_infix_declaration (parser : t) : Ast.Infix_declaration.t result =
-  let%bind name = spanned_bind (get_ident parser) in
+  let%bind () = get_specific parser Token.Open_paren in
+  let%bind name = spanned_bind (get_operator parser) in
+  let%bind () = get_specific parser Token.Close_paren in
   let%bind () = get_specific parser Token.Colon in
   let%bind group = spanned_bind (get_ident parser) in
   let%bind () = get_specific parser Token.Semicolon in
   return Ast.Infix_declaration.{name; group}
 
 let parse_func (parser : t) : Ast.Func.t result =
-  let%bind name = get_ident parser in
+  let%bind name = get_name parser in
   let%bind params = parse_parameter_list parser in
   let%bind ret_ty = parse_return_type parser in
   let%bind body = spanned_bind (parse_block parser) in
