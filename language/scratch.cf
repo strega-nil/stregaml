@@ -1,3 +1,10 @@
+type V2 {
+  data = record {
+    x: Int32;
+    y: Int32;
+  };
+}
+
 infix group Additive {
   associativity = start;
   precedence < Multiplicative;
@@ -33,18 +40,28 @@ func (prefix -)(x: Int32) -> Int32 {
 func (<=)(x: Int32, y: Int32) -> Bool {
   __builtin(less_eq)(x, y)
 }
-func (=)(x: Int32, y: Int32) -> Bool {
-  if (x <= y) {
-    y <= x
+
+func twiddle(v: &mut V2, (×): func(Int32, Int32) -> Int32) {
+  let tmp = *v;
+  (*v).x <- tmp.x × tmp.y;
+  let y = &mut (*v).y;
+  *y <- tmp.y × tmp.x;
+}
+
+func δ(v: V2) -> Int32 {
+  if (v.x <= v.y) {
+    v.y - v.x
   } else {
-    false
+    v.x - v.y
   }
 }
 
+func f(x: Int32, y: Int32) -> Int32 {
+  -x * y + y
+}
+
 func main() -> Int32 {
-  if (1 * 3 - 1 = 2) {
-    - {1 + 2 * 3}
-  } else {
-    0
-  }
+  let mut v = V2::{x = 10; y = 20};
+  twiddle(&mut v, f);
+  δ(v)
 }

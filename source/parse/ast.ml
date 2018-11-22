@@ -237,7 +237,7 @@ let to_string self =
   in
   let infix_decls =
     let f (infix_decl, _) = Infix_declaration.to_string infix_decl in
-    String.concat ~sep:"\n\n" (List.map ~f self.infix_decls)
+    String.concat ~sep:"\n" (List.map ~f self.infix_decls)
   in
   let funcs =
     let f (func, _) = Func.to_string func in

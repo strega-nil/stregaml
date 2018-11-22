@@ -186,9 +186,16 @@ let rec maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result
       return (Some expr)
   | Token.Open_paren, sp ->
       eat_token parser ;
-      let%bind (), sp' = spanned_bind (get_specific parser Token.Close_paren) in
-      let sp = Spanned.Span.union sp sp' in
-      let%bind expr = get_postfix (Ast.Expr.Unit_literal, sp) in
+      let%bind expr =
+        match%bind spanned_bind (peek_token parser) with
+        | Token.Close_paren, sp' ->
+            eat_token parser ;
+            get_postfix (Ast.Expr.Unit_literal, Spanned.Span.union sp sp')
+        | _ ->
+            let%bind expr = parse_expression parser in
+            let%bind (), sp' = spanned_bind (get_specific parser Token.Close_paren) in
+            get_postfix (expr, Spanned.Span.union sp sp')
+      in
       return (Some expr)
   | Token.Open_brace, _ ->
       let%bind blk, sp = spanned_bind (parse_block parser) in
