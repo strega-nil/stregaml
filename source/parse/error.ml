@@ -6,6 +6,7 @@ module Expected = struct
     | Item_declarator -> "`func`, `type`, or `association`"
     | Operator -> "an operator identifier"
     | Identifier -> "an identifier"
+    | Name -> "a name (either an identifier, or a paren-surrounded operator)"
     | Variable_decl -> "a variable declaration"
     | Type -> "the start of a type"
     | Data -> "either `record` or `variant`"
@@ -36,7 +37,7 @@ let to_string = function
   | Reserved_token tok -> Printf.sprintf "reserved token: `%s`" (tok :> string)
   | Unrecognized_character ch ->
       Printf.sprintf "unrecognized character: `%s` (%d)"
-        (Ident.uchar_to_string ch) (Uchar.to_scalar ch)
+        (Nfc_string.uchar_to_string ch) (Uchar.to_scalar ch)
   | Unclosed_comment -> "unclosed comment"
   | Unexpected_token (exp, tok) ->
       String.concat

@@ -2,15 +2,11 @@ module Spanned = Cafec_containers.Spanned
 
 let indent_to_string indent = String.make (indent * 2) ' '
 
-let normalize_ident id =
-  if Lexer.is_operator_ident id then String.concat ["("; (id :> string); ")"]
-  else (id :> string)
-
 module Type = struct
   include Types.Ast_Type
 
   let rec to_string = function
-    | Named id -> normalize_ident id
+    | Named id -> (id :> string)
     | Reference {is_mut; pointee= ty, _} ->
         let ptr = if is_mut then "&mut " else "&" in
         ptr ^ to_string ty
@@ -26,8 +22,8 @@ module Type = struct
     include Types.Ast_Type_Data
 
     let to_string (Record members) =
-      let f (((name : Ident.t), ty), _) =
-        String.concat ["\n    "; normalize_ident name; ": "; to_string ty; ";"]
+      let f (((name : Nfc_string.t), ty), _) =
+        String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
       in
       let members = String.concat (List.map members ~f) in
       String.concat ["record {"; members; "\n  }"]
@@ -63,7 +59,7 @@ module Implementation_stmt_expr = struct
           ; " else "
           ; block_to_string els ~indent ]
     | Name {path; name} ->
-        let name = List.map ~f:normalize_ident (path @ [name]) in
+        let name = (path :> string list) @ [Name.to_string name] in
         String.concat ~sep:"::" name
     | Block (blk, _) -> block_to_string blk ~indent
     | Builtin ((name, _), args) ->
@@ -88,9 +84,9 @@ module Implementation_stmt_expr = struct
         String.concat [open_paren parens; "*"; place; close_paren parens]
     | Record_literal {ty= ty, _; members} ->
         let members =
-          let f (((name : Ident.t), (expr, _)), _) =
+          let f (((name : Nfc_string.t), (expr, _)), _) =
             String.concat
-              [ normalize_ident name
+              [ (name :> string)
               ; " = "
               ; expr_to_string expr ~indent:(indent + 1) ]
           in
@@ -99,7 +95,7 @@ module Implementation_stmt_expr = struct
         String.concat [Type.to_string ty; "::{ "; members; " }"]
     | Record_access ((e, _), member) ->
         let record = expr_to_string e ~parens:true ~indent:(indent + 1) in
-        let member = normalize_ident member in
+        let member = (member :> string) in
         String.concat
           [open_paren parens; record; "."; member; close_paren parens]
 
@@ -135,7 +131,7 @@ module Implementation_stmt_expr = struct
         String.concat
           [ "let "
           ; mut
-          ; normalize_ident name
+          ; Name.to_string name
           ; ty
           ; " = "
           ; expr_to_string expr ~indent ]
@@ -160,8 +156,8 @@ module Func = struct
 
   let to_string self =
     let parameters =
-      let f ((((name : Ident.t), _), (ty, _)), _) =
-        String.concat [normalize_ident name; ": "; Type.to_string ty]
+      let f ((((name : Name.t), _), (ty, _)), _) =
+        String.concat [Name.to_string name; ": "; Type.to_string ty]
       in
       String.concat ~sep:", " (List.map ~f self.params)
     in
@@ -172,7 +168,7 @@ module Func = struct
     in
     String.concat
       [ "func "
-      ; normalize_ident self.name
+      ; Name.to_string self.name
       ; "("
       ; parameters
       ; ")"
@@ -191,14 +187,14 @@ module Infix_group = struct
       match associativity with Assoc_start -> "start" | Assoc_none -> "none"
     in
     let precedence =
-      let f (Less (id, _)) = "precedence < " ^ normalize_ident id in
+      let f (Less (id, _)) = "precedence < " ^ (id :> string) in
       String.concat ~sep:"\n  " (List.map precedence ~f)
     in
     Printf.sprintf {|infix group %s {
   associativity = %s;
   %s
 }|}
-      (normalize_ident name) associativity precedence
+      (name :> string) associativity precedence
 end
 
 module Infix_declaration = struct
@@ -206,7 +202,7 @@ module Infix_declaration = struct
 
   let to_string {name= name, _; group= group, _} =
     String.concat
-      ["infix "; normalize_ident name; ": "; normalize_ident group; ";"]
+      ["infix ("; (name :> string); "): "; (group :> string); ";"]
 end
 
 include Types.Ast
@@ -217,11 +213,11 @@ let to_string self =
       match kind with
       | Type.Definition.Alias data ->
           String.concat
-            ["type "; normalize_ident name; " = "; Type.to_string data; ";"]
+            ["type "; (name :> string); " = "; Type.to_string data; ";"]
       | Type.Definition.User_defined {data} ->
           String.concat
             [ "type "
-            ; normalize_ident name
+            ; (name :> string)
             ; " {\n"
             ; "  data = "
             ; Type.Data.to_string data

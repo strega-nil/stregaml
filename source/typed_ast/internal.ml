@@ -6,7 +6,7 @@ module Local = Ast.Expr.Local
 module Binding = Ast.Binding
 
 module Function_declaration = struct
-  type t = {name: Ident.t; params: Binding.t list; ret_ty: Type.t}
+  type t = {name: Name.t; params: Binding.t list; ret_ty: Type.t}
 end
 
 module Infix_group = struct
@@ -21,9 +21,9 @@ end
 
 type t =
   { type_context: Type.Context.t
-  ; infix_group_names: Ident.t list
+  ; infix_group_names: Nfc_string.t list
   ; infix_groups: Infix_group.t list
-  ; infix_decls: (Ident.t * int) list
+  ; infix_decls: (Nfc_string.t * int) list
   ; function_context: Function_declaration.t Spanned.t list
   ; function_definitions: Expr.block Spanned.t list }
 
@@ -31,7 +31,7 @@ type 'a result = ('a, Error.t) Spanned.Result.t
 
 module Functions : sig
   val index_by_name :
-    Function_declaration.t Spanned.t list -> Ident.t -> int option
+    Function_declaration.t Spanned.t list -> Name.t -> int option
 
   val decl_by_index :
        Function_declaration.t Spanned.t list
@@ -42,7 +42,7 @@ module Functions : sig
 end = struct
   let index_by_name ctxt search =
     let rec helper n = function
-      | ({Function_declaration.name; _}, _) :: _ when Ident.equal name search
+      | ({Function_declaration.name; _}, _) :: _ when Name.equal name search
         ->
           Some n
       | _ :: names -> helper (n + 1) names
@@ -79,7 +79,7 @@ module Bind_order = struct
     let module U = Untyped_ast.Expr in
     let module T = Infix_group in
     let get_infix_group ctxt op =
-      let f (name, _) = Ident.equal op name in
+      let f (name, _) = Nfc_string.equal op name in
       match List.find ~f ctxt.infix_decls with
       | Some (_, idx) -> Some (idx, List.nth_exn ctxt.infix_groups idx)
       | None -> None
@@ -127,7 +127,7 @@ end
 let find_local name (lst : Binding.t list) : Local.t option =
   let f index binding =
     let name', _ = binding.Binding.name in
-    if Ident.equal name' name then Some Local.{binding; index} else None
+    if Name.equal name' name then Some Local.{binding; index} else None
   in
   List.find_mapi ~f lst
 
@@ -220,6 +220,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
               let ty = value_type (Type.Builtin Type.Unit) in
               return T.{variant= Assign {dest; source}; ty} )
     | U.Infix_name name, sp ->
+        let name = Name.{string= name; kind= Infix} in
         let name = (U.Name {path= []; name}, sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
         typeck_call callee [e0; e1]
@@ -385,13 +386,13 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> return_err (Error.Record_literal_non_record_type ty)
       in
       let rec find_in_type_members s = function
-        | (name, ty) :: _ when Ident.equal name s -> Some ty
+        | (name, ty) :: _ when Nfc_string.equal name s -> Some ty
         | _ :: xs -> find_in_type_members s xs
         | [] -> None
       in
       let rec has_dup el = function
         | [] -> None
-        | ((name, _), _) :: _ when Ident.equal el name -> Some el
+        | ((name, _), _) :: _ when Nfc_string.equal el name -> Some el
         | _ :: xs -> has_dup el xs
       in
       let%bind members =
@@ -431,7 +432,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
             if the type wasn't correct, we'd find it in map
           *)
           let rec check_for_single name = function
-            | ((x, _), _) :: _ when Ident.equal name x -> true
+            | ((x, _), _) :: _ when Nfc_string.equal name x -> true
             | _ :: xs -> check_for_single name xs
             | [] -> false
           in
@@ -455,7 +456,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         let T.Type.({category= ecat; ty= ebty}) = ety in
         match Type.structural ebty ~ctxt:ctxt.type_context with
         | Type.Structural.Record members -> (
-            let f (n, _) = Ident.equal n member in
+            let f (n, _) = Nfc_string.equal n member in
             match List.find ~f members with
             | Some (_, ty) -> return T.Type.{category= ecat; ty}
             | None ->
@@ -465,7 +466,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       return T.{variant= Record_access (expr, member); ty}
 
 let find_infix_group_name ctxt id =
-  let f _ name = Ident.equal id name in
+  let f _ name = Nfc_string.equal id name in
   match List.findi ~f ctxt.infix_group_names with
   | Some (i, _) -> Some i
   | None -> None
@@ -523,7 +524,7 @@ let add_function_declaration (ctxt : t)
   (* check for duplicates *)
   let rec check_for_duplicates search = function
     | [] -> None
-    | (f, sp) :: _ when Ident.equal f.Function_declaration.name search ->
+    | (f, sp) :: _ when Name.equal f.Function_declaration.name search ->
         Some (f, sp)
     | _ :: xs -> check_for_duplicates search xs
   in
@@ -543,7 +544,7 @@ let add_function_definition (ctxt : t)
     let num_funcs = List.length ctxt.function_context in
     let idx = num_funcs - 1 - List.length ctxt.function_definitions in
     let decl, _ = Functions.decl_by_index ctxt.function_context idx in
-    assert (Ident.equal decl.Function_declaration.name unt_func.F.name) ;
+    assert (Name.equal decl.Function_declaration.name unt_func.F.name) ;
     decl
   in
   let%bind body, body_sp =

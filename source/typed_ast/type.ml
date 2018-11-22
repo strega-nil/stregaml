@@ -9,7 +9,7 @@ module Context = struct
   (* note: const after construction *)
   type nonrec t =
     { user_defined: user_defined_type array
-    ; names: (Ident.t Spanned.t * t) array }
+    ; names: (Nfc_string.t Spanned.t * t) array }
 
   let make lst =
     let module PType = Parse.Ast.Type in
@@ -29,12 +29,12 @@ module Context = struct
       (* returns -1 if not found *)
       let rec find_index name index = function
         | [] -> -1
-        | ((name', _), _) :: _ when Ident.equal name name' -> index
+        | ((name', _), _) :: _ when Nfc_string.equal name name' -> index
         | _ :: rest -> find_index name (index + 1) rest
       in
       let rec find_alias name = function
         | [] -> return None
-        | ((name', _), alias) :: _ when Ident.equal name name' ->
+        | ((name', _), alias) :: _ when Nfc_string.equal name name' ->
             let%bind ty = get_ast_type alias in
             return (Some ty)
         | _ :: rest -> find_alias name rest
@@ -73,14 +73,14 @@ module Context = struct
       Array.create ~len:defs_len default
     in
     let names =
-      let default = ((Ident.empty, Spanned.Span.made_up), User_defined (-1)) in
+      let default = ((Nfc_string.empty, Spanned.Span.made_up), User_defined (-1)) in
       Array.create ~len:names_len default
     in
     let rec exists_duplicate idx end_idx name =
       if idx = end_idx then false
       else
         let (name_idx, _), _ = names.(idx) in
-        if Ident.equal name_idx name then true
+        if Nfc_string.equal name_idx name then true
         else exists_duplicate (idx + 1) end_idx name
     in
     let fill_defs index ((name, name_sp), def) =
@@ -120,7 +120,7 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
   let%bind unt_ty = spanned_lift unt_ty in
   match unt_ty with
   | U.Named name -> (
-      let f ((name', _), _) = Ident.equal name' name in
+      let f ((name', _), _) = Nfc_string.equal name' name in
       match Array.find ~f ctxt.Context.names with
       | Some (_, ty) -> return ty
       | None -> (

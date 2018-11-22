@@ -26,6 +26,10 @@ func (*)(x: Int32, y: Int32) -> Int32 {
   __builtin(mul)(x, y)
 }
 
+func (prefix -)(x: Int32) -> Int32 {
+  __builtin(sub)(0, x)
+}
+
 func (<=)(x: Int32, y: Int32) -> Bool {
   __builtin(less_eq)(x, y)
 }
@@ -40,7 +44,7 @@ func (==)(x: Int32, y: Int32) -> Bool {
 func main() -> Int32 {
   if (1 * 3 - 1 == 2) {
     if (2 == 1 * 3 - 1) {
-      1 + 2 * 3
+      - (1 + 2 * 3)
     } else {
       1
     }

@@ -58,9 +58,9 @@ let get_typed_ast args =
 
 let interpret ty_ast _args =
   let ctxt = Interpreter.make ty_ast in
-  match
-    Interpreter.get_function ctxt ~name:(Ident.of_string_unsafe "main")
-  with
+  let string = Nfc_string.of_string_unsafe "main" in
+  let name = Name.{string; kind= Identifier} in
+  match Interpreter.get_function ctxt ~name with
   | Some f ->
       let v = Interpreter.call ctxt f [] in
       Out.output_string Out.stdout "main returned: " ;

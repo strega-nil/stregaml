@@ -41,10 +41,10 @@ let is_number_continue ch base =
   | base -> raise (Bug_lexer ("Invalid base: " ^ Int.to_string base))
 
 (*
-  allowed:
+  start:
     | _
     | xid-start
-  continue only:
+  continue:
     | -
     | '
     | xid-continue
@@ -56,7 +56,7 @@ let is_ident_continue_no_prime ch = ch =~ '-' || Uucp.Id.is_xid_continue ch
 let is_ident_continue ch = ch =~ '\'' || is_ident_continue_no_prime ch
 
 (*
-  allowed:
+  start:
     | symbol-math
     | common operators of other languages
       | :
@@ -71,14 +71,10 @@ let is_ident_continue ch = ch =~ '\'' || is_ident_continue_no_prime ch
       | |
       | ˆ
       | !
-      | ?
       | @
-  only continue:
+  continue:
+    | operator-start
     | '
-
-  note:
-    the programmer may put `[]` braces around operators in order to treat
-    them as identifiers.
 *)
 let is_operator_start ch =
   let is_valid_ascii ch =
@@ -96,7 +92,6 @@ let is_operator_start ch =
     | '|' -> true
     | '^' -> true
     | '!' -> true
-    | '?' -> true
     | '@' -> true
     | _ -> false
   in
@@ -104,8 +99,6 @@ let is_operator_start ch =
   else match Uucp.Gc.general_category ch with `Sm -> true | _ -> false
 
 let is_operator_continue ch = ch =~ '\'' || is_operator_start ch
-
-let is_operator_ident id = is_operator_start (Ident.first_codepoint_exn id)
 
 let current_span lex =
   let open Spanned.Span in
@@ -149,13 +142,14 @@ let lex_ident fst lex =
         eat_ch lex ;
         helper (ch :: lst)
     | Some _ | None -> (
-        let ident = Ident.of_uchar_list (List.rev lst) in
+        let ident = Nfc_string.of_uchar_list (List.rev lst) in
         match (ident :> string) with
         | "true" -> return Token.Keyword_true
         | "false" -> return Token.Keyword_false
         | "if" -> return Token.Keyword_if
         | "else" -> return Token.Keyword_else
         | "infix" -> return Token.Keyword_infix
+        | "prefix" -> return Token.Keyword_prefix
         | "group" -> return Token.Keyword_group
         | "func" -> return Token.Keyword_func
         | "type" -> return Token.Keyword_type
@@ -277,7 +271,7 @@ let rec next_token lex =
           eat_ch lex ;
           helper (ch :: lst)
       | Some _ | None -> (
-          let ident = Ident.of_uchar_list (List.rev lst) in
+          let ident = Nfc_string.of_uchar_list (List.rev lst) in
           match (ident :> string) with
           | "/*" ->
               let%bind () = block_comment () in
