@@ -109,10 +109,8 @@ and Ast_Expr : sig
     | Block of block Spanned.t
     | Reference of {mutability: Type.mutability; place: t Spanned.t}
     | Dereference of t Spanned.t
-    | Record_literal of
-        { ty: Type.t Spanned.t
-        ; members: (Nfc_string.t * t Spanned.t) Spanned.t list }
-    | Record_access of t Spanned.t * Nfc_string.t
+    | Record_literal of {ty: Type.t Spanned.t; members: t array}
+    | Record_access of t Spanned.t * int
     | Global_function of int
     | Constructor of Type.t * int
     | Local of Ast_Expr_Local.t

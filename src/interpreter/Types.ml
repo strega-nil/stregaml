@@ -7,7 +7,7 @@ module rec Value : sig
     | Reference of Expr_result.place
     | Constructor of int
     | Variant of int * t ref
-    | Record of (Nfc_string.t * t ref) list
+    | Record of t ref array
 end =
   Value
 

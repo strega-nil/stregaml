@@ -13,6 +13,12 @@ module Expr = struct
 
   let full_type_sp ({ty; _}, _) = ty
 
+  let unit_value =
+    { variant= Unit_literal
+    ; ty=
+        {Type.ty= Types.Type.Builtin Types.Type.Unit; Type.category= Type.Value}
+    }
+
   module Local = Types.Ast_Expr_Local
   module Builtin = Types.Ast_Expr_Builtin
 end

@@ -5,8 +5,15 @@ type Option {
   };
 }
 
-func main() -> Option {
+type Pair {
+  data = record {
+    p0: Option;
+    p1: Option;
+  };
+}
+
+func main() -> Pair {
   let opt = Option::Some(10);
   let opt2 = Option::None(());
-  opt
+  Pair::{p0= opt; p1= opt2}
 }

@@ -256,7 +256,7 @@ and parse_path_expression (parser : t) : Ast.Expr.t result =
             eat_token parser ;
             helper parser ~path:((name, sp') :: path, Spanned.Span.union sp sp')
         | _ ->
-            let name = Name.{string= name; kind= Identifier}, sp' in
+            let name = (Name.{string= name; kind= Identifier}, sp') in
             return (Ast.Expr.Name {path; name}) )
     | Token.Open_paren, _ ->
         let%bind name = spanned_bind (get_name parser) in
@@ -269,8 +269,8 @@ and parse_path_expression (parser : t) : Ast.Expr.t result =
   in
   helper parser ~path:([], Spanned.Span.made_up)
 
-and parse_record_literal (parser : t) ~(path : Nfc_string.t Spanned.t list Spanned.t) :
-    Ast.Expr.t result =
+and parse_record_literal (parser : t)
+    ~(path : Nfc_string.t Spanned.t list Spanned.t) : Ast.Expr.t result =
   let f parser =
     let%bind name = get_ident parser in
     let%bind () = get_specific parser Ctxt_keyword.equal_tok in
@@ -285,7 +285,7 @@ and parse_record_literal (parser : t) ~(path : Nfc_string.t Spanned.t list Spann
   let%bind () = get_specific parser Token.Close_brace in
   let ty =
     match path with
-    | [ty, _], sp -> (Ast.Type.Named ty, sp)
+    | [(ty, _)], sp -> (Ast.Type.Named ty, sp)
     | _ -> failwith "no paths in types yet"
   in
   return (Ast.Expr.Record_literal {ty; members})

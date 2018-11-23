@@ -217,7 +217,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
               let ty = value_type (Type.Builtin Type.Unit) in
               return T.{variant= Assign {dest; source}; ty} )
     | U.Infix_name name, sp ->
-        let name = Name.{string= name; kind= Infix}, sp in
+        let name = (Name.{string= name; kind= Infix}, sp) in
         let name = (U.Name {path= []; name}, sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
         typeck_call callee [e0; e1]
@@ -317,7 +317,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let%bind args = return_map ~f args in
       typeck_call callee args
   | U.Prefix_operator ((op, sp), expr) ->
-      let name = Name.{string= op; kind= Prefix}, sp in
+      let name = (Name.{string= op; kind= Prefix}, sp) in
       let name = (U.Name {path= []; name}, sp) in
       let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
       let%bind arg = spanned_bind (typeck_expression locals ctxt expr) in
@@ -326,12 +326,12 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let%bind first = spanned_bind (typeck_expression locals ctxt first) in
       typeck_infix_list locals ctxt first rest
   | U.Name {path= []; name} -> (
-      match find_local name locals with
-      | Some loc ->
-          let Binding.({ty= ty, _; mutability; _}) = loc.Local.binding in
-          let ty = T.Type.{ty; category= Place {mutability}} in
-          return T.{variant= Local loc; ty}
-      | None -> (
+    match find_local name locals with
+    | Some loc ->
+        let Binding.({ty= ty, _; mutability; _}) = loc.Local.binding in
+        let ty = T.Type.{ty; category= Place {mutability}} in
+        return T.{variant= Local loc; ty}
+    | None -> (
         let name, _ = name in
         match Functions.index_by_name ctxt.function_context name with
         | None -> return_err (Error.Name_not_found name)
@@ -351,7 +351,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Name {path= [ty_name]; name= name, _} ->
       let%bind ty =
         let ty_name, sp = ty_name in
-        let ty = Cafec_Parse.Ast.Type.Named ty_name, sp in
+        let ty = Untyped_ast.Type.Named ty_name, sp in
         Type.of_untyped ty ~ctxt:ctxt.type_context
       in
       let%bind type_members =
@@ -361,15 +361,15 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       in
       let%bind nfc_name =
         match name with
-        | Name.{string; kind= Identifier} -> return string
+        | Name.({string; kind= Identifier}) -> return string
         | _ -> return_err (Error.Name_not_found_in_type (ty, name))
       in
       let%bind idx, ty_member =
         let rec helper idx = function
-        | [] -> return_err (Error.Name_not_found_in_type (ty, name))
-        | (name, ty) :: _ when Nfc_string.equal nfc_name name ->
-            return (idx, ty)
-        | _ :: xs -> helper (idx + 1) xs
+          | [] -> return_err (Error.Name_not_found_in_type (ty, name))
+          | (name, ty) :: _ when Nfc_string.equal nfc_name name ->
+              return (idx, ty)
+          | _ :: xs -> helper (idx + 1) xs
         in
         helper 0 type_members
       in
@@ -418,28 +418,29 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | Type.Structural.Record members -> return members
         | _ -> return_err (Error.Record_literal_non_record_type ty)
       in
-      let rec find_in_type_members s = function
-        | (name, ty) :: _ when Nfc_string.equal name s -> Some ty
-        | _ :: xs -> find_in_type_members s xs
-        | [] -> None
+      let find_in_type_members s members =
+        let rec helper idx = function
+          | (name, ty) :: _ when Nfc_string.equal name s -> Some (idx, ty)
+          | _ :: xs -> helper (idx + 1) xs
+          | [] -> None
+        in
+        helper 0 members
       in
-      let rec has_dup el = function
-        | [] -> None
-        | ((name, _), _) :: _ when Nfc_string.equal el name -> Some el
-        | _ :: xs -> has_dup el xs
+      let members_len = List.length type_members in
+      let members_init : bool array = Array.create ~len:members_len false in
+      let members_typed : T.t array =
+        Array.create ~len:members_len T.unit_value
       in
-      let%bind members =
+      let%bind () =
         let rec helper = function
-          | [] -> return []
-          | ((name, expr), sp) :: xs ->
-              let%bind expr =
-                spanned_bind (typeck_expression locals ctxt expr)
-              in
-              let ty = T.base_type_sp expr in
-              let%bind () =
+          | [] -> return ()
+          | ((name, expr), _) :: xs ->
+              let%bind expr = typeck_expression locals ctxt expr in
+              let ty = T.base_type expr in
+              let%bind idx =
                 match find_in_type_members name type_members with
-                | Some mty ->
-                    if Type.equal mty ty then return ()
+                | Some (idx, mty) ->
+                    if Type.equal mty ty then return idx
                     else
                       return_err
                         (Error.Record_literal_incorrect_type
@@ -448,55 +449,44 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                     return_err (Error.Record_literal_extra_field (ty, name))
               in
               let%bind () =
-                match has_dup name xs with
-                | Some name ->
-                    return_err (Error.Record_literal_duplicate_members name)
-                | None -> return ()
+                if members_init.(idx) then
+                  return_err (Error.Record_literal_duplicate_members name)
+                else (
+                  members_typed.(idx) <- expr ;
+                  members_init.(idx) <- true ;
+                  return () )
               in
-              let%bind xs = helper xs in
-              return (((name, expr), sp) :: xs)
+              helper xs
         in
         helper members
       in
       let%bind () =
-        let rec check_for_existence type_members members =
-          (*
-            note: we only need to check for existence, not type correctness
-            if the type wasn't correct, we'd find it in map
-          *)
-          let rec check_for_single name = function
-            | ((x, _), _) :: _ when Nfc_string.equal name x -> true
-            | _ :: xs -> check_for_single name xs
-            | [] -> false
-          in
-          match type_members with
-          | [] -> return ()
-          | (name, ty) :: xs ->
-              if check_for_single name members then
-                check_for_existence xs members
-              else return_err (Error.Record_literal_missing_field (ty, name))
-        in
-        check_for_existence type_members members
+        let f _ el = not el in
+        match Array.findi ~f members_init with
+        | None -> return ()
+        | Some (idx, _) ->
+            let name, ty = List.nth_exn type_members idx in
+            return_err (Error.Record_literal_missing_field (ty, name))
       in
       return
         T.
-          { variant= Record_literal {ty= (ty, ty_sp); members}
+          { variant= Record_literal {ty= (ty, ty_sp); members= members_typed}
           ; ty= value_type ty }
   | U.Record_access (expr, member) ->
       let%bind expr = spanned_bind (typeck_expression locals ctxt expr) in
       let ety = T.full_type_sp expr in
-      let%bind ty =
+      let%bind idx, ty =
         let T.Type.({category= ecat; ty= ebty}) = ety in
         match Type.structural ebty ~ctxt:ctxt.type_context with
         | Type.Structural.Record members -> (
-            let f (n, _) = Nfc_string.equal n member in
-            match List.find ~f members with
-            | Some (_, ty) -> return T.Type.{category= ecat; ty}
+            let f _ (n, _) = Nfc_string.equal n member in
+            match List.findi ~f members with
+            | Some (idx, (_, ty)) -> return (idx, T.Type.{category= ecat; ty})
             | None ->
                 return_err (Error.Record_access_non_member (ebty, member)) )
         | _ -> return_err (Error.Record_access_non_record_type (ebty, member))
       in
-      return T.{variant= Record_access (expr, member); ty}
+      return T.{variant= Record_access (expr, idx); ty}
 
 let find_infix_group_name ctxt id =
   let f _ name = Nfc_string.equal id name in

@@ -16,6 +16,10 @@ module Expr : sig
 
   val full_type_sp : t Spanned.t -> Type.t
 
+  (* useful for filling arrays *)
+
+  val unit_value : t
+
   module Local = Types.Ast_Expr_Local
   module Builtin = Types.Ast_Expr_Builtin
 end

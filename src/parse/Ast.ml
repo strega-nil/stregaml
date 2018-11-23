@@ -65,8 +65,8 @@ module Implementation_stmt_expr = struct
           ; block_to_string thn ~indent
           ; " else "
           ; block_to_string els ~indent ]
-    | Name {path; name= (name, _)} ->
-        let f ((id: Nfc_string.t), _) = (id :> string) in
+    | Name {path; name= name, _} ->
+        let f ((id : Nfc_string.t), _) = (id :> string) in
         let path = List.map ~f path in
         let name = path @ [Name.to_string name] in
         String.concat ~sep:"::" name
@@ -239,17 +239,17 @@ let to_string self =
             ; ";\n}" ]
     in
     if List.is_empty self.types then ""
-    else (String.concat ~sep:"\n" (List.map ~f self.types)) ^ "\n\n"
+    else String.concat ~sep:"\n" (List.map ~f self.types) ^ "\n\n"
   in
   let infix_groups =
     let f (infix_group, _) = Infix_group.to_string infix_group in
     if List.is_empty self.infix_groups then ""
-    else (String.concat ~sep:"\n" (List.map ~f self.infix_groups)) ^ "\n\n"
+    else String.concat ~sep:"\n" (List.map ~f self.infix_groups) ^ "\n\n"
   in
   let infix_decls =
     let f (infix_decl, _) = Infix_declaration.to_string infix_decl in
     if List.is_empty self.infix_decls then ""
-    else (String.concat ~sep:"\n" (List.map ~f self.infix_decls)) ^ "\n\n"
+    else String.concat ~sep:"\n" (List.map ~f self.infix_decls) ^ "\n\n"
   in
   let funcs =
     let f (func, _) = Func.to_string func in

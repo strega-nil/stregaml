@@ -19,15 +19,12 @@ module Value = struct
 
   let rec clone imm =
     match imm with
-    | Unit | Bool _ | Integer _ | Function _ | Reference _ | Constructor _ -> imm
-    | Variant (idx, v) ->
-       Variant (idx, ref (clone !v))
+    | Unit | Bool _ | Integer _ | Function _ | Reference _ | Constructor _ ->
+        imm
+    | Variant (idx, v) -> Variant (idx, ref (clone !v))
     | Record r ->
-        let rec helper = function
-          | (name, x) :: xs -> (name, ref (clone !x)) :: helper xs
-          | [] -> []
-        in
-        Record (helper r)
+        let f x = ref (clone !x) in
+        Record (Array.map ~f r)
 
   let rec to_string v ctxt =
     match v with
@@ -35,24 +32,20 @@ module Value = struct
     | Integer n -> Int.to_string n
     | Bool true -> "true"
     | Bool false -> "false"
-    | Constructor idx -> "variant::" ^ (Int.to_string idx)
+    | Constructor idx -> "variant::" ^ Int.to_string idx
     | Reference place ->
         let Types.Expr_result.({is_mut; value; _}) = place in
         let pointer = if is_mut then "&mut " else "&" in
         String.concat [pointer; "{"; to_string !value ctxt; "}"]
     | Variant (idx, v) ->
         String.concat
-          [ "variant::"
-          ; (Int.to_string idx)
-          ; "("
-          ; to_string !v ctxt
-          ; ")" ]
+          ["variant::"; Int.to_string idx; "("; to_string !v ctxt; ")"]
     | Record members ->
         let members =
-          let f ((name : Nfc_string.t), e) =
-            String.concat [(name :> string); " = "; to_string !e ctxt]
+          let f idx e =
+            String.concat [Int.to_string idx; " = "; to_string !e ctxt]
           in
-          String.concat ~sep:"; " (List.map ~f members)
+          String.concat_array ~sep:"; " (Array.mapi ~f members)
         in
         String.concat ["{ "; members; " }"]
     | Function n ->
@@ -191,18 +184,17 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           List.iter ~f:Object.drop args ;
           Expr_result.Value ret
       | Value.Constructor idx ->
-        let arg =
-          match args with
-          | [arg, _] -> Expr_result.to_value (eval ctxt locals arg)
-          | _ -> assert false
-        in
-        Expr_result.Value (Value.Variant (idx, ref arg))
+          let arg =
+            match args with
+            | [(arg, _)] -> Expr_result.to_value (eval ctxt locals arg)
+            | _ -> assert false
+          in
+          Expr_result.Value (Value.Variant (idx, ref arg))
       | _ -> assert false )
     | Expr.Block (b, _) -> Expr_result.Value (eval_block ctxt locals b)
     | Expr.Global_function i ->
         Expr_result.Value (Value.Function (Value.function_index_of_int i))
-    | Expr.Constructor (_, idx) ->
-        Expr_result.Value (Value.Constructor idx)
+    | Expr.Constructor (_, idx) -> Expr_result.Value (Value.Constructor idx)
     | Expr.Reference {mutability; place= place, _} ->
         let place = eval ctxt locals place in
         Expr_result.reference ~is_mut:(is_mut mutability) place
@@ -210,25 +202,18 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
         let value = eval ctxt locals value in
         Expr_result.deref value
     | Expr.Record_literal {members; _} ->
-        let members =
-          let f ((name, (e, _)), _) =
-            let immediate = ref (Expr_result.to_value (eval ctxt locals e)) in
-            (name, immediate)
-          in
-          List.map members ~f
-        in
+        let f e = ref (Expr_result.to_value (eval ctxt locals e)) in
+        let members = Array.map ~f members in
         Expr_result.Value (Value.Record members)
-    | Expr.Record_access ((e, _), member) -> (
-        let find_member (name, _) = Nfc_string.equal name member in
+    | Expr.Record_access ((e, _), idx) -> (
         let v = eval ctxt locals e in
         match v with
         | Expr_result.Value (Value.Record members) ->
-            let _, e = List.find_exn ~f:find_member members in
-            Expr_result.Value !e
+            Expr_result.Value !(members.(idx))
         | Expr_result.Place Expr_result.({value; is_mut; header}) -> (
           match !value with
           | Value.Record members ->
-              let _, value = List.find_exn ~f:find_member members in
+              let value = members.(idx) in
               Expr_result.Place Expr_result.{value; is_mut; header}
           | _ -> assert false )
         | _ -> assert false )
