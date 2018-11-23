@@ -1,6 +1,7 @@
 module rec Error : sig
   type t =
     | Name_not_found of Name.t
+    | Name_not_found_in_type of Type.t * Name.t
     | Type_not_found of Nfc_string.t
     | Type_defined_multiple_times of Nfc_string.t
     | Infix_group_not_found of Nfc_string.t
@@ -58,9 +59,10 @@ end =
   Type
 
 and Type_Structural : sig
-  type members = (Nfc_string.t * Type.t) list
-
-  type t = Builtin of Type.builtin | Record of members | Variant of members
+  type t =
+    | Builtin of Type.builtin
+    | Record of (Nfc_string.t * Type.t) list
+    | Variant of (Nfc_string.t * Type.t) list
 end =
   Type_Structural
 

@@ -21,7 +21,8 @@ module Type = struct
 
     let to_string data =
       let members_to_string members =
-        let f (((name : Nfc_string.t), ty), _) =
+        let f ((name, ty), _) =
+          ignore (name : Nfc_string.t) ;
           String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
         in
         String.concat (List.map members ~f)
@@ -237,18 +238,21 @@ let to_string self =
             ; Type.Data.to_string data
             ; ";\n}" ]
     in
-    String.concat ~sep:"\n" (List.map ~f self.types)
+    if List.is_empty self.types then ""
+    else (String.concat ~sep:"\n" (List.map ~f self.types)) ^ "\n\n"
   in
   let infix_groups =
     let f (infix_group, _) = Infix_group.to_string infix_group in
-    String.concat ~sep:"\n" (List.map ~f self.infix_groups)
+    if List.is_empty self.infix_groups then ""
+    else (String.concat ~sep:"\n" (List.map ~f self.infix_groups)) ^ "\n\n"
   in
   let infix_decls =
     let f (infix_decl, _) = Infix_declaration.to_string infix_decl in
-    String.concat ~sep:"\n" (List.map ~f self.infix_decls)
+    if List.is_empty self.infix_decls then ""
+    else (String.concat ~sep:"\n" (List.map ~f self.infix_decls)) ^ "\n\n"
   in
   let funcs =
     let f (func, _) = Func.to_string func in
     String.concat ~sep:"\n" (List.map ~f self.funcs)
   in
-  String.concat ~sep:"\n\n" [types; infix_groups; infix_decls; funcs]
+  String.concat [types; infix_groups; infix_decls; funcs]

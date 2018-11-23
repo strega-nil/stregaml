@@ -1,11 +1,12 @@
 type Option {
   data = variant {
-    Some: Int32;
     None: Unit;
+    Some: Int32;
   };
 }
 
 func main() -> Option {
   let opt = Option::Some(10);
+  let opt2 = Option::None(());
   opt
 }

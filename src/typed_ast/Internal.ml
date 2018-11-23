@@ -348,14 +348,34 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
               value_type (Type.Builtin (Type.Function {params; ret_ty}))
             in
             return T.{variant= Global_function idx; ty} ) )
-  | U.Name {path= [ty_name]; name} ->
-      let%bind ty, ty_sp =
+  | U.Name {path= [ty_name]; name= name, _} ->
+      let%bind ty =
         let ty_name, sp = ty_name in
         let ty = Cafec_Parse.Ast.Type.Named ty_name, sp in
-        spanned_bind (Type.of_untyped ty ~ctxt:ctxt.type_context)
+        Type.of_untyped ty ~ctxt:ctxt.type_context
       in
-      assert false
-  | U.Name {path; name} -> failwith "paths with size > 1 not supported"
+      let%bind type_members =
+        match Type.structural ty ~ctxt:ctxt.type_context with
+        | Type.Structural.Variant members -> return members
+        | _ -> return_err (Error.Name_not_found_in_type (ty, name))
+      in
+      let%bind nfc_name =
+        match name with
+        | Name.{string; kind= Identifier} -> return string
+        | _ -> return_err (Error.Name_not_found_in_type (ty, name))
+      in
+      let%bind idx, ty_member =
+        let rec helper idx = function
+        | [] -> return_err (Error.Name_not_found_in_type (ty, name))
+        | (name, ty) :: _ when Nfc_string.equal nfc_name name ->
+            return (idx, ty)
+        | _ :: xs -> helper (idx + 1) xs
+        in
+        helper 0 type_members
+      in
+      let ty = Type.(Builtin (Function {params= [ty_member]; ret_ty= ty})) in
+      return T.{variant= Constructor (ty, idx); ty= value_type ty}
+  | U.Name _ -> failwith "paths with size > 1 not supported"
   | U.Block blk ->
       let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
       let ty =

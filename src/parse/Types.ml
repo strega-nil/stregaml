@@ -80,9 +80,9 @@ end =
   Ast_Type
 
 and Ast_Type_Data : sig
-  type members = (Nfc_string.t * Ast_Type.t) Spanned.t list
-
-  type t = Record of members | Variant of members
+  type t =
+    | Record of (Nfc_string.t * Ast_Type.t) Spanned.t list
+    | Variant of (Nfc_string.t * Ast_Type.t) Spanned.t list
 end =
   Ast_Type_Data
 

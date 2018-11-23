@@ -9,6 +9,10 @@ let to_string err ~ctxt =
   match err with
   | Name_not_found name ->
       Printf.sprintf "Name not found: %s" (Name.to_string name)
+  | Name_not_found_in_type (ty, name) ->
+      Printf.sprintf "Name `%s` not found in type `%s`"
+        (Name.to_string name)
+        (Type.to_string ty ~ctxt)
   | Type_not_found ty -> Printf.sprintf "Type not found: %s" (ty :> string)
   | Type_defined_multiple_times name ->
       Printf.sprintf "Type declared multiple times: %s" (name :> string)
