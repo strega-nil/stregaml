@@ -103,7 +103,7 @@ and Ast_Expr : sig
     | Bool_literal of bool
     | Integer_literal of int
     | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
-    | Name of {path: Nfc_string.t list; name: Name.t}
+    | Name of {path: Nfc_string.t Spanned.t list; name: Name.t Spanned.t}
     | Block of block Spanned.t
     | Builtin of Nfc_string.t Spanned.t * t Spanned.t list
     | Call of t Spanned.t * t Spanned.t list

@@ -64,8 +64,10 @@ module Implementation_stmt_expr = struct
           ; block_to_string thn ~indent
           ; " else "
           ; block_to_string els ~indent ]
-    | Name {path; name} ->
-        let name = (path :> string list) @ [Name.to_string name] in
+    | Name {path; name= (name, _)} ->
+        let f ((id: Nfc_string.t), _) = (id :> string) in
+        let path = List.map ~f path in
+        let name = path @ [Name.to_string name] in
         String.concat ~sep:"::" name
     | Block (blk, _) -> block_to_string blk ~indent
     | Builtin ((name, _), args) ->

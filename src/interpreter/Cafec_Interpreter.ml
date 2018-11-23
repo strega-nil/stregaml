@@ -19,7 +19,9 @@ module Value = struct
 
   let rec clone imm =
     match imm with
-    | Unit | Bool _ | Integer _ | Function _ | Reference _ -> imm
+    | Unit | Bool _ | Integer _ | Function _ | Reference _ | Constructor _ -> imm
+    | Variant (idx, v) ->
+       Variant (idx, ref (clone !v))
     | Record r ->
         let rec helper = function
           | (name, x) :: xs -> (name, ref (clone !x)) :: helper xs
@@ -33,10 +35,18 @@ module Value = struct
     | Integer n -> Int.to_string n
     | Bool true -> "true"
     | Bool false -> "false"
+    | Constructor idx -> "variant::" ^ (Int.to_string idx)
     | Reference place ->
         let Types.Expr_result.({is_mut; value; _}) = place in
         let pointer = if is_mut then "&mut " else "&" in
         String.concat [pointer; "{"; to_string !value ctxt; "}"]
+    | Variant (idx, v) ->
+        String.concat
+          [ "variant::"
+          ; (Int.to_string idx)
+          ; "("
+          ; to_string !v ctxt
+          ; ")" ]
     | Record members ->
         let members =
           let f ((name : Nfc_string.t), e) =
@@ -180,10 +190,19 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           let ret = eval_block ctxt args expr in
           List.iter ~f:Object.drop args ;
           Expr_result.Value ret
+      | Value.Constructor idx ->
+        let arg =
+          match args with
+          | [arg, _] -> Expr_result.to_value (eval ctxt locals arg)
+          | _ -> assert false
+        in
+        Expr_result.Value (Value.Variant (idx, ref arg))
       | _ -> assert false )
     | Expr.Block (b, _) -> Expr_result.Value (eval_block ctxt locals b)
     | Expr.Global_function i ->
         Expr_result.Value (Value.Function (Value.function_index_of_int i))
+    | Expr.Constructor (_, idx) ->
+        Expr_result.Value (Value.Constructor idx)
     | Expr.Reference {mutability; place= place, _} ->
         let place = eval ctxt locals place in
         Expr_result.reference ~is_mut:(is_mut mutability) place

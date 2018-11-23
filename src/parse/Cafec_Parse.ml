@@ -246,7 +246,7 @@ let rec maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result
   | _ -> return None
 
 and parse_path_expression (parser : t) : Ast.Expr.t result =
-  let rec helper parser ~(path : Nfc_string.t list Spanned.t) =
+  let rec helper parser ~(path : Nfc_string.t Spanned.t list Spanned.t) =
     let path, sp = path in
     match%bind spanned_bind (peek_token parser) with
     | Token.Identifier name, sp' -> (
@@ -254,12 +254,12 @@ and parse_path_expression (parser : t) : Ast.Expr.t result =
         match%bind peek_token parser with
         | Token.Double_colon ->
             eat_token parser ;
-            helper parser ~path:(name :: path, Spanned.Span.union sp sp')
+            helper parser ~path:((name, sp') :: path, Spanned.Span.union sp sp')
         | _ ->
-            let name = Name.{string= name; kind= Identifier} in
+            let name = Name.{string= name; kind= Identifier}, sp' in
             return (Ast.Expr.Name {path; name}) )
     | Token.Open_paren, _ ->
-        let%bind name = get_name parser in
+        let%bind name = spanned_bind (get_name parser) in
         return (Ast.Expr.Name {path; name})
     | Token.Open_brace, sp' ->
         parse_record_literal parser ~path:(path, Spanned.Span.union sp sp')
@@ -269,7 +269,7 @@ and parse_path_expression (parser : t) : Ast.Expr.t result =
   in
   helper parser ~path:([], Spanned.Span.made_up)
 
-and parse_record_literal (parser : t) ~(path : Nfc_string.t list Spanned.t) :
+and parse_record_literal (parser : t) ~(path : Nfc_string.t Spanned.t list Spanned.t) :
     Ast.Expr.t result =
   let f parser =
     let%bind name = get_ident parser in
@@ -285,7 +285,7 @@ and parse_record_literal (parser : t) ~(path : Nfc_string.t list Spanned.t) :
   let%bind () = get_specific parser Token.Close_brace in
   let ty =
     match path with
-    | [ty], sp -> (Ast.Type.Named ty, sp)
+    | [ty, _], sp -> (Ast.Type.Named ty, sp)
     | _ -> failwith "no paths in types yet"
   in
   return (Ast.Expr.Record_literal {ty; members})

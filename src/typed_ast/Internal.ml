@@ -121,6 +121,7 @@ module Bind_order = struct
 end
 
 let find_local name (lst : Binding.t list) : Local.t option =
+  let name, _ = name in
   let f index binding =
     let name', _ = binding.Binding.name in
     if Name.equal name' name then Some Local.{binding; index} else None
@@ -216,7 +217,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
               let ty = value_type (Type.Builtin Type.Unit) in
               return T.{variant= Assign {dest; source}; ty} )
     | U.Infix_name name, sp ->
-        let name = Name.{string= name; kind= Infix} in
+        let name = Name.{string= name; kind= Infix}, sp in
         let name = (U.Name {path= []; name}, sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
         typeck_call callee [e0; e1]
@@ -316,7 +317,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let%bind args = return_map ~f args in
       typeck_call callee args
   | U.Prefix_operator ((op, sp), expr) ->
-      let name = Name.{string= op; kind= Prefix} in
+      let name = Name.{string= op; kind= Prefix}, sp in
       let name = (U.Name {path= []; name}, sp) in
       let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
       let%bind arg = spanned_bind (typeck_expression locals ctxt expr) in
@@ -324,14 +325,14 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Infix_list (first, rest) ->
       let%bind first = spanned_bind (typeck_expression locals ctxt first) in
       typeck_infix_list locals ctxt first rest
-  | U.Name {path; name} -> (
-      assert (List.length path = 0) ;
+  | U.Name {path= []; name} -> (
       match find_local name locals with
       | Some loc ->
           let Binding.({ty= ty, _; mutability; _}) = loc.Local.binding in
           let ty = T.Type.{ty; category= Place {mutability}} in
           return T.{variant= Local loc; ty}
       | None -> (
+        let name, _ = name in
         match Functions.index_by_name ctxt.function_context name with
         | None -> return_err (Error.Name_not_found name)
         | Some idx ->
@@ -347,6 +348,14 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
               value_type (Type.Builtin (Type.Function {params; ret_ty}))
             in
             return T.{variant= Global_function idx; ty} ) )
+  | U.Name {path= [ty_name]; name} ->
+      let%bind ty, ty_sp =
+        let ty_name, sp = ty_name in
+        let ty = Cafec_Parse.Ast.Type.Named ty_name, sp in
+        spanned_bind (Type.of_untyped ty ~ctxt:ctxt.type_context)
+      in
+      assert false
+  | U.Name {path; name} -> failwith "paths with size > 1 not supported"
   | U.Block blk ->
       let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
       let ty =
