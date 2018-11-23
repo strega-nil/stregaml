@@ -217,7 +217,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
               return T.{variant= Assign {dest; source}; ty} )
     | U.Infix_name name, sp ->
         let name = Name.{string= name; kind= Infix} in
-        let name = U.Name {path= []; name}, sp in
+        let name = (U.Name {path= []; name}, sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
         typeck_call callee [e0; e1]
   in

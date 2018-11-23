@@ -61,6 +61,7 @@ and Token : sig
     | Keyword_type
     | Keyword_data
     | Keyword_record
+    | Keyword_variant
     | Keyword_alias
     | Keyword_let
     | Keyword_mut
@@ -79,7 +80,9 @@ end =
   Ast_Type
 
 and Ast_Type_Data : sig
-  type t = Record of (Nfc_string.t * Ast_Type.t) Spanned.t list
+  type members = (Nfc_string.t * Ast_Type.t) Spanned.t list
+
+  type t = Record of members | Variant of members
 end =
   Ast_Type_Data
 

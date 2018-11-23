@@ -19,12 +19,20 @@ module Type = struct
   module Data = struct
     include Types.Ast_Type_Data
 
-    let to_string (Record members) =
-      let f (((name : Nfc_string.t), ty), _) =
-        String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
+    let to_string data =
+      let members_to_string members =
+        let f (((name : Nfc_string.t), ty), _) =
+          String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
+        in
+        String.concat (List.map members ~f)
       in
-      let members = String.concat (List.map members ~f) in
-      String.concat ["record {"; members; "\n  }"]
+      match data with
+      | Record members ->
+          let members = members_to_string members in
+          String.concat ["record {"; members; "\n  }"]
+      | Variant members ->
+          let members = members_to_string members in
+          String.concat ["variant {"; members; "\n  }"]
   end
 
   module Definition = Types.Ast_Type_Definition

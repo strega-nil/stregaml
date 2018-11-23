@@ -193,7 +193,9 @@ let rec maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result
             get_postfix (Ast.Expr.Unit_literal, Spanned.Span.union sp sp')
         | _ ->
             let%bind expr = parse_expression parser in
-            let%bind (), sp' = spanned_bind (get_specific parser Token.Close_paren) in
+            let%bind (), sp' =
+              spanned_bind (get_specific parser Token.Close_paren)
+            in
             get_postfix (expr, Spanned.Span.union sp sp')
       in
       return (Some expr)
@@ -378,22 +380,29 @@ and parse_type (parser : t) : Ast.Type.t result =
   | tok -> return_err (Error.Unexpected_token (Error.Expected.Type, tok))
 
 and parse_data (parser : t) : Ast.Type.Data.t result =
+  let members parser =
+    let%bind () = get_specific parser Token.Open_brace in
+    let%bind members =
+      let f parser =
+        let%bind name = get_ident parser in
+        let%bind () = get_specific parser Token.Colon in
+        let%bind ty = parse_type parser in
+        return (name, ty)
+      in
+      parse_list parser ~f ~sep:Token.Semicolon ~close:Token.Close_brace
+        ~expected:Error.Expected.Variable_decl
+    in
+    let%bind () = get_specific parser Token.Close_brace in
+    return members
+  in
   let%bind tok = next_token parser in
   match tok with
   | Token.Keyword_record ->
-      let%bind () = get_specific parser Token.Open_brace in
-      let%bind members =
-        let f parser =
-          let%bind name = get_ident parser in
-          let%bind () = get_specific parser Token.Colon in
-          let%bind ty = parse_type parser in
-          return (name, ty)
-        in
-        parse_list parser ~f ~sep:Token.Semicolon ~close:Token.Close_brace
-          ~expected:Error.Expected.Variable_decl
-      in
-      let%bind () = get_specific parser Token.Close_brace in
+      let%bind members = members parser in
       return (Ast.Type.Data.Record members)
+  | Token.Keyword_variant ->
+      let%bind members = members parser in
+      return (Ast.Type.Data.Variant members)
   | tok -> return_err (Error.Unexpected_token (Error.Expected.Data, tok))
 
 and maybe_parse_type_annotation (parser : t) :

@@ -28,6 +28,7 @@ let equal lhs rhs =
   | Keyword_type, Keyword_type -> true
   | Keyword_data, Keyword_data -> true
   | Keyword_record, Keyword_record -> true
+  | Keyword_variant, Keyword_variant -> true
   | Keyword_alias, Keyword_alias -> true
   | Keyword_let, Keyword_let -> true
   | Keyword_mut, Keyword_mut -> true
@@ -64,6 +65,7 @@ let to_string = function
   | Keyword_type -> "keyword `type`"
   | Keyword_data -> "keyword `data`"
   | Keyword_record -> "keyword `record`"
+  | Keyword_variant -> "keyword `variant`"
   | Keyword_alias -> "keyword `alias`"
   | Keyword_let -> "keyword `let`"
   | Keyword_mut -> "keyword `mut`"

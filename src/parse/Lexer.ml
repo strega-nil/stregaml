@@ -160,7 +160,7 @@ let lex_ident fst lex =
         | "mut" -> return Token.Keyword_mut
         | "__builtin" -> return Token.Keyword_builtin
         | "_" -> return Token.Keyword_underscore
-        | "variant" -> return_err (Error.Reserved_token ident)
+        | "variant" -> return Token.Keyword_variant
         | "opaque" -> return_err (Error.Reserved_token ident)
         | "public" -> return_err (Error.Reserved_token ident)
         | _ -> return (Token.Identifier ident) )

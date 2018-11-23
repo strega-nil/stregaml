@@ -58,7 +58,9 @@ end =
   Type
 
 and Type_Structural : sig
-  type t = Builtin of Type.builtin | Record of (Nfc_string.t * Type.t) list
+  type members = (Nfc_string.t * Type.t) list
+
+  type t = Builtin of Type.builtin | Record of members | Variant of members
 end =
   Type_Structural
 
@@ -110,6 +112,7 @@ and Ast_Expr : sig
         ; members: (Nfc_string.t * t Spanned.t) Spanned.t list }
     | Record_access of t Spanned.t * Nfc_string.t
     | Global_function of int
+    | Constructor of Type.t * int
     | Local of Ast_Expr_Local.t
 
   and t = {variant: variant; ty: Ast_Expr_Type.t}
