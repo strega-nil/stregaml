@@ -1,5 +1,3 @@
-module Spanned = Cafec_containers.Spanned
-
 module Type : sig
   include module type of struct
       include Types.Ast_Type

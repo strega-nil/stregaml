@@ -14,7 +14,7 @@ module Value :
   end
   with type ctxt := t
 
-val make : Cafec_typed_ast.t -> t
+val make : Cafec_Typed_ast.t -> t
 
 val get_function : t -> name:Name.t -> Value.function_index option
 

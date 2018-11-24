@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(library
+  ((name Cafec_Interpreter)
+  (libraries (base ppx_let Cafec_Typed_ast Cafec_Containers))
+  (preprocess (pps (ppx_let)))
+  (flags (:standard -w +a-4@8 -open Base -open Cafec_Containers))))

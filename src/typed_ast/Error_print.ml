@@ -100,8 +100,8 @@ place is of type: `%s`|}
       Printf.sprintf "Builtin `%s` is unknown" (name :> string)
   | Unordered_operators {op1= op1, _; op2= op2, _} ->
       let op_to_string = function
-        | Cafec_parse.Ast.Expr.Infix_assign -> "<-"
-        | Cafec_parse.Ast.Expr.Infix_name id -> (id :> string)
+        | Cafec_Parse.Ast.Expr.Infix_assign -> "<-"
+        | Cafec_Parse.Ast.Expr.Infix_name id -> (id :> string)
       in
       Printf.sprintf
         "Used mutually unordered operators `%s` and `%s` in the same expression"

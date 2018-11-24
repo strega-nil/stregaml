@@ -1,4 +1,4 @@
-module Ast = Cafec_typed_ast
+module Ast = Cafec_Typed_ast
 module Expr = Ast.Expr
 module Stmt = Ast.Stmt
 module Type = Ast.Type

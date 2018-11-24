@@ -10,7 +10,7 @@ module Context : sig
   val empty : t
 
   val make :
-       Cafec_parse.Ast.Type.Definition.t Cafec_containers.Spanned.t list
+       Cafec_Parse.Ast.Type.Definition.t Spanned.t list
     -> t result
 end
 
@@ -22,4 +22,4 @@ val equal : t -> t -> bool
 
 val to_string : t -> ctxt:Context.t -> string
 
-val of_untyped : Cafec_parse.Ast.Type.t Spanned.t -> ctxt:Context.t -> t result
+val of_untyped : Cafec_Parse.Ast.Type.t Spanned.t -> ctxt:Context.t -> t result

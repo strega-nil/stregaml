@@ -30,8 +30,8 @@ module rec Error : sig
         ; found: int }
     | Builtin_invalid_arguments of {name: Nfc_string.t; found: Type.t list}
     | Unordered_operators of
-        { op1: Cafec_parse.Ast.Expr.infix Spanned.t
-        ; op2: Cafec_parse.Ast.Expr.infix Spanned.t }
+        { op1: Cafec_Parse.Ast.Expr.infix Spanned.t
+        ; op2: Cafec_Parse.Ast.Expr.infix Spanned.t }
     | Unknown_builtin of Nfc_string.t
     | Call_of_non_function of Type.t
     | Defined_function_multiple_times of
@@ -126,7 +126,6 @@ end =
   Ast_Expr_Builtin
 
 module Pervasives = struct
-  include Cafec_containers
   include Spanned.Result.Monad
   module Error = Error
 

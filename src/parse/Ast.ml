@@ -1,5 +1,3 @@
-module Spanned = Cafec_containers.Spanned
-
 let indent_to_string indent = String.make (indent * 2) ' '
 
 module Type = struct

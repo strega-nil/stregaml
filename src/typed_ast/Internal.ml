@@ -1,6 +1,6 @@
 open! Types.Pervasives
 module Span = Spanned.Span
-module Untyped_ast = Cafec_parse.Ast
+module Untyped_ast = Cafec_Parse.Ast
 module Expr = Ast.Expr
 module Local = Ast.Expr.Local
 module Binding = Ast.Binding

@@ -1,0 +1,23 @@
+(jbuild_version 1)
+
+(library (
+  (name Cafec)
+  (modules (Cafec))
+  (libraries (
+    base
+    Cafec_Containers
+    Cafec_Interpreter
+    Cafec_Parse
+    Cafec_Typed_ast))
+  (flags (:standard -safe-string -w +a-4 -open Base -open Cafec_Containers))))
+
+(executables (
+  (names (main))
+  (modules (main))
+  (libraries (Cafec))
+  (flags (:standard -safe-string -w +a-4 -open Base -open Cafec_Containers))))
+
+(install (
+  (section bin)
+  (package cafec)
+  (files ((main.exe as cafec)))))

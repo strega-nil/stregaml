@@ -13,7 +13,7 @@ type type_def = Internal.type_def = {tname: string; kind: type_kind}
 
 type t
 
-val make : Cafec_parse.Ast.t -> (t, Error.t * Type.Context.t) Spanned.Result.t
+val make : Cafec_Parse.Ast.t -> (t, Error.t * Type.Context.t) Spanned.Result.t
 
 (*
 val number_of_types : t -> int

@@ -1,5 +1,5 @@
 open! Types.Pervasives
-module Parse = Cafec_parse
+module Parse = Cafec_Parse
 include Types.Type
 module Structural = Types.Type_Structural
 
