@@ -5,15 +5,14 @@ type Option {
   };
 }
 
-type Pair {
-  data = record {
-    p0: Option;
-    p1: Option;
-  };
-}
-
-func main() -> Pair {
+func main() -> Int32 {
   let opt = Option::Some(10);
-  let opt2 = Option::None(());
-  Pair::{p0= opt; p1= opt2}
+  match (opt) {
+    Option::Some x => {
+      x
+    }
+    Option::None () => {
+      -1
+    }
+  }
 }

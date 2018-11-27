@@ -203,6 +203,10 @@ let rec maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result
       let%bind blk, sp = spanned_bind (parse_block parser) in
       let%bind expr = get_postfix (Ast.Expr.Block (blk, sp), sp) in
       return (Some expr)
+  | Token.Keyword_match, _ ->
+      let%bind expr = spanned_bind (parse_match_expression parser) in
+      let%bind expr = get_postfix expr in
+      return (Some expr)
   | Token.Keyword_if, sp ->
       eat_token parser ;
       let%bind () = get_specific parser Token.Open_paren in
@@ -257,10 +261,10 @@ and parse_path_expression (parser : t) : Ast.Expr.t result =
             helper parser ~path:((name, sp') :: path, Spanned.Span.union sp sp')
         | _ ->
             let name = (Name.{string= name; kind= Identifier}, sp') in
-            return (Ast.Expr.Name {path; name}) )
+            return (Ast.Expr.Name Ast.Expr.{path; name}) )
     | Token.Open_paren, _ ->
         let%bind name = spanned_bind (get_name parser) in
-        return (Ast.Expr.Name {path; name})
+        return (Ast.Expr.Name Ast.Expr.{path; name})
     | Token.Open_brace, sp' ->
         parse_record_literal parser ~path:(path, Spanned.Span.union sp sp')
     | tok, _ ->
@@ -268,6 +272,8 @@ and parse_path_expression (parser : t) : Ast.Expr.t result =
           (Error.Unexpected_token (Error.Expected.Path_expression, tok))
   in
   helper parser ~path:([], Spanned.Span.made_up)
+
+and parse_match_expression (_parser : t) : Ast.Expr.t result = assert false
 
 and parse_record_literal (parser : t)
     ~(path : Nfc_string.t Spanned.t list Spanned.t) : Ast.Expr.t result =

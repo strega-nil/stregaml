@@ -57,6 +57,7 @@ module Implementation_stmt_expr = struct
     | Bool_literal true -> "true"
     | Bool_literal false -> "false"
     | Integer_literal n -> Int.to_string n
+    | Match _ -> assert false
     | If_else {cond= cond, _; thn= thn, _; els= els, _} ->
         String.concat
           [ "if ("

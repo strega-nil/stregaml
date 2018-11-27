@@ -218,7 +218,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
               return T.{variant= Assign {dest; source}; ty} )
     | U.Infix_name name, sp ->
         let name = (Name.{string= name; kind= Infix}, sp) in
-        let name = (U.Name {path= []; name}, sp) in
+        let name = (U.Name U.{path= []; name}, sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
         typeck_call callee [e0; e1]
   in
@@ -257,6 +257,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Integer_literal i ->
       let ty = value_type (Type.Builtin Type.Int32) in
       return T.{variant= Integer_literal i; ty}
+  | U.Match _ -> assert false
   | U.If_else {cond; thn; els} -> (
       let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
       match T.base_type_sp cond with
@@ -318,14 +319,14 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       typeck_call callee args
   | U.Prefix_operator ((op, sp), expr) ->
       let name = (Name.{string= op; kind= Prefix}, sp) in
-      let name = (U.Name {path= []; name}, sp) in
+      let name = (U.Name U.{path= []; name}, sp) in
       let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
       let%bind arg = spanned_bind (typeck_expression locals ctxt expr) in
       typeck_call callee [arg]
   | U.Infix_list (first, rest) ->
       let%bind first = spanned_bind (typeck_expression locals ctxt first) in
       typeck_infix_list locals ctxt first rest
-  | U.Name {path= []; name} -> (
+  | U.Name U.{path= []; name} -> (
     match find_local name locals with
     | Some loc ->
         let Binding.({ty= ty, _; mutability; _}) = loc.Local.binding in
@@ -348,7 +349,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
               value_type (Type.Builtin (Type.Function {params; ret_ty}))
             in
             return T.{variant= Global_function idx; ty} ) )
-  | U.Name {path= [ty_name]; name= name, _} ->
+  | U.Name U.{path= [ty_name]; name= name, _} ->
       let%bind ty =
         let ty_name, sp = ty_name in
         let ty = Untyped_ast.Type.Named ty_name, sp in

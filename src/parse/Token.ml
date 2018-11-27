@@ -14,12 +14,14 @@ let equal lhs rhs =
   | Integer_literal i1, Integer_literal i2 -> i1 = i2
   | Assign, Assign -> true
   | Arrow, Arrow -> true
+  | Thick_arrow, Thick_arrow -> true
   | Colon, Colon -> true
   | Double_colon, Double_colon -> true
   | Operator id1, Operator id2 -> Nfc_string.equal id1 id2
   | Identifier id1, Identifier id2 -> Nfc_string.equal id1 id2
   | Keyword_true, Keyword_true -> true
   | Keyword_false, Keyword_false -> true
+  | Keyword_match, Keyword_match -> true
   | Keyword_if, Keyword_if -> true
   | Keyword_else, Keyword_else -> true
   | Keyword_infix, Keyword_infix -> true
@@ -50,12 +52,14 @@ let to_string = function
   | Integer_literal i -> Printf.sprintf "int literal: `%d`" i
   | Assign -> "assign `<-`"
   | Arrow -> "arrow `->`"
+  | Thick_arrow -> "thick arrow `=>`"
   | Colon -> "colon `:`"
   | Double_colon -> "double colon `::`"
   | Operator ident -> Printf.sprintf "infix operator: `%s`" (ident :> string)
   | Identifier ident -> Printf.sprintf "identifier: `%s`" (ident :> string)
   | Keyword_true -> "keyword `true`"
   | Keyword_false -> "keyword `false`"
+  | Keyword_match -> "keyword `match`"
   | Keyword_if -> "keyword `if`"
   | Keyword_else -> "keyword `else`"
   | Keyword_infix -> "keyword `infix`"

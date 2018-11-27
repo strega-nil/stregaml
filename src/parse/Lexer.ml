@@ -146,6 +146,7 @@ let lex_ident fst lex =
         match (ident :> string) with
         | "true" -> return Token.Keyword_true
         | "false" -> return Token.Keyword_false
+        | "match" -> return Token.Keyword_match
         | "if" -> return Token.Keyword_if
         | "else" -> return Token.Keyword_else
         | "infix" -> return Token.Keyword_infix
@@ -282,6 +283,7 @@ let rec next_token lex =
           | ":" -> return Token.Colon
           | "<-" -> return Token.Assign
           | "->" -> return Token.Arrow
+          | "=>" -> return Token.Thick_arrow
           | "::" -> return Token.Double_colon
           | "|" -> return_err (Error.Reserved_token ident)
           | "\\" -> return_err (Error.Reserved_token ident)

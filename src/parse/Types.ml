@@ -46,12 +46,14 @@ and Token : sig
     | Integer_literal of int
     | Assign
     | Arrow
+    | Thick_arrow
     | Colon
     | Double_colon
     | Operator of Nfc_string.t
     | Identifier of Nfc_string.t
     | Keyword_true
     | Keyword_false
+    | Keyword_match
     | Keyword_if
     | Keyword_else
     | Keyword_infix
@@ -96,14 +98,23 @@ end =
 and Ast_Expr : sig
   type infix = Infix_assign | Infix_name of Nfc_string.t
 
+  type qualified_name =
+    { path: Nfc_string.t Spanned.t list
+    ; name: Name.t Spanned.t }
+
+  type pattern =
+    { constructor: qualified_name Spanned.t
+    ; binding: Name.t Spanned.t }
+
   type block = {stmts: Ast_Stmt.t Spanned.t list; expr: t Spanned.t option}
 
   and t =
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
+    | Match of {matchee: t Spanned.t; patterns: pattern * block list}
     | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
-    | Name of {path: Nfc_string.t Spanned.t list; name: Name.t Spanned.t}
+    | Name of qualified_name
     | Block of block Spanned.t
     | Builtin of Nfc_string.t Spanned.t * t Spanned.t list
     | Call of t Spanned.t * t Spanned.t list
