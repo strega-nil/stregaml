@@ -8,10 +8,10 @@ type Option {
 func main() -> Int32 {
   let opt = Option::Some(10);
   match (opt) {
-    Option::Some x => {
+    Option::Some(x) => {
       x
     }
-    Option::None () => {
+    Option::None(_unit) => {
       -1
     }
   }

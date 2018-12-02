@@ -14,7 +14,7 @@ let equal lhs rhs =
   | Integer_literal i1, Integer_literal i2 -> i1 = i2
   | Assign, Assign -> true
   | Arrow, Arrow -> true
-  | Thick_arrow, Thick_arrow -> true
+  | Thicc_arrow, Thicc_arrow -> true
   | Colon, Colon -> true
   | Double_colon, Double_colon -> true
   | Operator id1, Operator id2 -> Nfc_string.equal id1 id2
@@ -52,7 +52,7 @@ let to_string = function
   | Integer_literal i -> Printf.sprintf "int literal: `%d`" i
   | Assign -> "assign `<-`"
   | Arrow -> "arrow `->`"
-  | Thick_arrow -> "thick arrow `=>`"
+  | Thicc_arrow -> "thick arrow `=>`"
   | Colon -> "colon `:`"
   | Double_colon -> "double colon `::`"
   | Operator ident -> Printf.sprintf "infix operator: `%s`" (ident :> string)

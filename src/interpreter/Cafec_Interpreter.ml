@@ -229,4 +229,3 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
   let _, blk = ctxt.funcs.((idx :> int)) in
   let args = List.map ~f:(Object.obj ~is_mut:false) args in
   eval_block ctxt args blk
-

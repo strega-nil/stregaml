@@ -20,6 +20,8 @@ module Expected = struct
     | Statement_end -> "a closing brace or semicolon"
     | Path_expression ->
         "the continuation of a path, or an identifier or record literal"
+    | Path -> "the continuation of a path, or an identifier"
+    | Match_arm -> "either a match arm, or the end of the match block"
 end
 
 include Types.Error

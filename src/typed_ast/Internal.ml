@@ -326,7 +326,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Infix_list (first, rest) ->
       let%bind first = spanned_bind (typeck_expression locals ctxt first) in
       typeck_infix_list locals ctxt first rest
-  | U.Name U.{path= []; name} -> (
+  | U.Name U.({path= []; name}) -> (
     match find_local name locals with
     | Some loc ->
         let Binding.({ty= ty, _; mutability; _}) = loc.Local.binding in
@@ -349,10 +349,10 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
               value_type (Type.Builtin (Type.Function {params; ret_ty}))
             in
             return T.{variant= Global_function idx; ty} ) )
-  | U.Name U.{path= [ty_name]; name= name, _} ->
+  | U.Name U.({path= [ty_name]; name= name, _}) ->
       let%bind ty =
         let ty_name, sp = ty_name in
-        let ty = Untyped_ast.Type.Named ty_name, sp in
+        let ty = (Untyped_ast.Type.Named ty_name, sp) in
         Type.of_untyped ty ~ctxt:ctxt.type_context
       in
       let%bind type_members =

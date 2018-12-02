@@ -16,6 +16,8 @@ module rec Error_Expected : sig
     | Expression_follow
     | Statement_end
     | Path_expression
+    | Path
+    | Match_arm
 end =
   Error_Expected
 
@@ -46,7 +48,7 @@ and Token : sig
     | Integer_literal of int
     | Assign
     | Arrow
-    | Thick_arrow
+    | Thicc_arrow
     | Colon
     | Double_colon
     | Operator of Nfc_string.t
@@ -99,12 +101,10 @@ and Ast_Expr : sig
   type infix = Infix_assign | Infix_name of Nfc_string.t
 
   type qualified_name =
-    { path: Nfc_string.t Spanned.t list
-    ; name: Name.t Spanned.t }
+    {path: Nfc_string.t Spanned.t list; name: Name.t Spanned.t}
 
   type pattern =
-    { constructor: qualified_name Spanned.t
-    ; binding: Name.t Spanned.t }
+    {constructor: qualified_name Spanned.t; binding: Name.t Spanned.t}
 
   type block = {stmts: Ast_Stmt.t Spanned.t list; expr: t Spanned.t option}
 
@@ -112,7 +112,9 @@ and Ast_Expr : sig
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
-    | Match of {matchee: t Spanned.t; patterns: pattern * block list}
+    | Match of
+        { cond: t Spanned.t
+        ; arms: (pattern Spanned.t * block Spanned.t) list }
     | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
     | Name of qualified_name
     | Block of block Spanned.t

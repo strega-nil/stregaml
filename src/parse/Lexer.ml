@@ -283,9 +283,8 @@ let rec next_token lex =
           | ":" -> return Token.Colon
           | "<-" -> return Token.Assign
           | "->" -> return Token.Arrow
-          | "=>" -> return Token.Thick_arrow
+          | "=>" -> return Token.Thicc_arrow
           | "::" -> return Token.Double_colon
-          | "|" -> return_err (Error.Reserved_token ident)
           | "\\" -> return_err (Error.Reserved_token ident)
           | op when includes_comment_token op ->
               return_err (Error.Operator_including_comment_token ident)
