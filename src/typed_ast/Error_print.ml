@@ -79,13 +79,24 @@ place is of type: `%s`|}
          `%s`"
         (member :> string)
         (Type.to_string ty ~ctxt)
+  | Match_non_variant_type ty ->
+      Printf.sprintf
+        "Attempted to `match` on an expression of non-variant type `%s`"
+        (Type.to_string ty ~ctxt)
+  | Match_branches_of_different_type {expected; found} ->
+      Printf.sprintf
+        {|`match` expression has branches of differing types:
+  expected: `%s`
+  found: `%s`|}
+        (Type.to_string expected ~ctxt)
+        (Type.to_string found ~ctxt)
   | If_non_bool ty ->
       Printf.sprintf
         "Attempted to `if` on an expression of non-boolean type `%s`"
         (Type.to_string ty ~ctxt)
   | If_branches_of_differing_type (t1, t2) ->
       Printf.sprintf
-        {|`if-else` expression had branches of differing types:
+        {|`if-else` expression has branches of differing types:
   1st branch: `%s`
   2nd branch: `%s`|}
         (Type.to_string t1 ~ctxt) (Type.to_string t2 ~ctxt)

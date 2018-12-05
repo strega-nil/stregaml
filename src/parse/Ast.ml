@@ -1,5 +1,4 @@
 let indent_to_string indent = String.make (indent * 2) ' '
-
 module Type = struct
   include Types.Ast_Type
 
@@ -44,6 +43,12 @@ module Implementation_stmt_expr = struct
     | Types.Ast_Expr.Infix_assign -> "<-"
     | Types.Ast_Expr.Infix_name id -> (id :> string)
 
+  let name_to_string Types.Ast_Expr.{path; name= name, _} =
+    let f ((id : Nfc_string.t), _) = (id :> string) in
+    let path = List.map ~f path in
+    let name = path @ [Name.to_string name] in
+    String.concat ~sep:"::" name
+
   let rec expr_to_string ?(parens = false) e ~indent =
     let open Types.Ast_Expr in
     let open_paren parens = if parens then "(" else "" in
@@ -57,7 +62,27 @@ module Implementation_stmt_expr = struct
     | Bool_literal true -> "true"
     | Bool_literal false -> "false"
     | Integer_literal n -> Int.to_string n
-    | Match _ -> assert false
+    | Match {cond= cond, _; arms} ->
+        let f ((pat, _), (block, _)) =
+          let {constructor= const, _; binding= binding, _} = pat in
+          String.concat
+            [ indent_to_string (indent + 1)
+            ; name_to_string const
+            ; "("
+            ; Name.to_string binding
+            ; ") => "
+            ; block_to_string ~indent:(indent+1) block
+            ; "\n"
+            ]
+        in
+        let arms = String.concat (List.map ~f arms) in
+        String.concat
+          [ "match ("
+          ; expr_to_string cond ~indent:(indent + 1)
+          ; ") {\n"
+          ; arms
+          ; indent_to_string indent
+          ; "}" ]
     | If_else {cond= cond, _; thn= thn, _; els= els, _} ->
         String.concat
           [ "if ("
@@ -66,11 +91,7 @@ module Implementation_stmt_expr = struct
           ; block_to_string thn ~indent
           ; " else "
           ; block_to_string els ~indent ]
-    | Name {path; name= name, _} ->
-        let f ((id : Nfc_string.t), _) = (id :> string) in
-        let path = List.map ~f path in
-        let name = path @ [Name.to_string name] in
-        String.concat ~sep:"::" name
+    | Name name -> name_to_string name
     | Block (blk, _) -> block_to_string blk ~indent
     | Builtin ((name, _), args) ->
         let args = arg_list args in

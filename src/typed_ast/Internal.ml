@@ -257,7 +257,19 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Integer_literal i ->
       let ty = value_type (Type.Builtin Type.Int32) in
       return T.{variant= Integer_literal i; ty}
-  | U.Match _ -> assert false
+  | U.Match {cond; arms} ->
+      let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
+      let cond_ty = T.base_type_sp cond in
+      let%bind variants =
+        match Type.structural cond_ty ~ctxt:ctxt.type_context with
+        | Type.Structural.Variant variants -> return variants
+        | _ -> return_err (Error.Match_non_variant_type cond_ty)
+      in
+      let variants_len = List.length variants in
+      let branch_some = Array.create ~len:variants_len false in
+      let branches = Array.create ~len:variants_len T.{stmts= []; expr= None} in
+      let f ((pat, _), (blk, _)) = assert false in
+      assert false
   | U.If_else {cond; thn; els} -> (
       let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
       match T.base_type_sp cond with

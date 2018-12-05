@@ -23,6 +23,8 @@ module rec Error : sig
     | Record_literal_missing_field of Type.t * Nfc_string.t
     | Record_access_non_record_type of Type.t * Nfc_string.t
     | Record_access_non_member of Type.t * Nfc_string.t
+    | Match_non_variant_type of Type.t
+    | Match_branches_of_different_type of {expected: Type.t; found: Type.t}
     | If_non_bool of Type.t
     | If_branches_of_differing_type of Type.t * Type.t
     | Builtin_mismatched_arity of
