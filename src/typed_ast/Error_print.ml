@@ -90,6 +90,16 @@ place is of type: `%s`|}
   found: `%s`|}
         (Type.to_string expected ~ctxt)
         (Type.to_string found ~ctxt)
+  | Match_repeated_branches name ->
+      Printf.sprintf "`match` expression has duplicated pattern: `%s`"
+        (name :> string)
+  | Pattern_of_wrong_type {expected; found} ->
+      Printf.sprintf
+        {|`match` pattern of incorrect type:
+  expected: `%s`
+  found: `%s`|}
+        (Type.to_string expected ~ctxt)
+        (Type.to_string found ~ctxt)
   | If_non_bool ty ->
       Printf.sprintf
         "Attempted to `if` on an expression of non-boolean type `%s`"

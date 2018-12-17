@@ -5,8 +5,12 @@ type Option {
   };
 }
 
+func (prefix -)(x: Int32) -> Int32 {
+  __builtin(sub)(0, x)
+}
+
 func main() -> Int32 {
-  let opt = Option::Some(10);
+  let opt = Option::None(());
   match (opt) {
     Option::Some(x) => {
       x

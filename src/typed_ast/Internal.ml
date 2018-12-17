@@ -147,12 +147,10 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
           let T.Expr.Type.({ty= expr_ty; _}) = expr_ty in
           let%bind ty =
             match ty with
-            | None -> return (expr_ty, Spanned.Span.made_up)
+            | None -> return expr_ty
             | Some ty ->
-                let%bind ty, ty_sp =
-                  spanned_bind (Type.of_untyped ty ~ctxt:ctxt.type_context)
-                in
-                if Type.equal expr_ty ty then return (ty, ty_sp)
+                let%bind ty = Type.of_untyped ty ~ctxt:ctxt.type_context in
+                if Type.equal expr_ty ty then return ty
                 else
                   let name, _ = name in
                   return_err
@@ -257,7 +255,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Integer_literal i ->
       let ty = value_type (Type.Builtin Type.Int32) in
       return T.{variant= Integer_literal i; ty}
-  | U.Match {cond; arms} ->
+  | U.Match {cond; arms= parse_arms} ->
       let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
       let cond_ty = T.base_type_sp cond in
       let%bind variants =
@@ -266,10 +264,85 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> return_err (Error.Match_non_variant_type cond_ty)
       in
       let variants_len = List.length variants in
-      let branch_some = Array.create ~len:variants_len false in
-      let branches = Array.create ~len:variants_len T.{stmts= []; expr= None} in
-      let f ((pat, _), (blk, _)) = assert false in
-      assert false
+      let arms_some = Array.create ~len:variants_len false in
+      let arms =
+        let ty = Type.Builtin Type.Unit in
+        let blk = T.{stmts= []; expr= None} in
+        Array.create ~len:variants_len (ty, (blk, Spanned.Span.made_up))
+      in
+      let arms_ty = ref None in
+      let%bind () =
+        let insert_arm pat blk =
+          let U.({constructor= constructor, _; binding}) = pat in
+          let%bind cty, (cname_name, _) =
+            match constructor.U.path with
+            | [(ty_name, sp)] ->
+                let ty = (Untyped_ast.Type.Named ty_name, sp) in
+                let%bind ty = Type.of_untyped ty ~ctxt:ctxt.type_context in
+                return (ty, constructor.U.name)
+            | _ -> failwith "paths with size > 1 not supported"
+          in
+          let%bind cname =
+            match cname_name with
+            | Name.({string; kind= Identifier}) -> return string
+            | _ -> return_err (Error.Name_not_found_in_type (cty, cname_name))
+          in
+          let%bind () =
+            if not (Type.equal cty cond_ty) then
+              return_err
+                (Error.Pattern_of_wrong_type {expected= cond_ty; found= cty})
+            else return ()
+          in
+          let%bind index, bind_ty =
+            let f _ (name, _) = Nfc_string.equal name cname in
+            match List.findi variants ~f with
+            | None ->
+                return_err (Error.Name_not_found_in_type (cty, cname_name))
+            | Some (idx, (_, bind_ty)) -> return (idx, bind_ty)
+          in
+          let%bind () =
+            if arms_some.(index) then
+              return_err (Error.Match_repeated_branches cname)
+            else return ()
+          in
+          let binding =
+            Ast.Binding.
+              {name= binding; mutability= Type.Immutable; ty= bind_ty}
+          in
+          let locals = binding :: locals in
+          let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
+          let%bind () =
+            match !arms_ty with
+            | None -> return (arms_ty := Some (T.block_base_type_sp blk))
+            | Some ty ->
+                let arm_ty = T.block_base_type_sp blk in
+                if Type.equal arm_ty ty then return ()
+                else
+                  return_err
+                    (Error.Match_branches_of_different_type
+                       {expected= ty; found= arm_ty})
+          in
+          arms.(index) <- (bind_ty, blk) ;
+          arms_some.(index) <- true ;
+          return ()
+        in
+        let rec helper = function
+          | [] -> return ()
+          | ((pat, _), blk) :: xs ->
+              let%bind () = insert_arm pat blk in
+              helper xs
+        in
+        helper parse_arms
+      in
+      let variant = T.Match {cond; arms} in
+      let ty =
+        match !arms_ty with
+        | Some ty -> value_type ty
+        | None ->
+            (* technically should be bottom, but _shrug_ *)
+            value_type (Type.Builtin Type.Unit)
+      in
+      return T.{variant; ty}
   | U.If_else {cond; thn; els} -> (
       let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
       match T.base_type_sp cond with
@@ -341,7 +414,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Name U.({path= []; name}) -> (
     match find_local name locals with
     | Some loc ->
-        let Binding.({ty= ty, _; mutability; _}) = loc.Local.binding in
+        let Binding.({ty; mutability; _}) = loc.Local.binding in
         let ty = T.Type.{ty; category= Place {mutability}} in
         return T.{variant= Local loc; ty}
     | None -> (
@@ -354,7 +427,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                 Functions.decl_by_index ctxt.function_context idx
               in
               let params =
-                let f Binding.({ty= ty, _; _}) = ty in
+                let f Binding.({ty; _}) = ty in
                 List.map ~f decl.Function_declaration.params
               in
               let ret_ty = decl.Function_declaration.ret_ty in
@@ -547,9 +620,7 @@ let add_function_declaration (ctxt : t)
   let {F.name; F.params; F.ret_ty; _} = unt_func in
   let%bind params, parm_sp =
     let f ((name, ty), _) =
-      let%bind ty =
-        spanned_bind (Type.of_untyped ~ctxt:ctxt.type_context ty)
-      in
+      let%bind ty = Type.of_untyped ~ctxt:ctxt.type_context ty in
       return Binding.{name; mutability= Type.Immutable; ty}
     in
     spanned_bind (return_map ~f params)

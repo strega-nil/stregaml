@@ -1,4 +1,5 @@
 let indent_to_string indent = String.make (indent * 2) ' '
+
 module Type = struct
   include Types.Ast_Type
 
@@ -43,7 +44,7 @@ module Implementation_stmt_expr = struct
     | Types.Ast_Expr.Infix_assign -> "<-"
     | Types.Ast_Expr.Infix_name id -> (id :> string)
 
-  let name_to_string Types.Ast_Expr.{path; name= name, _} =
+  let name_to_string Types.Ast_Expr.({path; name= name, _}) =
     let f ((id : Nfc_string.t), _) = (id :> string) in
     let path = List.map ~f path in
     let name = path @ [Name.to_string name] in
@@ -71,9 +72,8 @@ module Implementation_stmt_expr = struct
             ; "("
             ; Name.to_string binding
             ; ") => "
-            ; block_to_string ~indent:(indent+1) block
-            ; "\n"
-            ]
+            ; block_to_string ~indent:(indent + 1) block
+            ; "\n" ]
         in
         let arms = String.concat (List.map ~f arms) in
         String.concat

@@ -130,8 +130,8 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     in
     let locals = helper locals stmts in
     match expr with
-    | Some (e, _) -> Expr_result.to_value (eval ctxt locals e)
-    | None -> Value.Unit
+    | Some (e, _) -> eval ctxt locals e
+    | None -> Expr_result.Value Value.Unit
   and eval ctxt locals e =
     let eval_builtin_args (lhs, _) (rhs, _) =
       let lhs =
@@ -151,10 +151,17 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | Expr.Unit_literal -> Expr_result.Value Value.Unit
     | Expr.Bool_literal b -> Expr_result.Value (Value.Bool b)
     | Expr.Integer_literal n -> Expr_result.Value (Value.Integer n)
+    | Expr.Match {cond= cond, _; arms} -> (
+        match Expr_result.to_value (eval ctxt locals cond) with
+        | Value.Variant (index, value) ->
+            let _, (code, _) = arms.(index) in
+            let locals = (Object.obj ~is_mut:false !value) :: locals in
+            eval_block ctxt locals code
+        | _ -> assert false )
     | Expr.If_else {cond= cond, _; thn= thn, _; els= els, _} -> (
       match Expr_result.to_value (eval ctxt locals cond) with
-      | Value.Bool true -> Expr_result.Value (eval_block ctxt locals thn)
-      | Value.Bool false -> Expr_result.Value (eval_block ctxt locals els)
+      | Value.Bool true -> eval_block ctxt locals thn
+      | Value.Bool false -> eval_block ctxt locals els
       | _ -> assert false )
     | Expr.Local Expr.Local.({index; _}) ->
         Expr_result.Place (Object.place (List.nth_exn locals index))
@@ -182,7 +189,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           let args = List.map args ~f:ready_arg in
           let ret = eval_block ctxt args expr in
           List.iter ~f:Object.drop args ;
-          Expr_result.Value ret
+          ret
       | Value.Constructor idx ->
           let arg =
             match args with
@@ -191,7 +198,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           in
           Expr_result.Value (Value.Variant (idx, ref arg))
       | _ -> assert false )
-    | Expr.Block (b, _) -> Expr_result.Value (eval_block ctxt locals b)
+    | Expr.Block (b, _) -> eval_block ctxt locals b
     | Expr.Global_function i ->
         Expr_result.Value (Value.Function (Value.function_index_of_int i))
     | Expr.Constructor (_, idx) -> Expr_result.Value (Value.Constructor idx)
@@ -228,4 +235,4 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
   in
   let _, blk = ctxt.funcs.((idx :> int)) in
   let args = List.map ~f:(Object.obj ~is_mut:false) args in
-  eval_block ctxt args blk
+  Expr_result.to_value (eval_block ctxt args blk)
