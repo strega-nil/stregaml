@@ -9,9 +9,7 @@ module Context : sig
 
   val empty : t
 
-  val make :
-       Cafec_Parse.Ast.Type.Definition.t Spanned.t list
-    -> t result
+  val make : Cafec_Parse.Ast.Type.Definition.t Spanned.t list -> t result
 end
 
 module Structural = Types.Type_Structural

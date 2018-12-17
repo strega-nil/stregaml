@@ -14,12 +14,14 @@ let equal lhs rhs =
   | Integer_literal i1, Integer_literal i2 -> i1 = i2
   | Assign, Assign -> true
   | Arrow, Arrow -> true
+  | Thicc_arrow, Thicc_arrow -> true
   | Colon, Colon -> true
   | Double_colon, Double_colon -> true
   | Operator id1, Operator id2 -> Nfc_string.equal id1 id2
   | Identifier id1, Identifier id2 -> Nfc_string.equal id1 id2
   | Keyword_true, Keyword_true -> true
   | Keyword_false, Keyword_false -> true
+  | Keyword_match, Keyword_match -> true
   | Keyword_if, Keyword_if -> true
   | Keyword_else, Keyword_else -> true
   | Keyword_infix, Keyword_infix -> true
@@ -28,6 +30,7 @@ let equal lhs rhs =
   | Keyword_type, Keyword_type -> true
   | Keyword_data, Keyword_data -> true
   | Keyword_record, Keyword_record -> true
+  | Keyword_variant, Keyword_variant -> true
   | Keyword_alias, Keyword_alias -> true
   | Keyword_let, Keyword_let -> true
   | Keyword_mut, Keyword_mut -> true
@@ -49,12 +52,14 @@ let to_string = function
   | Integer_literal i -> Printf.sprintf "int literal: `%d`" i
   | Assign -> "assign `<-`"
   | Arrow -> "arrow `->`"
+  | Thicc_arrow -> "thick arrow `=>`"
   | Colon -> "colon `:`"
   | Double_colon -> "double colon `::`"
   | Operator ident -> Printf.sprintf "infix operator: `%s`" (ident :> string)
   | Identifier ident -> Printf.sprintf "identifier: `%s`" (ident :> string)
   | Keyword_true -> "keyword `true`"
   | Keyword_false -> "keyword `false`"
+  | Keyword_match -> "keyword `match`"
   | Keyword_if -> "keyword `if`"
   | Keyword_else -> "keyword `else`"
   | Keyword_infix -> "keyword `infix`"
@@ -64,6 +69,7 @@ let to_string = function
   | Keyword_type -> "keyword `type`"
   | Keyword_data -> "keyword `data`"
   | Keyword_record -> "keyword `record`"
+  | Keyword_variant -> "keyword `variant`"
   | Keyword_alias -> "keyword `alias`"
   | Keyword_let -> "keyword `let`"
   | Keyword_mut -> "keyword `mut`"

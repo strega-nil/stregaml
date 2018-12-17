@@ -19,12 +19,21 @@ module Type = struct
   module Data = struct
     include Types.Ast_Type_Data
 
-    let to_string (Record members) =
-      let f (((name : Nfc_string.t), ty), _) =
-        String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
+    let to_string data =
+      let members_to_string members =
+        let f ((name, ty), _) =
+          ignore (name : Nfc_string.t) ;
+          String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
+        in
+        String.concat (List.map members ~f)
       in
-      let members = String.concat (List.map members ~f) in
-      String.concat ["record {"; members; "\n  }"]
+      match data with
+      | Record members ->
+          let members = members_to_string members in
+          String.concat ["record {"; members; "\n  }"]
+      | Variant members ->
+          let members = members_to_string members in
+          String.concat ["variant {"; members; "\n  }"]
   end
 
   module Definition = Types.Ast_Type_Definition
@@ -34,6 +43,12 @@ module Implementation_stmt_expr = struct
   let infix_to_string = function
     | Types.Ast_Expr.Infix_assign -> "<-"
     | Types.Ast_Expr.Infix_name id -> (id :> string)
+
+  let name_to_string Types.Ast_Expr.({path; name= name, _}) =
+    let f ((id : Nfc_string.t), _) = (id :> string) in
+    let path = List.map ~f path in
+    let name = path @ [Name.to_string name] in
+    String.concat ~sep:"::" name
 
   let rec expr_to_string ?(parens = false) e ~indent =
     let open Types.Ast_Expr in
@@ -48,6 +63,26 @@ module Implementation_stmt_expr = struct
     | Bool_literal true -> "true"
     | Bool_literal false -> "false"
     | Integer_literal n -> Int.to_string n
+    | Match {cond= cond, _; arms} ->
+        let f ((pat, _), (block, _)) =
+          let {constructor= const, _; binding= binding, _} = pat in
+          String.concat
+            [ indent_to_string (indent + 1)
+            ; name_to_string const
+            ; "("
+            ; Name.to_string binding
+            ; ") => "
+            ; block_to_string ~indent:(indent + 1) block
+            ; "\n" ]
+        in
+        let arms = String.concat (List.map ~f arms) in
+        String.concat
+          [ "match ("
+          ; expr_to_string cond ~indent:(indent + 1)
+          ; ") {\n"
+          ; arms
+          ; indent_to_string indent
+          ; "}" ]
     | If_else {cond= cond, _; thn= thn, _; els= els, _} ->
         String.concat
           [ "if ("
@@ -56,9 +91,7 @@ module Implementation_stmt_expr = struct
           ; block_to_string thn ~indent
           ; " else "
           ; block_to_string els ~indent ]
-    | Name {path; name} ->
-        let name = (path :> string list) @ [Name.to_string name] in
-        String.concat ~sep:"::" name
+    | Name name -> name_to_string name
     | Block (blk, _) -> block_to_string blk ~indent
     | Builtin ((name, _), args) ->
         let args = arg_list args in
@@ -227,18 +260,21 @@ let to_string self =
             ; Type.Data.to_string data
             ; ";\n}" ]
     in
-    String.concat ~sep:"\n" (List.map ~f self.types)
+    if List.is_empty self.types then ""
+    else String.concat ~sep:"\n" (List.map ~f self.types) ^ "\n\n"
   in
   let infix_groups =
     let f (infix_group, _) = Infix_group.to_string infix_group in
-    String.concat ~sep:"\n" (List.map ~f self.infix_groups)
+    if List.is_empty self.infix_groups then ""
+    else String.concat ~sep:"\n" (List.map ~f self.infix_groups) ^ "\n\n"
   in
   let infix_decls =
     let f (infix_decl, _) = Infix_declaration.to_string infix_decl in
-    String.concat ~sep:"\n" (List.map ~f self.infix_decls)
+    if List.is_empty self.infix_decls then ""
+    else String.concat ~sep:"\n" (List.map ~f self.infix_decls) ^ "\n\n"
   in
   let funcs =
     let f (func, _) = Func.to_string func in
     String.concat ~sep:"\n" (List.map ~f self.funcs)
   in
-  String.concat ~sep:"\n\n" [types; infix_groups; infix_decls; funcs]
+  String.concat [types; infix_groups; infix_decls; funcs]

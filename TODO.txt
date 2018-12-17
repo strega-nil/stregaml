@@ -4,14 +4,53 @@
 * LLVM backend
 * externals
 * ADTs + pattern matching
+* effects
+  - syntax:
+    ```cafe
+    effect Yield {
+      func yield(Int32);
+    }
+    effect IoYield = Yield | Io;
+
+    func generate() Yield { ... }
+    func get_int() Io -> Int32 { ... }
+    func input_stream() Io | Yield { ... }
+
+    func print_all(f: func() Yield) {
+      handle (f()) {
+        Yield::yield(x) => {
+          print(x);
+          continue;
+        }
+        return => {}
+      }
+    }
+    ```
+* polymorphism!
+  - syntax: `type Array[T: type, N: UInt]`
+  - ```cafe
+    func iter_map[
+      T: type,
+      U: type,
+      E: effect,
+    ](
+      lst: List[T],
+      f: func(T) E -> U,
+    )
+      Yield[Int32] | E
+    {
+      ...
+    }
+    ```
+* implicit polymorphism!
+  - ```cafe
+    func iter_map(lst: List['t], f: func('t) 'e -> 'u)
+      Yield[Int32] | 'e
+    {
+      ...
+    }
+    ```
 * linearity
-* figure out user-defined prefix operators
-  - maybe their names start with `#`?
-  - then `-b` = `[#-](b)`
-* should there be more differences between
-  - association: left
-  - association <=> [operator]
-  - assocation by [func]
 
 * names for stuff
   * tamper - build

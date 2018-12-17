@@ -16,6 +16,8 @@ module rec Error_Expected : sig
     | Expression_follow
     | Statement_end
     | Path_expression
+    | Path
+    | Match_arm
 end =
   Error_Expected
 
@@ -46,12 +48,14 @@ and Token : sig
     | Integer_literal of int
     | Assign
     | Arrow
+    | Thicc_arrow
     | Colon
     | Double_colon
     | Operator of Nfc_string.t
     | Identifier of Nfc_string.t
     | Keyword_true
     | Keyword_false
+    | Keyword_match
     | Keyword_if
     | Keyword_else
     | Keyword_infix
@@ -61,6 +65,7 @@ and Token : sig
     | Keyword_type
     | Keyword_data
     | Keyword_record
+    | Keyword_variant
     | Keyword_alias
     | Keyword_let
     | Keyword_mut
@@ -79,7 +84,9 @@ end =
   Ast_Type
 
 and Ast_Type_Data : sig
-  type t = Record of (Nfc_string.t * Ast_Type.t) Spanned.t list
+  type t =
+    | Record of (Nfc_string.t * Ast_Type.t) Spanned.t list
+    | Variant of (Nfc_string.t * Ast_Type.t) Spanned.t list
 end =
   Ast_Type_Data
 
@@ -93,14 +100,23 @@ end =
 and Ast_Expr : sig
   type infix = Infix_assign | Infix_name of Nfc_string.t
 
+  type qualified_name =
+    {path: Nfc_string.t Spanned.t list; name: Name.t Spanned.t}
+
+  type pattern =
+    {constructor: qualified_name Spanned.t; binding: Name.t Spanned.t}
+
   type block = {stmts: Ast_Stmt.t Spanned.t list; expr: t Spanned.t option}
 
   and t =
     | Unit_literal
     | Bool_literal of bool
     | Integer_literal of int
+    | Match of
+        { cond: t Spanned.t
+        ; arms: (pattern Spanned.t * block Spanned.t) list }
     | If_else of {cond: t Spanned.t; thn: block Spanned.t; els: block Spanned.t}
-    | Name of {path: Nfc_string.t list; name: Name.t}
+    | Name of qualified_name
     | Block of block Spanned.t
     | Builtin of Nfc_string.t Spanned.t * t Spanned.t list
     | Call of t Spanned.t * t Spanned.t list

@@ -5,7 +5,9 @@ module rec Value : sig
     | Integer of int
     | Function of Function_index.t
     | Reference of Expr_result.place
-    | Record of (Nfc_string.t * t ref) list
+    | Constructor of int
+    | Variant of int * t ref
+    | Record of t ref array
 end =
   Value
 

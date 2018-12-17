@@ -19,5 +19,5 @@ clean:
 format:
 	ocamlformat --inplace \
 	  test/*.ml \
-	  source/*.ml source/*.mli \
-	  source/*/*.ml source/*/*.mli
+	  src/*.ml src/*.mli \
+	  src/*/*.ml src/*/*.mli

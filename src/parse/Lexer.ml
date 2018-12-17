@@ -146,6 +146,7 @@ let lex_ident fst lex =
         match (ident :> string) with
         | "true" -> return Token.Keyword_true
         | "false" -> return Token.Keyword_false
+        | "match" -> return Token.Keyword_match
         | "if" -> return Token.Keyword_if
         | "else" -> return Token.Keyword_else
         | "infix" -> return Token.Keyword_infix
@@ -160,7 +161,7 @@ let lex_ident fst lex =
         | "mut" -> return Token.Keyword_mut
         | "__builtin" -> return Token.Keyword_builtin
         | "_" -> return Token.Keyword_underscore
-        | "variant" -> return_err (Error.Reserved_token ident)
+        | "variant" -> return Token.Keyword_variant
         | "opaque" -> return_err (Error.Reserved_token ident)
         | "public" -> return_err (Error.Reserved_token ident)
         | _ -> return (Token.Identifier ident) )
@@ -282,8 +283,8 @@ let rec next_token lex =
           | ":" -> return Token.Colon
           | "<-" -> return Token.Assign
           | "->" -> return Token.Arrow
+          | "=>" -> return Token.Thicc_arrow
           | "::" -> return Token.Double_colon
-          | "|" -> return_err (Error.Reserved_token ident)
           | "\\" -> return_err (Error.Reserved_token ident)
           | op when includes_comment_token op ->
               return_err (Error.Operator_including_comment_token ident)

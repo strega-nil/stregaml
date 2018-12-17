@@ -1,67 +1,22 @@
-type V2 {
-  data = record {
-    x: Int32;
-    y: Int32;
+type Option {
+  data = variant {
+    None: Unit;
+    Some: Int32;
   };
-}
-
-infix group Additive {
-  associativity = start;
-  precedence < Multiplicative;
-}
-infix group Multiplicative {
-  associativity = start;
-}
-infix group Relational {
-  associativity = none;
-  precedence < Additive;
-}
-
-infix (+): Additive;
-infix (-): Additive;
-infix (*): Multiplicative;
-infix (<=): Relational;
-infix (=): Relational;
-
-func (+)(x: Int32, y: Int32) -> Int32 {
-  __builtin(add)(x, y)
-}
-func (-)(x: Int32, y: Int32) -> Int32 {
-  __builtin(sub)(x, y)
-}
-func (*)(x: Int32, y: Int32) -> Int32 {
-  __builtin(mul)(x, y)
 }
 
 func (prefix -)(x: Int32) -> Int32 {
   __builtin(sub)(0, x)
 }
 
-func (<=)(x: Int32, y: Int32) -> Bool {
-  __builtin(less_eq)(x, y)
-}
-
-func twiddle(v: &mut V2, (×): func(Int32, Int32) -> Int32) {
-  let tmp = *v;
-  (*v).x <- tmp.x × tmp.y;
-  let y = &mut (*v).y;
-  *y <- tmp.y × tmp.x;
-}
-
-func δ(v: V2) -> Int32 {
-  if (v.x <= v.y) {
-    v.y - v.x
-  } else {
-    v.x - v.y
-  }
-}
-
-func f(x: Int32, y: Int32) -> Int32 {
-  -x * y + y
-}
-
 func main() -> Int32 {
-  let mut v = V2::{x = 10; y = 20};
-  twiddle(&mut v, f);
-  δ(v)
+  let opt = Option::None(());
+  match (opt) {
+    Option::Some(x) => {
+      x
+    }
+    Option::None(_unit) => {
+      -1
+    }
+  }
 }
