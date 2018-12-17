@@ -23,7 +23,7 @@ type t =
   { type_context: Type.Context.t
   ; infix_group_names: Nfc_string.t list
   ; infix_groups: Infix_group.t list
-  ; infix_decls: (Nfc_string.t * int) list
+  ; infix_decls: (Name.t * int) list
   ; function_context: Function_declaration.t Spanned.t list
   ; function_definitions: Expr.block Spanned.t list }
 
@@ -75,7 +75,7 @@ module Bind_order = struct
     let module U = Untyped_ast.Expr in
     let module T = Infix_group in
     let get_infix_group ctxt op =
-      let f (name, _) = Nfc_string.equal op name in
+      let f (name, _) = Name.equal op name in
       match List.find ~f ctxt.infix_decls with
       | Some (_, idx) -> Some (idx, List.nth_exn ctxt.infix_groups idx)
       | None -> None
@@ -92,9 +92,9 @@ module Bind_order = struct
             | T.Less idx :: xs -> (
                 let info = List.nth_exn ctxt.infix_groups idx in
                 (*
-              note: since ig < ig2, this means that no matter what,
-              ig binds looser than ig2
-            *)
+                  note: since ig < ig2, this means that no matter what,
+                  ig binds looser than ig2
+                *)
                 match order_infix_groups idx info idx2 with
                 | Some _ -> Some End
                 | None -> check_all_sub_precedences xs )
@@ -215,7 +215,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
               let ty = value_type (Type.Builtin Type.Unit) in
               return T.{variant= Assign {dest; source}; ty} )
     | U.Infix_name name, sp ->
-        let name = (Name.{string= name; kind= Infix}, sp) in
+        let name = (name, sp) in
         let name = (U.Name U.{path= []; name}, sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
         typeck_call callee [e0; e1]
@@ -284,7 +284,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           in
           let%bind cname =
             match cname_name with
-            | Name.({string; kind= Identifier}) -> return string
+            | Name.({string; kind= Identifier; _}) -> return string
             | _ -> return_err (Error.Name_not_found_in_type (cty, cname_name))
           in
           let%bind () =
@@ -402,8 +402,8 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let f x = spanned_bind (typeck_expression locals ctxt x) in
       let%bind args = return_map ~f args in
       typeck_call callee args
-  | U.Prefix_operator ((op, sp), expr) ->
-      let name = (Name.{string= op; kind= Prefix}, sp) in
+  | U.Prefix_operator ((name, sp), expr) ->
+      let name = (name, sp) in
       let name = (U.Name U.{path= []; name}, sp) in
       let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
       let%bind arg = spanned_bind (typeck_expression locals ctxt expr) in
@@ -447,7 +447,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       in
       let%bind nfc_name =
         match name with
-        | Name.({string; kind= Identifier}) -> return string
+        | Name.({string; kind= Identifier; _}) -> return string
         | _ -> return_err (Error.Name_not_found_in_type (ty, name))
       in
       let%bind idx, ty_member =

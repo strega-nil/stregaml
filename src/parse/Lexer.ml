@@ -41,13 +41,15 @@ let is_number_continue ch base =
   | base -> raise (Bug_lexer ("Invalid base: " ^ Int.to_string base))
 
 (*
-  start:
-    | _
+  <identifier-start> :=
+    | <character _>
     | xid-start
-  continue:
-    | -
-    | '
+  <identifier-continue> :=
+    | <character ->
+    | <character '>
     | xid-continue
+
+  <identifier> = {<identifier-start> <identifier-continue>*} / <keyword>
 *)
 let is_ident_start ch = ch =~ '_' || Uucp.Id.is_xid_start ch
 
@@ -56,25 +58,29 @@ let is_ident_continue_no_prime ch = ch =~ '-' || Uucp.Id.is_xid_continue ch
 let is_ident_continue ch = ch =~ '\'' || is_ident_continue_no_prime ch
 
 (*
-  start:
-    | symbol-math
-    | common operators of other languages
-      | :
-      | %
-      | +
-      | -
-      | *
-      | /
-      | \
-      | ~
-      | &
-      | |
-      | ˆ
-      | !
-      | @
-  continue:
-    | operator-start
-    | '
+  <operator-start> :=
+    | <unicode-symbol-math> (* includes =, <, > *)
+    | (* common operators of other languages *)
+      | <character :>
+      | <character %>
+      | <character +>
+      | <character ->
+      | <character *>
+      | <character />
+      | <character \>
+      | <character ~>
+      | <character &>
+      | <character |>
+      | <character ˆ>
+      | <character !>
+      | <character @>
+  <operator-continue> :=
+    | <operator-start>
+    | <character '>
+
+  <operator> :=
+    | { <operator-start> <operator-continue>* } / <operator-keyword>
+    | { <character \> <identifier> }
 *)
 let is_operator_start ch =
   let is_valid_ascii ch =
@@ -93,6 +99,9 @@ let is_operator_start ch =
     | '^' -> true
     | '!' -> true
     | '@' -> true
+    | '=' -> true (* these three are included for optimization purposes *)
+    | '<' -> true
+    | '>' -> true
     | _ -> false
   in
   if is_valid_ascii ch then true
@@ -290,7 +299,15 @@ let rec next_token lex =
               return_err (Error.Operator_including_comment_token ident)
           | _ -> return (Token.Operator ident) )
     in
-    helper [fst]
+    let%bind peek = peek_ch lex in
+    match peek with
+    | Some ch when fst =~ '\\' && is_ident_start ch -> (
+        eat_ch lex ;
+        let%bind ident = lex_ident ch lex in
+        match ident with
+        | Token.Identifier id -> return (Token.Identifier_operator id)
+        | tok -> return_err (Error.Identifier_operator_is_keyword tok) )
+    | _ -> helper [fst]
   in
   let%bind () = eat_whitespace lex in
   let%bind ch = next_ch lex in

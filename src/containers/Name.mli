@@ -1,7 +1,11 @@
-type kind = Identifier | Infix | Prefix
+type fixity = Normal | Prefix
 
-type t = {string: Nfc_string.t; kind: kind}
+(* mostly important for printing *)
 
-val to_string : t -> string
+type kind = Identifier | Operator
+
+type t = {string: Nfc_string.t; fixity: fixity; kind: kind}
+
+val to_ident_string : t -> string
 
 val equal : t -> t -> bool

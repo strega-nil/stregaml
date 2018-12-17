@@ -82,6 +82,7 @@ let is_postfix_token = function
 
 let is_infix_token = function
   | Token.Operator _ -> true
+  | Token.Identifier_operator _ -> true
   | Token.Assign -> true
   | _ -> false
 
@@ -105,17 +106,28 @@ let get_specific (parser : t) (token : Token.t) : unit result =
       let%bind tok = next_token parser in
       unexpected tok (Error.Expected.Specific token)
 
-let maybe_get_operator (parser : t) : Nfc_string.t option result =
+let maybe_get_infix_operator (parser : t) : Name.t option result =
   match%bind peek_token parser with
-  | Token.Operator op -> eat_token parser ; return (Some op)
+  | Token.Operator string ->
+      eat_token parser ;
+      let op = Name.{string; kind= Operator; fixity= Normal} in
+      return (Some op)
+  | Token.Identifier_operator string ->
+      eat_token parser ;
+      let op = Name.{string; kind= Identifier; fixity= Normal} in
+      return (Some op)
   | _ -> return None
 
-let get_operator (parser : t) : Nfc_string.t result =
-  match%bind maybe_get_operator parser with
+let get_infix_operator (parser : t) : Name.t result =
+  match%bind maybe_get_infix_operator parser with
   | Some op -> return op
   | None ->
       let%bind tok = next_token parser in
       unexpected tok Error.Expected.Operator
+
+let get_prefix_operator (parser : t) : Name.t result =
+  let%bind op = get_infix_operator parser in
+  return Name.{op with fixity= Prefix}
 
 let get_ident (parser : t) : Nfc_string.t result =
   match%bind next_token parser with
@@ -127,15 +139,17 @@ let get_name (parser : t) : Name.t result =
   | Token.Open_paren ->
       let%bind name =
         match%bind next_token parser with
-        | Token.Operator op -> return Name.{string= op; kind= Infix}
-        | Token.Keyword_prefix ->
-            let%bind op = get_operator parser in
-            return Name.{string= op; kind= Prefix}
+        | Token.Operator string ->
+            return Name.{string; kind= Operator; fixity= Normal}
+        | Token.Identifier_operator string ->
+            return Name.{string; kind= Identifier; fixity= Normal}
+        | Token.Keyword_prefix -> get_prefix_operator parser
         | tok -> unexpected tok Error.Expected.Operator
       in
       let%bind () = get_specific parser Token.Close_paren in
       return name
-  | Token.Identifier string -> return Name.{string; kind= Identifier}
+  | Token.Identifier string ->
+      return Name.{string; kind= Identifier; fixity= Normal}
   | tok -> unexpected tok Error.Expected.Name
 
 let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
@@ -229,10 +243,10 @@ let rec maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result
       in
       let%bind place = spanned_bind (parse_expression_no_infix parser) in
       return (Some (Ast.Expr.Reference {is_mut; place}))
-  | Token.Operator op, sp ->
-      eat_token parser ;
+  | Token.Operator _, sp | Token.Identifier_operator _, sp ->
+      let%bind op = get_prefix_operator parser in
       let%bind expr = spanned_bind (parse_expression_no_infix parser) in
-      if Nfc_string.equal op Ctxt_keyword.dereference then
+      if Nfc_string.equal op.Name.string Ctxt_keyword.dereference then
         return (Some (Ast.Expr.Dereference expr))
       else return (Some (Ast.Expr.Prefix_operator ((op, sp), expr)))
   | Token.Keyword_builtin, sp ->
@@ -261,7 +275,9 @@ and parse_path_expression (parser : t) : Ast.Expr.t result =
             eat_token parser ;
             helper parser ~path:((name, sp') :: path, Spanned.Span.union sp sp')
         | _ ->
-            let name = (Name.{string= name; kind= Identifier}, sp') in
+            let name =
+              (Name.{string= name; kind= Identifier; fixity= Normal}, sp')
+            in
             return (Ast.Expr.Name Ast.Expr.{path; name}) )
     | Token.Open_paren, _ ->
         let%bind name = spanned_bind (get_name parser) in
@@ -286,7 +302,9 @@ and parse_qualified_name (parser : t) : Ast.Expr.qualified_name result =
             eat_token parser ;
             helper parser ~path:((name, sp') :: path)
         | _ ->
-            let name = (Name.{string= name; kind= Identifier}, sp') in
+            let name =
+              (Name.{string= name; kind= Identifier; fixity= Normal}, sp')
+            in
             return Ast.Expr.{path; name} )
     | tok, _ -> unexpected tok Error.Expected.Path
   in
@@ -373,12 +391,15 @@ and parse_expression (parser : t) : Ast.Expr.t result =
 
 and parse_infix (parser : t) :
     (Ast.Expr.infix Spanned.t * Ast.Expr.t Spanned.t) list result =
-  let%bind tok, tok_sp = spanned_bind (next_token parser) in
-  let infix =
+  let%bind tok, tok_sp = spanned_bind (peek_token parser) in
+  let%bind infix =
     match tok with
-    | Token.Assign -> (Ast.Expr.Infix_assign, tok_sp)
-    | Token.Operator op -> (Ast.Expr.Infix_name op, tok_sp)
-    | _ -> failwith "this function was called incorrectly"
+    | Token.Assign ->
+        eat_token parser ;
+        return (Ast.Expr.Infix_assign, tok_sp)
+    | _ ->
+        let%bind op = get_infix_operator parser in
+        return (Ast.Expr.Infix_name op, tok_sp)
   in
   let%bind expr = spanned_bind (parse_expression_no_infix parser) in
   let%bind next = peek_token parser in
@@ -585,9 +606,7 @@ let parse_infix_group (parser : t) : Ast.Infix_group.t result =
   helper name None []
 
 let parse_infix_declaration (parser : t) : Ast.Infix_declaration.t result =
-  let%bind () = get_specific parser Token.Open_paren in
-  let%bind name = spanned_bind (get_operator parser) in
-  let%bind () = get_specific parser Token.Close_paren in
+  let%bind name = spanned_bind (get_name parser) in
   let%bind () = get_specific parser Token.Colon in
   let%bind group = spanned_bind (get_ident parser) in
   let%bind () = get_specific parser Token.Semicolon in

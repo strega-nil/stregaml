@@ -55,7 +55,9 @@ let to_string = function
   | Thicc_arrow -> "thick arrow `=>`"
   | Colon -> "colon `:`"
   | Double_colon -> "double colon `::`"
-  | Operator ident -> Printf.sprintf "infix operator: `%s`" (ident :> string)
+  | Operator ident -> Printf.sprintf "operator: `%s`" (ident :> string)
+  | Identifier_operator ident ->
+      Printf.sprintf "operator: `\\%s`" (ident :> string)
   | Identifier ident -> Printf.sprintf "identifier: `%s`" (ident :> string)
   | Keyword_true -> "keyword `true`"
   | Keyword_false -> "keyword `false`"

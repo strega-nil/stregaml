@@ -32,6 +32,10 @@ let to_string = function
   | Operator_including_comment_token s ->
       Printf.sprintf "operator `%s` includes a sequence of comment characters"
         (s :> string)
+  | Identifier_operator_is_keyword tok ->
+      Printf.sprintf
+        "identifier operator must be a non-keyword identifier (found `%s`)"
+        (Token.to_string tok)
   | Associativity_defined_twice name ->
       Printf.sprintf
         "Attempted to define the associativity of infix group `%s` twice"

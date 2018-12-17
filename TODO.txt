@@ -1,3 +1,5 @@
+* cleanup
+  - remove all the reimplementations of "find index of field in type"
 * recursive types
   - first - check for it
   - second - see pointers

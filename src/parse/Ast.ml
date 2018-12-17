@@ -42,12 +42,15 @@ end
 module Implementation_stmt_expr = struct
   let infix_to_string = function
     | Types.Ast_Expr.Infix_assign -> "<-"
-    | Types.Ast_Expr.Infix_name id -> (id :> string)
+    | Types.Ast_Expr.Infix_name Name.({string; kind= Operator; _}) ->
+        (string :> string)
+    | Types.Ast_Expr.Infix_name Name.({string; kind= Identifier; _}) ->
+        "\\" ^ (string :> string)
 
-  let name_to_string Types.Ast_Expr.({path; name= name, _}) =
+  let qualified_to_string Types.Ast_Expr.({path; name= name, _}) =
     let f ((id : Nfc_string.t), _) = (id :> string) in
     let path = List.map ~f path in
-    let name = path @ [Name.to_string name] in
+    let name = path @ [Name.to_ident_string name] in
     String.concat ~sep:"::" name
 
   let rec expr_to_string ?(parens = false) e ~indent =
@@ -68,9 +71,9 @@ module Implementation_stmt_expr = struct
           let {constructor= const, _; binding= binding, _} = pat in
           String.concat
             [ indent_to_string (indent + 1)
-            ; name_to_string const
+            ; qualified_to_string const
             ; "("
-            ; Name.to_string binding
+            ; Name.to_ident_string binding
             ; ") => "
             ; block_to_string ~indent:(indent + 1) block
             ; "\n" ]
@@ -91,15 +94,21 @@ module Implementation_stmt_expr = struct
           ; block_to_string thn ~indent
           ; " else "
           ; block_to_string els ~indent ]
-    | Name name -> name_to_string name
+    | Name name -> qualified_to_string name
     | Block (blk, _) -> block_to_string blk ~indent
     | Builtin ((name, _), args) ->
         let args = arg_list args in
         String.concat ["__builtin("; (name :> string); ")("; args; ")"]
     | Prefix_operator ((name, _), (expr, _)) ->
+        let name =
+          match name with
+          | Name.({string; kind= Operator; _}) -> (string :> string)
+          | Name.({string; kind= Identifier; _}) ->
+              "\\" ^ (string :> string) ^ " "
+        in
         String.concat
           [ open_paren parens
-          ; (name :> string)
+          ; name
           ; expr_to_string ~indent expr
           ; close_paren parens ]
     | Infix_list ((first, _), rest) ->
@@ -168,7 +177,7 @@ module Implementation_stmt_expr = struct
         String.concat
           [ "let "
           ; mut
-          ; Name.to_string name
+          ; Name.to_ident_string name
           ; ty
           ; " = "
           ; expr_to_string expr ~indent ]
@@ -194,7 +203,7 @@ module Func = struct
   let to_string self =
     let parameters =
       let f ((((name : Name.t), _), (ty, _)), _) =
-        String.concat [Name.to_string name; ": "; Type.to_string ty]
+        String.concat [Name.to_ident_string name; ": "; Type.to_string ty]
       in
       String.concat ~sep:", " (List.map ~f self.params)
     in
@@ -205,7 +214,7 @@ module Func = struct
     in
     String.concat
       [ "func "
-      ; Name.to_string self.name
+      ; Name.to_ident_string self.name
       ; "("
       ; parameters
       ; ")"
@@ -239,7 +248,8 @@ module Infix_declaration = struct
   include Types.Ast_Infix_declaration
 
   let to_string {name= name, _; group= group, _} =
-    String.concat ["infix ("; (name :> string); "): "; (group :> string); ";"]
+    String.concat
+      ["infix "; Name.to_ident_string name; ": "; (group :> string); ";"]
 end
 
 include Types.Ast

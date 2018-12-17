@@ -50,7 +50,7 @@ module Value = struct
         String.concat ["{ "; members; " }"]
     | Function n ->
         let name, _ = ctxt.funcs.((n :> int)) in
-        Printf.sprintf "<function %s>" (Name.to_string name)
+        Printf.sprintf "<function %s>" (Name.to_ident_string name)
 end
 
 module Expr_result = struct
@@ -152,12 +152,12 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | Expr.Bool_literal b -> Expr_result.Value (Value.Bool b)
     | Expr.Integer_literal n -> Expr_result.Value (Value.Integer n)
     | Expr.Match {cond= cond, _; arms} -> (
-        match Expr_result.to_value (eval ctxt locals cond) with
-        | Value.Variant (index, value) ->
-            let _, (code, _) = arms.(index) in
-            let locals = (Object.obj ~is_mut:false !value) :: locals in
-            eval_block ctxt locals code
-        | _ -> assert false )
+      match Expr_result.to_value (eval ctxt locals cond) with
+      | Value.Variant (index, value) ->
+          let _, (code, _) = arms.(index) in
+          let locals = Object.obj ~is_mut:false !value :: locals in
+          eval_block ctxt locals code
+      | _ -> assert false )
     | Expr.If_else {cond= cond, _; thn= thn, _; els= els, _} -> (
       match Expr_result.to_value (eval ctxt locals cond) with
       | Value.Bool true -> eval_block ctxt locals thn

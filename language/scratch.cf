@@ -5,18 +5,38 @@ type Option {
   };
 }
 
-func (prefix -)(x: Int32) -> Int32 {
+infix group Additive {
+  associativity = start;
+  precedence < Multiplicative;
+}
+
+infix group Multiplicative {
+  associativity = start;
+}
+
+infix plus: Additive;
+infix times: Multiplicative;
+
+func plus(x: Int32, y: Int32) -> Int32 {
+  __builtin(add)(x, y)
+}
+
+func times(x: Int32, y: Int32) -> Int32 {
+  __builtin(mul)(x, y)
+}
+
+func (prefix \negative)(x: Int32) -> Int32 {
   __builtin(sub)(0, x)
 }
 
 func main() -> Int32 {
-  let opt = Option::None(());
+  let opt = Option::Some(20);
   match (opt) {
     Option::Some(x) => {
-      x
+      x \plus 10 \times 3
     }
     Option::None(_unit) => {
-      -1
+      \negative 1
     }
   }
 }

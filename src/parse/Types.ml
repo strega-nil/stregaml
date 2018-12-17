@@ -26,6 +26,7 @@ and Error : sig
     | Malformed_input of string
     | Unclosed_comment
     | Operator_including_comment_token of Nfc_string.t
+    | Identifier_operator_is_keyword of Token.t
     | Malformed_number_literal
     | Associativity_defined_twice of Nfc_string.t
     | Reserved_token of Nfc_string.t
@@ -52,6 +53,7 @@ and Token : sig
     | Colon
     | Double_colon
     | Operator of Nfc_string.t
+    | Identifier_operator of Nfc_string.t
     | Identifier of Nfc_string.t
     | Keyword_true
     | Keyword_false
@@ -98,7 +100,7 @@ end =
   Ast_Type_Definition
 
 and Ast_Expr : sig
-  type infix = Infix_assign | Infix_name of Nfc_string.t
+  type infix = Infix_assign | Infix_name of Name.t
 
   type qualified_name =
     {path: Nfc_string.t Spanned.t list; name: Name.t Spanned.t}
@@ -120,7 +122,7 @@ and Ast_Expr : sig
     | Block of block Spanned.t
     | Builtin of Nfc_string.t Spanned.t * t Spanned.t list
     | Call of t Spanned.t * t Spanned.t list
-    | Prefix_operator of Nfc_string.t Spanned.t * t Spanned.t
+    | Prefix_operator of Name.t Spanned.t * t Spanned.t
     | Infix_list of t Spanned.t * (infix Spanned.t * t Spanned.t) list
     | Reference of {is_mut: bool; place: Ast_Expr.t Spanned.t}
     | Dereference of Ast_Expr.t Spanned.t
@@ -164,7 +166,7 @@ end =
   Ast_Infix_group
 
 and Ast_Infix_declaration : sig
-  type t = {name: Nfc_string.t Spanned.t; group: Nfc_string.t Spanned.t}
+  type t = {name: Name.t Spanned.t; group: Nfc_string.t Spanned.t}
 end =
   Ast_Infix_declaration
 
