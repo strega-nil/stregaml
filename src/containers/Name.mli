@@ -1,4 +1,4 @@
-type fixity = Normal | Prefix
+type fixity = Nonfix | Infix | Prefix
 
 (* mostly important for printing *)
 

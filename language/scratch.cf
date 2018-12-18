@@ -14,14 +14,14 @@ infix group Multiplicative {
   associativity = start;
 }
 
-infix plus: Additive;
-infix times: Multiplicative;
+infix (+): Additive;
+infix (\times): Multiplicative;
 
-func plus(x: Int32, y: Int32) -> Int32 {
+func (infix +)(x: Int32, y: Int32) -> Int32 {
   __builtin(add)(x, y)
 }
 
-func times(x: Int32, y: Int32) -> Int32 {
+func (infix \times)(x: Int32, y: Int32) -> Int32 {
   __builtin(mul)(x, y)
 }
 
@@ -33,7 +33,7 @@ func main() -> Int32 {
   let opt = Option::Some(20);
   match (opt) {
     Option::Some(x) => {
-      x \plus 10 \times 3
+      x + 10 \times 3
     }
     Option::None(_unit) => {
       \negative 1

@@ -1,5 +1,13 @@
 let indent_to_string indent = String.make (indent * 2) ' '
 
+let infix_name_string = function
+  | Name.({string; kind= Operator; _}) -> (string :> string)
+  | Name.({string; kind= Identifier; _}) -> "\\" ^ (string :> string)
+
+let infix_to_string = function
+  | Types.Ast_Expr.Infix_assign -> "<-"
+  | Types.Ast_Expr.Infix_name name -> infix_name_string name
+
 module Type = struct
   include Types.Ast_Type
 
@@ -40,13 +48,6 @@ module Type = struct
 end
 
 module Implementation_stmt_expr = struct
-  let infix_to_string = function
-    | Types.Ast_Expr.Infix_assign -> "<-"
-    | Types.Ast_Expr.Infix_name Name.({string; kind= Operator; _}) ->
-        (string :> string)
-    | Types.Ast_Expr.Infix_name Name.({string; kind= Identifier; _}) ->
-        "\\" ^ (string :> string)
-
   let qualified_to_string Types.Ast_Expr.({path; name= name, _}) =
     let f ((id : Nfc_string.t), _) = (id :> string) in
     let path = List.map ~f path in
@@ -249,7 +250,7 @@ module Infix_declaration = struct
 
   let to_string {name= name, _; group= group, _} =
     String.concat
-      ["infix "; Name.to_ident_string name; ": "; (group :> string); ";"]
+      ["infix ("; infix_name_string name; "): "; (group :> string); ";"]
 end
 
 include Types.Ast
