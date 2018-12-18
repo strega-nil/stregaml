@@ -6,6 +6,7 @@ module rec Error : sig
     | Type_defined_multiple_times of Nfc_string.t
     | Infix_group_not_found of Nfc_string.t
     | Infix_group_defined_multiple_times of Nfc_string.t
+    | Infix_group_recursive_precedence of Nfc_string.t * Nfc_string.t
     | Incorrect_let_type of {name: Name.t; let_ty: Type.t; expr_ty: Type.t}
     | Assignment_to_incompatible_type of {dest: Type.t; source: Type.t}
     | Assignment_to_value
@@ -39,6 +40,8 @@ module rec Error : sig
         ; op2: Cafec_Parse.Ast.Expr.infix Spanned.t }
     | Unknown_builtin of Nfc_string.t
     | Call_of_non_function of Type.t
+    | Prefix_function_wrong_arity of {name: Name.t; num_params: int}
+    | Infix_function_wrong_arity of {name: Name.t; num_params: int}
     | Defined_function_multiple_times of
         { name: Name.t
         ; original_declaration: Spanned.Span.t }

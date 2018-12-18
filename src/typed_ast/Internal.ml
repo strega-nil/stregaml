@@ -19,6 +19,7 @@ module Infix_group = struct
   type t = {associativity: associativity; precedence: precedence list}
 end
 
+(* these should really all be arrays, probably *)
 type t =
   { type_context: Type.Context.t
   ; infix_group_names: Nfc_string.t list
@@ -591,10 +592,43 @@ let add_infix_group_name (ctxt : t)
 let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
     t result =
   let module U = Untyped_ast.Infix_group in
-  let {U.associativity; U.precedence; _}, _ = group in
+  let names_len = List.length ctxt.infix_group_names in
+  let ig_len = List.length ctxt.infix_groups in
+  let rec precedence_less ig idx =
+    let rec helper = function
+      | [] -> false
+      | Infix_group.Less idx' :: _ when idx = idx' -> true
+      | Infix_group.Less idx' :: xs ->
+          let ig_idx = idx' - names_len + ig_len in
+          let prec_less =
+            if ig_idx < 0 then false
+            else
+              let ig = (List.nth_exn ctxt.infix_groups ig_idx) in
+              precedence_less ig idx
+          in
+          prec_less || helper xs
+    in
+    helper ig.Infix_group.precedence
+  in
+  let {U.associativity; U.precedence; U.name= name, _}, _ = group in
   let f (U.Less (id, _)) =
     match find_infix_group_name ctxt id with
-    | Some idx -> return (Infix_group.Less idx)
+    | Some idx ->
+        (* get the index of idx in the _current_ ctxt.infix_groups *)
+        let ig_idx = idx - names_len + ig_len in
+        let my_idx = names_len - ig_len - 1 in
+        let%bind () =
+          if ig_idx < 0 then return ()
+          else
+            let ig = List.nth_exn ctxt.infix_groups ig_idx in
+            if precedence_less ig my_idx then
+              let my_name = name in
+              let name = List.nth_exn ctxt.infix_group_names idx in
+              return_err
+                (Error.Infix_group_recursive_precedence (name, my_name))
+            else return ()
+        in
+        return (Infix_group.Less idx)
     | None -> return_err (Error.Infix_group_not_found id)
   in
   let%bind precedence = return_map ~f precedence in

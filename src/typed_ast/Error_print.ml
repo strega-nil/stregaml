@@ -20,6 +20,13 @@ let to_string err ~ctxt =
       Printf.sprintf "Infix group not found: %s" (name :> string)
   | Infix_group_defined_multiple_times name ->
       Printf.sprintf "Infix group declared multiple times: %s" (name :> string)
+  | Infix_group_recursive_precedence (fst, snd) ->
+      Printf.sprintf
+        {|Infix groups declared with recursive precedence
+  group 1: %s
+  group 2: %s|}
+        (fst :> string)
+        (snd :> string)
   | Incorrect_let_type {name; let_ty; expr_ty} ->
       Printf.sprintf
         {|Let binding of `%s` is typed incorrectly:
@@ -138,6 +145,20 @@ place is of type: `%s`|}
   | Call_of_non_function ty ->
       Printf.sprintf "Attempted to call a non-function type `%s`"
         (Type.to_string ty ~ctxt)
+  | Prefix_function_wrong_arity {name; num_params} ->
+      Printf.sprintf
+        {|Attempted to define prefix operator `%s` with invalid number of parameters.
+  expected: 1
+  found: %d|}
+        (name.Name.string :> string)
+        num_params
+  | Infix_function_wrong_arity {name; num_params} ->
+      Printf.sprintf
+        {|Attempted to define infix operator `%s` with invalid number of parameters.
+  expected: 2
+  found: %d|}
+        (name.Name.string :> string)
+        num_params
   | Defined_function_multiple_times {name; original_declaration} ->
       Printf.sprintf
         {|Defined function `%s` multiple times
