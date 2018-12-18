@@ -523,15 +523,15 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           | [] -> return ()
           | ((name, expr), _) :: xs ->
               let%bind expr = typeck_expression locals ctxt expr in
-              let ty = T.base_type expr in
+              let ety = T.base_type expr in
               let%bind idx =
                 match find_in_type_members name type_members with
                 | Some (idx, mty) ->
-                    if Type.equal mty ty then return idx
+                    if Type.equal mty ety then return idx
                     else
                       return_err
                         (Error.Record_literal_incorrect_type
-                           {field= name; field_ty= ty; member_ty= mty})
+                           {field= name; field_ty= ety; member_ty= mty})
                 | None ->
                     return_err (Error.Record_literal_extra_field (ty, name))
               in
