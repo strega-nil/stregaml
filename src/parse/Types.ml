@@ -154,7 +154,7 @@ end =
   Ast_Func
 
 and Ast_Infix_group : sig
-  type associativity = Assoc_start | Assoc_none
+  type associativity = Assoc_start | Assoc_end | Assoc_none
 
   type order = Less of Nfc_string.t Spanned.t
 

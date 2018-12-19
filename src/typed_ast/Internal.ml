@@ -12,6 +12,7 @@ end
 module Infix_group = struct
   type associativity = Untyped_ast.Infix_group.associativity =
     | Assoc_start
+    | Assoc_end
     | Assoc_none
 
   type precedence = Less of int
@@ -86,6 +87,7 @@ module Bind_order = struct
         if idx = idx2 then
           match info.T.associativity with
           | T.Assoc_start -> Some Start
+          | T.Assoc_end -> Some End
           | T.Assoc_none -> Some Unordered
         else
           let rec check_all_sub_precedences = function
@@ -603,7 +605,7 @@ let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
           let prec_less =
             if ig_idx < 0 then false
             else
-              let ig = (List.nth_exn ctxt.infix_groups ig_idx) in
+              let ig = List.nth_exn ctxt.infix_groups ig_idx in
               precedence_less ig idx
           in
           prec_less || helper xs

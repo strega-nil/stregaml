@@ -1,42 +1,45 @@
-type Option {
-  data = variant {
-    None: Unit;
-    Some: Int32;
+type Cons {
+  data = record {
+    value: Int32;
+    /* this absolutely wouldn't work in "real" café */
+    next: List;
   };
 }
 
-infix group Additive {
-  associativity = start;
-  precedence < Multiplicative;
+type List {
+  data = variant {
+    Nil: Unit;
+    Cons: Cons;
+  };
 }
 
-infix group Multiplicative {
-  associativity = start;
+infix group Cons {
+  associativity = end;
 }
-
-infix (+): Additive;
-infix (\times): Multiplicative;
+infix (:-): Cons;
+func (infix :-)(x: Int32, lst: List) -> List {
+  List::Cons(Cons::{value = x; next = lst})
+}
 
 func (infix +)(x: Int32, y: Int32) -> Int32 {
   __builtin(add)(x, y)
 }
 
-func (infix \times)(x: Int32, y: Int32) -> Int32 {
-  __builtin(mul)(x, y)
+func sum(x: List) -> Int32 {
+  match (x) {
+    List::Nil(_unit) => { 0 }
+    List::Cons(cons) => {
+      cons.value + sum(cons.next)
+    }
+  }
 }
 
-func (prefix \negative)(x: Int32) -> Int32 {
-  __builtin(sub)(0, x)
-}
+func main() -> Cons {
+  let lst = 1 :- 2 :- 3 :- 4 :- 5 :- 6 :- 7 :- 8 :- 9 :- 10 :- List::Nil(());
 
-func main() -> Int32 {
-  let opt = Option::Some(20);
-  match (opt) {
-    Option::Some(x) => {
-      x + 10 \times 3
-    }
-    Option::None(_unit) => {
-      \negative 1
-    }
+  /* hax */
+  Cons::{
+    value = sum(lst);
+    next = lst;
   }
 }

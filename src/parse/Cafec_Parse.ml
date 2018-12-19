@@ -588,7 +588,7 @@ let parse_infix_group (parser : t) : Ast.Infix_group.t result =
               return I.Assoc_start
           | Token.Identifier id when Nfc_string.equal id Ctxt_keyword.assoc_end
             ->
-              failwith "end association not yet supported"
+              return I.Assoc_end
           | Token.Identifier id
             when Nfc_string.equal id Ctxt_keyword.assoc_none ->
               return I.Assoc_none

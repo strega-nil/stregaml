@@ -231,7 +231,10 @@ module Infix_group = struct
 
   let to_string {name= name, _; associativity; precedence} =
     let associativity =
-      match associativity with Assoc_start -> "start" | Assoc_none -> "none"
+      match associativity with
+      | Assoc_start -> "start"
+      | Assoc_end -> "end"
+      | Assoc_none -> "none"
     in
     let precedence =
       let f (Less (id, _)) = "precedence < " ^ (id :> string) in
