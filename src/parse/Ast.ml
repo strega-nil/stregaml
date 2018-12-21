@@ -27,7 +27,7 @@ module Type = struct
   module Data = struct
     include Types.Ast_Type_Data
 
-    let to_string data =
+    let to_string ?name data =
       let members_to_string members =
         let f ((name, ty), _) =
           ignore (name : Nfc_string.t) ;
@@ -35,13 +35,11 @@ module Type = struct
         in
         String.concat (List.map members ~f)
       in
-      match data with
-      | Record members ->
-          let members = members_to_string members in
-          String.concat ["record {"; members; "\n  }"]
-      | Variant members ->
-          let members = members_to_string members in
-          String.concat ["variant {"; members; "\n  }"]
+      let (T {kind; members}) = data in
+      let kind = match kind with Record -> "record" | Variant -> "variant" in
+      let name = match name with Some n -> " " ^ n | None -> "" in
+      let members = members_to_string members in
+      String.concat [kind; name; " {"; members; "\n  }"]
   end
 
   module Definition = Types.Ast_Type_Definition
@@ -270,8 +268,8 @@ let to_string self =
             [ "type "
             ; (name :> string)
             ; " {\n"
-            ; "  data = "
-            ; Type.Data.to_string data
+            ; "  "
+            ; Type.Data.to_string ~name:"data" data
             ; ";\n}" ]
     in
     if List.is_empty self.types then ""

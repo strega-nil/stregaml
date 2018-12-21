@@ -10,7 +10,7 @@ module Type : sig
         include Types.Ast_Type_Data
     end
 
-    val to_string : t -> string
+    val to_string : ?name:string -> t -> string
   end
 
   module Definition = Types.Ast_Type_Definition

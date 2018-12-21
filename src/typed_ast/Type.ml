@@ -91,20 +91,18 @@ module Context = struct
         return_err (Error.Type_defined_multiple_times name)
       else
         let%bind data =
-          let members lst =
+          let typed_members lst =
             let f ((name, ty), _) =
               let%bind ty = get_ast_type ty in
               return (name, ty)
             in
             return_map ~f lst
           in
-          match def with
-          | Data.Record lst ->
-              let%bind members = members lst in
-              return (Structural.Record members)
-          | Data.Variant lst ->
-              let%bind members = members lst in
-              return (Structural.Variant members)
+          let (Data.T {kind; members}) = def in
+          let%bind members = typed_members members in
+          match kind with
+          | Data.Record -> return (Structural.Record members)
+          | Data.Variant -> return (Structural.Variant members)
         in
         user_defined.(index) <- {data} ;
         names.(index) <- ((name, name_sp), User_defined index) ;

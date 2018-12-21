@@ -1,16 +1,12 @@
-type Cons {
-  data = record {
-    value: Int32;
-    # this absolutely wouldn't work in "real" café
-    next: List;
-  };
+record type Cons {
+  value: Int32;
+  # this absolutely wouldn't work in "real" café
+  next: List;
 }
 
-type List {
-  data = variant {
-    Nil: Unit;
-    Cons: Cons;
-  };
+variant type List {
+  Nil: Unit;
+  Cons: Cons;
 }
 
 func (prefix +)(x: Int32) -> Int32 {
@@ -59,7 +55,7 @@ func main() -> Int32 {
   helper(aoc_data())
 }
 
-/* no parsing or strings, lol */
+# no parsing or strings, lol
 func aoc_data() -> List {
   +1 :- +6 :- +6 :- +2 :- +1 :- -17 :- -16 :- +10 :- +9 :- +7 :- -13 :- +10
   :- +14 :- +13 :- -8 :- +12 :- -18 :- +11 :- -8 :- -19 :- -6 :- -15 :- -6 :-

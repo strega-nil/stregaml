@@ -4,25 +4,19 @@
   (hopefully, I'll be able to implement linear types soon too!)
 }
 
-type Option {
-  data = variant {
-    None: Unit;
-    Some: Int32;
-  };
+variant type Option {
+  None: Unit;
+  Some: Int32;
 }
 
-type Cons {
-  data = record {
-    value: Int32;
-    next: &List;
-  };
+record type Cons {
+  value: Int32;
+  next: &List;
 }
 
-type List {
-  data = variant {
-    Nil: Unit;
-    Cons: Cons;
-  };
+variant type List {
+  Nil: Unit;
+  Cons: Cons;
 }
 
 func (prefix +)(x: Int32) -> Int32 {
@@ -53,15 +47,15 @@ infix (:-): Cons;
 func (infix :-)(x: Int32, lst: List) -> List {
   List::Cons(Cons::{
     value = x;
-    next = &lst; /* take advantage of the GC */
+    next = &lst; # take advantage of the GC
   })
 }
 
 type FrequencyData {
-  data = record {
+  record data {
     frequencies: List;
     change_per_revolution: Int32;
-  };
+  }
 }
 
 func frequency(aoc_data: &List, out: &mut FrequencyData) {
@@ -70,7 +64,7 @@ func frequency(aoc_data: &List, out: &mut FrequencyData) {
     List::Cons(cons) => {
       let acc = (*out).change_per_revolution + cons.value;
       (*out).change_per_revolution <- acc;
-      (*out).frequencies <- (*out).frequencies -: acc;
+      (*out).frequencies <- acc :- (*out).frequencies;
       frequency(cons.next, out)
     }
   }

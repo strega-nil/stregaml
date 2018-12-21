@@ -1,16 +1,15 @@
-type Cons {
-  data = record {
-    value: Int32;
-    # this absolutely wouldn't work in "real" café
-    next: List;
-  };
+# note: short for a type with public data and no member functions
+record type Cons {
+  value: Int32;
+  # this absolutely wouldn't work in "real" café
+  next: List;
 }
 
 type List {
-  data = variant {
+  variant data {
     Nil: Unit;
     Cons: Cons;
-  };
+  }
 }
 
 infix group Cons {

@@ -2,12 +2,18 @@ open Cafec
 module Out = Stdio.Out_channel
 module In = Stdio.In_channel
 
+type compile_style =
+  | Typecheck
+  | Interpret
+  | Compile
+
 type command_line_arguments =
-  {filename: string; print_parse_ast: bool; interpreted: bool}
+  {filename: string; print_parse_ast: bool; style: compile_style}
 
 let parse_command_line () : (command_line_arguments, string) Result.t =
   let print_parse_ast = ref false in
-  let interpreted = ref false in
+  let typeck_only = ref false in
+  let interpret = ref false in
   let error = ref None in
   let filename = ref None in
   let get_filename name =
@@ -21,8 +27,11 @@ let parse_command_line () : (command_line_arguments, string) Result.t =
       , Set print_parse_ast
       , "print the (untyped) parsed ast" )
     ; ( "--interpret"
-      , Set interpreted
-      , "interpret, instead of using the LLVM backend" ) ]
+      , Set interpret
+      , "interpret, instead of using the LLVM backend" )
+    ; ( "--typecheck-only"
+      , Set typeck_only
+      , "only typecheck, don't interpret or compile" )]
   in
   Caml.Arg.parse cmd_options get_filename "cafec [filename]" ;
   match !error with
@@ -30,10 +39,18 @@ let parse_command_line () : (command_line_arguments, string) Result.t =
   | None -> (
     match !filename with
     | Some filename ->
-        Ok
-          { filename
-          ; print_parse_ast= !print_parse_ast
-          ; interpreted= !interpreted }
+        if !typeck_only && !interpret then
+          Error "both --typecheck-only and --interpret specified"
+        else
+          let style =
+            if !typeck_only then Typecheck
+            else if !interpret then Interpret
+            else Compile
+          in
+          Ok
+            { filename
+            ; print_parse_ast= !print_parse_ast
+            ; style }
     | None -> Error "no filename specified" )
 
 let get_parse_ast args =
@@ -72,8 +89,10 @@ let interpret ty_ast _args =
 
 let main args =
   let typed_ast = get_typed_ast args in
-  if args.interpreted then interpret typed_ast args
-  else failwith "compiler backend doesn't exist yet"
+  match args.style with
+  | Typecheck -> ()
+  | Interpret -> interpret typed_ast args
+  | Compile -> failwith "compiler backend doesn't exist yet"
 
 let () =
   let args =
