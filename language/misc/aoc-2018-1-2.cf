@@ -1,8 +1,8 @@
-/*
+#{
   warning: this program is terrible, because the interpreter is terrible
   I hope to fix this in the next value update :)
   (hopefully, I'll be able to implement linear types soon too!)
-*/
+}
 
 type Option {
   data = variant {
@@ -127,7 +127,7 @@ func main() -> Int32 {
   find_first_repeat(&freq_data, freq_data.change_per_revolution)
 }
 
-/* no parsing or strings, lol */
+# no parsing or strings, lol
 func aoc_data() -> List {
   +1 :- +6 :- +6 :- +2 :- +1 :- -17 :- -16 :- +10 :- +9 :- +7 :- -13 :- +10
   :- +14 :- +13 :- -8 :- +12 :- -18 :- +11 :- -8 :- -19 :- -6 :- -15 :- -6 :-

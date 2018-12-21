@@ -92,7 +92,6 @@ let is_operator_start ch =
     | '-' -> true
     | '*' -> true
     | '/' -> true
-    | '\\' -> true
     | '~' -> true
     | '&' -> true
     | '|' -> true
@@ -143,7 +142,12 @@ let rec eat_whitespace lex =
   | Some ch when is_whitespace ch -> eat_ch lex ; eat_whitespace lex
   | Some _ | None -> return ()
 
-let lex_ident fst lex =
+(* note:
+  these three functions _do not_ do special checking on the first character
+  to call these functions without guaranteeing that the first character is valid
+  is an _error_
+*)
+let lex_ident lex =
   let rec helper lst =
     let%bind ch = peek_ch lex in
     match ch with
@@ -153,6 +157,7 @@ let lex_ident fst lex =
     | Some _ | None -> (
         let ident = Nfc_string.of_uchar_list (List.rev lst) in
         match (ident :> string) with
+        | "" -> failwith "internal lexer error"
         | "true" -> return Token.Keyword_true
         | "false" -> return Token.Keyword_false
         | "match" -> return Token.Keyword_match
@@ -175,10 +180,15 @@ let lex_ident fst lex =
         | "public" -> return_err (Error.Reserved_token ident)
         | _ -> return (Token.Identifier ident) )
   in
-  helper [fst]
+  helper []
 
-let lex_number (fst : Uchar.t) lex =
+let lex_number lex =
   let open! Char.O in
+  let%bind fst =
+    match%bind next_ch lex with
+    | Some ch when is_number_start ch -> return ch
+    | _ -> failwith "internal lexer error"
+  in
   let%bind base, buff =
     if Uchar.equal fst (Uchar.of_char '0') then
       let%bind ch = peek_ch lex in
@@ -227,102 +237,85 @@ let lex_number (fst : Uchar.t) lex =
   in
   helper buff true
 
-let rec next_token lex =
-  let lex_operator_ident fst lex =
-    let rec block_comment () =
-      let rec eat_the_things () =
-        let%bind ch = next_ch lex in
-        match ch with
-        | Some ch when ch =~ '*' -> (
-            let%bind ch = next_ch lex in
-            match ch with
-            | Some ch when ch =~ '/' -> return ()
-            | _ -> eat_the_things () )
-        | Some ch when ch =~ '/' -> (
-            let%bind ch = next_ch lex in
-            match ch with
-            | Some ch when ch =~ '*' ->
-                let%bind () = block_comment () in
-                eat_the_things ()
-            | _ -> eat_the_things () )
-        | Some _ -> eat_the_things ()
-        | None -> return_err Error.Unclosed_comment
-      in
-      eat_the_things ()
-    in
-    let line_comment () =
-      let rec eat_the_things () =
-        let%bind ch = next_ch lex in
-        match ch with
-        | Some ch when ch =~ '\n' -> return ()
-        | None -> return ()
-        | Some _ -> eat_the_things ()
-      in
-      eat_the_things ()
-    in
-    let includes_comment_token s =
-      let is_invalid = function
-        | '*', '/' -> true
-        | '/', '/' -> true
-        | '/', '*' -> true
-        | _ -> false
-      in
-      let rec helper s idx =
-        if String.length s > idx + 1 then
-          if is_invalid (s.[idx], s.[idx + 1]) then true else helper s (idx + 1)
-        else false
-      in
-      helper s 0
-    in
-    let rec helper lst =
-      let%bind ch = peek_ch lex in
-      match ch with
-      | Some ch when is_operator_continue ch ->
-          eat_ch lex ;
-          helper (ch :: lst)
-      | Some _ | None -> (
-          let ident = Nfc_string.of_uchar_list (List.rev lst) in
-          match (ident :> string) with
-          | "/*" ->
-              let%bind () = block_comment () in
-              next_token lex
-          | "//" ->
-              let%bind () = line_comment () in
-              next_token lex
-          | ":" -> return Token.Colon
-          | "<-" -> return Token.Assign
-          | "->" -> return Token.Arrow
-          | "=>" -> return Token.Thicc_arrow
-          | "::" -> return Token.Double_colon
-          | "\\" -> return_err (Error.Reserved_token ident)
-          | op when includes_comment_token op ->
-              return_err (Error.Operator_including_comment_token ident)
-          | _ -> return (Token.Operator ident) )
-    in
-    let%bind peek = peek_ch lex in
-    match peek with
-    | Some ch when fst =~ '\\' && is_ident_start ch -> (
+let lex_operator lex =
+  let rec helper lst =
+    let%bind ch = peek_ch lex in
+    match ch with
+    | Some ch when is_operator_continue ch ->
         eat_ch lex ;
-        let%bind ident = lex_ident ch lex in
-        match ident with
-        | Token.Identifier id -> return (Token.Identifier_operator id)
-        | tok -> return_err (Error.Identifier_operator_is_keyword tok) )
-    | _ -> helper [fst]
+        helper (ch :: lst)
+    | Some _ | None -> (
+        let ident = Nfc_string.of_uchar_list (List.rev lst) in
+        match (ident :> string) with
+        | "" -> failwith "internal lexer error"
+        | ":" -> return Token.Colon
+        | "<-" -> return Token.Assign
+        | "->" -> return Token.Arrow
+        | "=>" -> return Token.Thicc_arrow
+        | "::" -> return Token.Double_colon
+        | _ -> return (Token.Operator ident) )
   in
+  helper []
+
+let rec next_token lex =
   let%bind () = eat_whitespace lex in
-  let%bind ch = next_ch lex in
+  let single_char_tok tok = eat_ch lex ; return tok in
+  let%bind ch = peek_ch lex in
   match ch with
-  | Some ch when ch =~ '(' -> return Token.Open_paren
-  | Some ch when ch =~ ')' -> return Token.Close_paren
-  | Some ch when ch =~ '{' -> return Token.Open_brace
-  | Some ch when ch =~ '}' -> return Token.Close_brace
-  | Some ch when ch =~ '[' -> return Token.Open_square
-  | Some ch when ch =~ ']' -> return Token.Close_square
-  | Some ch when ch =~ ';' -> return Token.Semicolon
-  | Some ch when ch =~ ',' -> return Token.Comma
-  | Some ch when ch =~ '.' -> return Token.Dot
-  | Some ch when is_ident_start ch -> lex_ident ch lex
-  | Some ch when is_operator_start ch -> lex_operator_ident ch lex
-  | Some ch when is_number_start ch -> lex_number ch lex
+  | Some ch when ch =~ '(' -> single_char_tok Token.Open_paren
+  | Some ch when ch =~ ')' -> single_char_tok Token.Close_paren
+  | Some ch when ch =~ '{' -> single_char_tok Token.Open_brace
+  | Some ch when ch =~ '}' -> single_char_tok Token.Close_brace
+  | Some ch when ch =~ '[' -> single_char_tok Token.Open_square
+  | Some ch when ch =~ ']' -> single_char_tok Token.Close_square
+  | Some ch when ch =~ ';' -> single_char_tok Token.Semicolon
+  | Some ch when ch =~ ',' -> single_char_tok Token.Comma
+  | Some ch when ch =~ '.' -> single_char_tok Token.Dot
+  | Some ch when ch =~ '#' -> (
+      eat_ch lex ;
+      let rec block_comment () =
+        let rec eat_the_things () =
+          let%bind ch = next_ch lex in
+          match ch with
+          | Some ch when ch =~ '}' -> return ()
+          | Some ch when ch =~ '{' ->
+              let%bind () = block_comment () in
+              eat_the_things ()
+          | Some _ -> eat_the_things ()
+          | None -> return_err Error.Unclosed_comment
+        in
+        eat_the_things ()
+      in
+      let line_comment () =
+        let rec eat_the_things () =
+          let%bind ch = next_ch lex in
+          match ch with
+          | Some ch when ch =~ '\n' || ch =~ '\r' -> return ()
+          | None -> return ()
+          | Some _ -> eat_the_things ()
+        in
+        eat_the_things ()
+      in
+      match%bind peek_ch lex with
+      | Some ch when ch =~ '{' ->
+          eat_ch lex ;
+          let%bind () = block_comment () in
+          next_token lex
+      | Some _ ->
+          let%bind () = line_comment () in
+          next_token lex
+      | None -> return Token.Eof )
+  | Some ch when ch =~ '\\' -> (
+      eat_ch lex ;
+      match%bind peek_ch lex with
+      | Some ch when is_ident_start ch -> (
+          let%bind ident = lex_ident lex in
+          match ident with
+          | Token.Identifier id -> return (Token.Identifier_operator id)
+          | tok -> return_err (Error.Identifier_operator_is_keyword tok) )
+      | ch -> return_err (Error.Identifier_operator_start_without_ident ch) )
+  | Some ch when is_ident_start ch -> lex_ident lex
+  | Some ch when is_operator_start ch -> lex_operator lex
+  | Some ch when is_number_start ch -> lex_number lex
   | Some ch -> return_err (Error.Unrecognized_character ch)
   | None -> return Token.Eof

@@ -25,8 +25,8 @@ and Error : sig
   type t =
     | Malformed_input of string
     | Unclosed_comment
-    | Operator_including_comment_token of Nfc_string.t
     | Identifier_operator_is_keyword of Token.t
+    | Identifier_operator_start_without_ident of Uchar.t option
     | Malformed_number_literal
     | Associativity_defined_twice of Nfc_string.t
     | Reserved_token of Nfc_string.t

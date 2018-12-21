@@ -1,7 +1,7 @@
 type Cons {
   data = record {
     value: Int32;
-    /* this absolutely wouldn't work in "real" café */
+    # this absolutely wouldn't work in "real" café
     next: List;
   };
 }
@@ -36,8 +36,7 @@ func sum(x: List) -> Int32 {
 
 func main() -> Cons {
   let lst = 1 :- 2 :- 3 :- 4 :- 5 :- 6 :- 7 :- 8 :- 9 :- 10 :- List::Nil(());
-
-  /* hax */
+  # hax
   Cons::{
     value = sum(lst);
     next = lst;

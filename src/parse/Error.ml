@@ -29,13 +29,18 @@ include Types.Error
 let to_string = function
   | Malformed_input s -> String.concat ["malformed utf-8: `"; s; "'"]
   | Malformed_number_literal -> "malformed number literal"
-  | Operator_including_comment_token s ->
-      Printf.sprintf "operator `%s` includes a sequence of comment characters"
-        (s :> string)
   | Identifier_operator_is_keyword tok ->
       Printf.sprintf
         "identifier operator must be a non-keyword identifier (found `%s`)"
         (Token.to_string tok)
+  | Identifier_operator_start_without_ident None ->
+      "`\\` followed by EOF; expected an identifier"
+  | Identifier_operator_start_without_ident (Some ch) ->
+      Printf.sprintf
+        "`\\` followed by a character that cannot start an identifier: `%s` \
+         (`%d`)"
+        (Nfc_string.uchar_to_string ch)
+        (Uchar.to_scalar ch)
   | Associativity_defined_twice name ->
       Printf.sprintf
         "Attempted to define the associativity of infix group `%s` twice"

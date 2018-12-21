@@ -1,7 +1,7 @@
 type Cons {
   data = record {
     value: Int32;
-    /* this absolutely wouldn't work in "real" café */
+    # this absolutely wouldn't work in "real" café
     next: List;
   };
 }
