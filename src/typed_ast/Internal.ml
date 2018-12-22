@@ -6,28 +6,57 @@ module Local = Ast.Expr.Local
 module Binding = Ast.Binding
 
 module Function_declaration = struct
-  type t = {name: Name.t; params: Binding.t list; ret_ty: Type.t}
+  type t =
+    | Declaration : {name: Name.t; params: Binding.t list; ret_ty: Type.t} -> t
+
+  let name (Declaration {name; _}) = name
+
+  let params (Declaration {params; _}) = params
+
+  let ret_ty (Declaration {ret_ty; _}) = ret_ty
 end
 
 module Infix_group = struct
   type associativity = Untyped_ast.Infix_group.associativity =
-    | Assoc_start
-    | Assoc_end
-    | Assoc_none
+    | Assoc_start : associativity
+    | Assoc_end : associativity
+    | Assoc_none : associativity
 
-  type precedence = Less of int
+  type precedence = Less : int -> precedence
 
-  type t = {associativity: associativity; precedence: precedence list}
+  type t =
+    | Infix_group :
+        { associativity: associativity
+        ; precedence: precedence list }
+        -> t
+
+  let associativity (Infix_group {associativity; _}) = associativity
+
+  let precedence (Infix_group {precedence; _}) = precedence
 end
 
 (* these should really all be arrays, probably *)
 type t =
-  { type_context: Type.Context.t
-  ; infix_group_names: Nfc_string.t list
-  ; infix_groups: Infix_group.t list
-  ; infix_decls: (Name.t * int) list
-  ; function_context: Function_declaration.t Spanned.t list
-  ; function_definitions: Expr.block Spanned.t list }
+  | Context :
+      { type_context: Type.Context.t
+      ; infix_group_names: Nfc_string.t list
+      ; infix_groups: Infix_group.t list
+      ; infix_decls: (Name.t * int) list
+      ; function_context: Function_declaration.t Spanned.t list
+      ; function_definitions: Expr.Block.t Spanned.t list }
+      -> t
+
+let type_context (Context r) = r.type_context
+
+let infix_group_names (Context r) = r.infix_group_names
+
+let infix_groups (Context r) = r.infix_groups
+
+let infix_decls (Context r) = r.infix_decls
+
+let function_context (Context r) = r.function_context
+
+let function_definitions (Context r) = r.function_definitions
 
 type 'a result = ('a, Error.t) Spanned.Result.t
 
@@ -40,12 +69,13 @@ module Functions : sig
     -> int
     -> Function_declaration.t Spanned.t
 
-  val expr_by_index : Expr.block Spanned.t list -> int -> Expr.block Spanned.t
+  val expr_by_index :
+    Expr.Block.t Spanned.t list -> int -> Expr.Block.t Spanned.t
 end = struct
   let index_by_name ctxt search =
+    let module D = Function_declaration in
     let rec helper n = function
-      | ({Function_declaration.name; _}, _) :: _ when Name.equal name search ->
-          Some n
+      | (D.Declaration {name; _}, _) :: _ when Name.equal name search -> Some n
       | _ :: names -> helper (n + 1) names
       | [] -> None
     in
@@ -78,14 +108,14 @@ module Bind_order = struct
     let module T = Infix_group in
     let get_infix_group ctxt op =
       let f (name, _) = Name.equal op name in
-      match List.find ~f ctxt.infix_decls with
-      | Some (_, idx) -> Some (idx, List.nth_exn ctxt.infix_groups idx)
+      match List.find ~f (infix_decls ctxt) with
+      | Some (_, idx) -> Some (idx, List.nth_exn (infix_groups ctxt) idx)
       | None -> None
     in
     let order_named ctxt op1 op2 =
       let rec order_infix_groups idx info idx2 =
         if idx = idx2 then
-          match info.T.associativity with
+          match T.associativity info with
           | T.Assoc_start -> Some Start
           | T.Assoc_end -> Some End
           | T.Assoc_none -> Some Unordered
@@ -93,7 +123,7 @@ module Bind_order = struct
           let rec check_all_sub_precedences = function
             | [] -> None
             | T.Less idx :: xs -> (
-                let info = List.nth_exn ctxt.infix_groups idx in
+                let info = List.nth_exn (infix_groups ctxt) idx in
                 (*
                   note: since ig < ig2, this means that no matter what,
                   ig binds looser than ig2
@@ -102,7 +132,7 @@ module Bind_order = struct
                 | Some _ -> Some End
                 | None -> check_all_sub_precedences xs )
           in
-          check_all_sub_precedences info.T.precedence
+          check_all_sub_precedences (T.precedence info)
       in
       let order_infix_groups_comm (idx1, info1) (idx2, info2) =
         match order_infix_groups idx1 info1 idx2 with
@@ -126,12 +156,14 @@ end
 let find_local name (lst : Binding.t list) : Local.t option =
   let name, _ = name in
   let f index binding =
-    let name', _ = binding.Binding.name in
-    if Name.equal name' name then Some Local.{binding; index} else None
+    let name', _ = Binding.name binding in
+    if Name.equal name' name then Some (Local.Local {binding; index}) else None
   in
   List.find_mapi ~f lst
 
-let value_type ty = Ast.Expr.Type.{category= Value; ty}
+let value_type ty =
+  let module T = Ast.Expr.Type in
+  T.Type {category= T.Value; ty}
 
 let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   let module U = Untyped_ast in
@@ -146,13 +178,12 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
           return ((T.Stmt.Expression e, sp) :: xs, expr_locals)
       | U.Stmt.Let {name; is_mut; ty; expr} ->
           let%bind expr = spanned_bind (typeck_expression locals ctxt expr) in
-          let T.Expr.({ty= expr_ty; _}), _ = expr in
-          let T.Expr.Type.({ty= expr_ty; _}) = expr_ty in
+          let expr_ty = T.Expr.base_type_sp expr in
           let%bind ty =
             match ty with
             | None -> return expr_ty
             | Some ty ->
-                let%bind ty = Type.of_untyped ty ~ctxt:ctxt.type_context in
+                let%bind ty = Type.of_untyped ty ~ctxt:(type_context ctxt) in
                 if Type.equal expr_ty ty then return ty
                 else
                   let name, _ = name in
@@ -160,12 +191,12 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
                     (Error.Incorrect_let_type {name; let_ty= ty; expr_ty})
           in
           let mutability = if is_mut then Type.Mutable else Type.Immutable in
-          let binding = Binding.{name; mutability; ty} in
+          let binding = Binding.Binding {name; mutability; ty} in
           let locals = binding :: locals in
           let%bind xs, expr_locals = typeck_stmts locals xs in
           return ((T.Stmt.Let {binding; expr}, sp) :: xs, expr_locals) )
   in
-  let U.Expr.({stmts; expr}), sp = unt_blk in
+  let U.Expr.Block.Block {stmts; expr}, sp = unt_blk in
   let%bind stmts, locals = typeck_stmts locals stmts in
   let%bind expr =
     match expr with
@@ -174,7 +205,7 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
         return (Some e)
     | None -> return None
   in
-  (Ok T.Expr.{stmts; expr}, sp)
+  (Ok (T.Expr.Block.Block {stmts; expr}), sp)
 
 and typeck_call callee args =
   let module T = Ast.Expr in
@@ -194,7 +225,7 @@ and typeck_call callee args =
                {expected= params; found= List.map ~f:T.base_type_sp args})
     | ty -> return_err (Error.Call_of_non_function ty)
   in
-  return T.{variant= Call (callee, args); ty= value_type ret_ty}
+  return (T.Expr {variant= T.Call (callee, args); ty= value_type ret_ty})
 
 and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
   let module U = Untyped_ast.Expr in
@@ -203,7 +234,9 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
     match op with
     | U.Infix_assign, _ -> (
         let source, dest = (e1, e0) in
-        let T.Type.({category= dest_cat; ty= dest_ty}) = T.full_type_sp dest in
+        let (T.Type.Type {category= dest_cat; ty= dest_ty}) =
+          T.full_type_sp dest
+        in
         let source_ty = T.base_type_sp source in
         if not (Type.equal dest_ty source_ty) then
           return_err
@@ -216,10 +249,10 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
               return_err Error.Assignment_to_immutable_place
           | T.Type.Place {mutability= Type.Mutable} ->
               let ty = value_type (Type.Builtin Type.Unit) in
-              return T.{variant= Assign {dest; source}; ty} )
+              return (T.Expr {variant= T.Assign {dest; source}; ty}) )
     | U.Infix_name name, sp ->
         let name = (name, sp) in
-        let name = (U.Name U.{path= []; name}, sp) in
+        let name = (U.Name (U.Qualified {path= []; name}), sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
         typeck_call callee [e0; e1]
   in
@@ -251,18 +284,18 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   match unt_expr with
   | U.Unit_literal ->
       let ty = value_type (Type.Builtin Type.Unit) in
-      return T.{variant= Unit_literal; ty}
+      return (T.Expr {variant= T.Unit_literal; ty})
   | U.Bool_literal b ->
       let ty = value_type (Type.Builtin Type.Bool) in
-      return T.{variant= Bool_literal b; ty}
+      return (T.Expr {variant= T.Bool_literal b; ty})
   | U.Integer_literal i ->
       let ty = value_type (Type.Builtin Type.Int32) in
-      return T.{variant= Integer_literal i; ty}
+      return (T.Expr {variant= T.Integer_literal i; ty})
   | U.Match {cond; arms= parse_arms} ->
       let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
       let cond_ty = T.base_type_sp cond in
       let%bind variants =
-        match Type.structural cond_ty ~ctxt:ctxt.type_context with
+        match Type.structural cond_ty ~ctxt:(type_context ctxt) with
         | Type.Structural.Variant variants -> return variants
         | _ -> return_err (Error.Match_non_variant_type cond_ty)
       in
@@ -270,24 +303,24 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let arms_some = Array.create ~len:variants_len false in
       let arms =
         let ty = Type.Builtin Type.Unit in
-        let blk = T.{stmts= []; expr= None} in
+        let blk = T.Block.Block {stmts= []; expr= None} in
         Array.create ~len:variants_len (ty, (blk, Spanned.Span.made_up))
       in
       let arms_ty = ref None in
       let%bind () =
         let insert_arm pat blk =
-          let U.({constructor= constructor, _; binding}) = pat in
+          let (U.Pattern {constructor= constructor, _; binding}) = pat in
           let%bind cty, (cname_name, _) =
-            match constructor.U.path with
+            match U.qualified_path constructor with
             | [(ty_name, sp)] ->
                 let ty = (Untyped_ast.Type.Named ty_name, sp) in
-                let%bind ty = Type.of_untyped ty ~ctxt:ctxt.type_context in
-                return (ty, constructor.U.name)
-            | _ -> failwith "paths with size > 1 not supported"
+                let%bind ty = Type.of_untyped ty ~ctxt:(type_context ctxt) in
+                return (ty, U.qualified_name constructor)
+            | _ -> failwith "paths with size <> 1 not supported"
           in
           let%bind cname =
             match cname_name with
-            | Name.({string; kind= Identifier; _}) -> return string
+            | Name.Name {string; kind= Name.Identifier; _} -> return string
             | _ -> return_err (Error.Name_not_found_in_type (cty, cname_name))
           in
           let%bind () =
@@ -309,16 +342,16 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
             else return ()
           in
           let binding =
-            Ast.Binding.
+            Ast.Binding.Binding
               {name= binding; mutability= Type.Immutable; ty= bind_ty}
           in
           let locals = binding :: locals in
           let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
           let%bind () =
             match !arms_ty with
-            | None -> return (arms_ty := Some (T.block_base_type_sp blk))
+            | None -> return (arms_ty := Some (T.Block.base_type_sp blk))
             | Some ty ->
-                let arm_ty = T.block_base_type_sp blk in
+                let arm_ty = T.Block.base_type_sp blk in
                 if Type.equal arm_ty ty then return ()
                 else
                   return_err
@@ -345,21 +378,19 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
             (* technically should be bottom, but _shrug_ *)
             value_type (Type.Builtin Type.Unit)
       in
-      return T.{variant; ty}
+      return (T.Expr {variant; ty})
   | U.If_else {cond; thn; els} -> (
       let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
       match T.base_type_sp cond with
       | Type.Builtin Type.Bool ->
           let%bind thn = spanned_bind (typeck_block locals ctxt thn) in
           let%bind els = spanned_bind (typeck_block locals ctxt els) in
-          let typeof (e, _) =
-            Option.value_map ~f:T.base_type_sp
-              ~default:(Type.Builtin Type.Unit) e.T.expr
-          in
-          let thn_ty = typeof thn in
-          let els_ty = typeof els in
+          let thn_ty = T.Block.base_type_sp thn in
+          let els_ty = T.Block.base_type_sp els in
           if Type.equal thn_ty els_ty then
-            return T.{variant= If_else {cond; thn; els}; ty= value_type thn_ty}
+            return
+              (T.Expr
+                 {variant= T.If_else {cond; thn; els}; ty= value_type thn_ty})
           else
             return_err (Error.If_branches_of_differing_type (thn_ty, els_ty))
       | ty -> return_err (Error.If_non_bool ty) )
@@ -385,20 +416,24 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       match (name :> string) with
       | "less_eq" ->
           return
-            { T.variant= T.Builtin (T.Builtin.Less_eq (arg1, arg2))
-            ; T.ty= value_type (Type.Builtin Type.Bool) }
+            (T.Expr
+               { variant= T.Builtin (T.Builtin.Less_eq (arg1, arg2))
+               ; ty= value_type (Type.Builtin Type.Bool) })
       | "add" ->
           return
-            { T.variant= T.Builtin (T.Builtin.Add (arg1, arg2))
-            ; T.ty= value_type (Type.Builtin Type.Int32) }
+            (T.Expr
+               { variant= T.Builtin (T.Builtin.Add (arg1, arg2))
+               ; ty= value_type (Type.Builtin Type.Int32) })
       | "sub" ->
           return
-            { T.variant= T.Builtin (T.Builtin.Sub (arg1, arg2))
-            ; T.ty= value_type (Type.Builtin Type.Int32) }
+            (T.Expr
+               { variant= T.Builtin (T.Builtin.Sub (arg1, arg2))
+               ; ty= value_type (Type.Builtin Type.Int32) })
       | "mul" ->
           return
-            { T.variant= T.Builtin (T.Builtin.Mul (arg1, arg2))
-            ; T.ty= value_type (Type.Builtin Type.Int32) }
+            (T.Expr
+               { variant= T.Builtin (T.Builtin.Mul (arg1, arg2))
+               ; ty= value_type (Type.Builtin Type.Int32) })
       | _ -> return_err (Error.Unknown_builtin name) )
   | U.Call (callee, args) ->
       let%bind callee = spanned_bind (typeck_expression locals ctxt callee) in
@@ -407,50 +442,50 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       typeck_call callee args
   | U.Prefix_operator ((name, sp), expr) ->
       let name = (name, sp) in
-      let name = (U.Name U.{path= []; name}, sp) in
+      let name = (U.Name (U.Qualified {path= []; name}), sp) in
       let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
       let%bind arg = spanned_bind (typeck_expression locals ctxt expr) in
       typeck_call callee [arg]
   | U.Infix_list (first, rest) ->
       let%bind first = spanned_bind (typeck_expression locals ctxt first) in
       typeck_infix_list locals ctxt first rest
-  | U.Name U.({path= []; name}) -> (
+  | U.Name (U.Qualified {path= []; name}) -> (
     match find_local name locals with
     | Some loc ->
-        let Binding.({ty; mutability; _}) = loc.Local.binding in
-        let ty = T.Type.{ty; category= Place {mutability}} in
-        return T.{variant= Local loc; ty}
+        let (Binding.Binding {ty; mutability; _}) = Local.binding loc in
+        let ty = T.Type.Type {ty; category= T.Type.Place {mutability}} in
+        return (T.Expr {variant= T.Local loc; ty})
     | None -> (
         let name, _ = name in
-        match Functions.index_by_name ctxt.function_context name with
+        match Functions.index_by_name (function_context ctxt) name with
         | None -> return_err (Error.Name_not_found name)
         | Some idx ->
             let ty =
               let decl, _ =
-                Functions.decl_by_index ctxt.function_context idx
+                Functions.decl_by_index (function_context ctxt) idx
               in
               let params =
-                let f Binding.({ty; _}) = ty in
-                List.map ~f decl.Function_declaration.params
+                let f (Binding.Binding {ty; _}) = ty in
+                List.map ~f (Function_declaration.params decl)
               in
-              let ret_ty = decl.Function_declaration.ret_ty in
+              let ret_ty = Function_declaration.ret_ty decl in
               value_type (Type.Builtin (Type.Function {params; ret_ty}))
             in
-            return T.{variant= Global_function idx; ty} ) )
-  | U.Name U.({path= [ty_name]; name= name, _}) ->
+            return (T.Expr {variant= T.Global_function idx; ty}) ) )
+  | U.Name (U.Qualified {path= [ty_name]; name= name, _}) ->
       let%bind ty =
         let ty_name, sp = ty_name in
         let ty = (Untyped_ast.Type.Named ty_name, sp) in
-        Type.of_untyped ty ~ctxt:ctxt.type_context
+        Type.of_untyped ty ~ctxt:(type_context ctxt)
       in
       let%bind type_members =
-        match Type.structural ty ~ctxt:ctxt.type_context with
+        match Type.structural ty ~ctxt:(type_context ctxt) with
         | Type.Structural.Variant members -> return members
         | _ -> return_err (Error.Name_not_found_in_type (ty, name))
       in
       let%bind nfc_name =
         match name with
-        | Name.({string; kind= Identifier; _}) -> return string
+        | Name.Name {string; kind= Name.Identifier; _} -> return string
         | _ -> return_err (Error.Name_not_found_in_type (ty, name))
       in
       let%bind idx, ty_member =
@@ -463,47 +498,46 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         helper 0 type_members
       in
       let ty = Type.(Builtin (Function {params= [ty_member]; ret_ty= ty})) in
-      return T.{variant= Constructor (ty, idx); ty= value_type ty}
+      return (T.Expr {variant= T.Constructor (ty, idx); ty= value_type ty})
   | U.Name _ -> failwith "paths with size > 1 not supported"
   | U.Block blk ->
       let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
-      let ty =
-        match blk with
-        | T.({expr= Some ({ty; _}, _); _}), _ -> ty
-        | _ -> value_type (Type.Builtin Type.Unit)
-      in
-      return T.{variant= Block blk; ty}
+      let ty = T.Block.full_type_sp blk in
+      return (T.Expr {variant= T.Block blk; ty})
   | U.Reference {is_mut; place} ->
       let%bind place = spanned_bind (typeck_expression locals ctxt place) in
       let mutability = if is_mut then Type.Mutable else Type.Immutable in
       let pointee_ty = T.full_type_sp place in
       let%bind ty =
-        match pointee_ty with
-        | T.Type.({category= Value; _}) ->
+        match T.Type.category pointee_ty with
+        | T.Type.Value ->
             return_err (Error.Reference_taken_to_value mutability)
-        | T.Type.({category= Place {mutability= pmut}; ty= pointee}) -> (
-          match (mutability, pmut) with
-          | Type.Immutable, _ | Type.Mutable, Type.Mutable ->
-              return
-                (value_type
-                   (Type.Builtin (Type.Reference {mutability; pointee})))
-          | Type.Mutable, Type.Immutable ->
-              return_err Error.Mutable_reference_taken_to_immutable_place )
+        | T.Type.Place {mutability= pmut} -> (
+            let pointee = T.Type.ty pointee_ty in
+            match (mutability, pmut) with
+            | Type.Immutable, _ | Type.Mutable, Type.Mutable ->
+                return
+                  (value_type
+                     (Type.Builtin (Type.Reference {mutability; pointee})))
+            | Type.Mutable, Type.Immutable ->
+                return_err Error.Mutable_reference_taken_to_immutable_place )
       in
-      return T.{variant= Reference {mutability; place}; ty}
+      return (T.Expr {variant= T.Reference {mutability; place}; ty})
   | U.Dereference value -> (
       let%bind value = spanned_bind (typeck_expression locals ctxt value) in
       match T.base_type_sp value with
       | Type.Builtin (Type.Reference {mutability; pointee}) ->
-          let ty = T.Type.{category= Place {mutability}; ty= pointee} in
-          return T.{variant= Dereference value; ty}
+          let ty =
+            T.Type.Type {category= T.Type.Place {mutability}; ty= pointee}
+          in
+          return (T.Expr {variant= T.Dereference value; ty})
       | ty -> return_err (Error.Dereference_of_non_reference ty) )
   | U.Record_literal {ty; members} ->
       let%bind ty, ty_sp =
-        spanned_bind (Type.of_untyped ty ~ctxt:ctxt.type_context)
+        spanned_bind (Type.of_untyped ty ~ctxt:(type_context ctxt))
       in
       let%bind type_members =
-        match Type.structural ty ~ctxt:ctxt.type_context with
+        match Type.structural ty ~ctxt:(type_context ctxt) with
         | Type.Structural.Record members -> return members
         | _ -> return_err (Error.Record_literal_non_record_type ty)
       in
@@ -558,44 +592,47 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
             return_err (Error.Record_literal_missing_field (ty, name))
       in
       return
-        T.
-          { variant= Record_literal {ty= (ty, ty_sp); members= members_typed}
-          ; ty= value_type ty }
+        (T.Expr
+           { variant= T.Record_literal {ty= (ty, ty_sp); members= members_typed}
+           ; ty= value_type ty })
   | U.Record_access (expr, member) ->
       let%bind expr = spanned_bind (typeck_expression locals ctxt expr) in
       let ety = T.full_type_sp expr in
       let%bind idx, ty =
-        let T.Type.({category= ecat; ty= ebty}) = ety in
-        match Type.structural ebty ~ctxt:ctxt.type_context with
+        let (T.Type.Type {category= ecat; ty= ebty}) = ety in
+        match Type.structural ebty ~ctxt:(type_context ctxt) with
         | Type.Structural.Record members -> (
             let f _ (n, _) = Nfc_string.equal n member in
             match List.findi ~f members with
-            | Some (idx, (_, ty)) -> return (idx, T.Type.{category= ecat; ty})
+            | Some (idx, (_, ty)) ->
+                return (idx, T.Type.Type {category= ecat; ty})
             | None ->
                 return_err (Error.Record_access_non_member (ebty, member)) )
         | _ -> return_err (Error.Record_access_non_record_type (ebty, member))
       in
-      return T.{variant= Record_access (expr, idx); ty}
+      return (T.Expr {variant= T.Record_access (expr, idx); ty})
 
 let find_infix_group_name ctxt id =
   let f _ name = Nfc_string.equal id name in
-  match List.findi ~f ctxt.infix_group_names with
+  match List.findi ~f (infix_group_names ctxt) with
   | Some (i, _) -> Some i
   | None -> None
 
 let add_infix_group_name (ctxt : t)
     (group : Untyped_ast.Infix_group.t Spanned.t) : t result =
   let module U = Untyped_ast.Infix_group in
-  let {U.name= name, _; _}, _ = group in
+  let U.Infix_group {name= name, _; _}, _ = group in
+  let (Context r) = ctxt in
   match find_infix_group_name ctxt name with
   | Some _ -> return_err (Error.Infix_group_defined_multiple_times name)
-  | None -> return {ctxt with infix_group_names= name :: ctxt.infix_group_names}
+  | None ->
+      return (Context {r with infix_group_names= name :: r.infix_group_names})
 
 let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
     t result =
   let module U = Untyped_ast.Infix_group in
-  let names_len = List.length ctxt.infix_group_names in
-  let ig_len = List.length ctxt.infix_groups in
+  let names_len = List.length (infix_group_names ctxt) in
+  let ig_len = List.length (infix_groups ctxt) in
   let rec precedence_less ig idx =
     let rec helper = function
       | [] -> false
@@ -605,14 +642,14 @@ let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
           let prec_less =
             if ig_idx < 0 then false
             else
-              let ig = List.nth_exn ctxt.infix_groups ig_idx in
+              let ig = List.nth_exn (infix_groups ctxt) ig_idx in
               precedence_less ig idx
           in
           prec_less || helper xs
     in
-    helper ig.Infix_group.precedence
+    helper (Infix_group.precedence ig)
   in
-  let {U.associativity; U.precedence; U.name= name, _}, _ = group in
+  let U.Infix_group {associativity; precedence; name= name, _}, _ = group in
   let f (U.Less (id, _)) =
     match find_infix_group_name ctxt id with
     | Some idx ->
@@ -622,10 +659,10 @@ let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
         let%bind () =
           if ig_idx < 0 then return ()
           else
-            let ig = List.nth_exn ctxt.infix_groups ig_idx in
+            let ig = List.nth_exn (infix_groups ctxt) ig_idx in
             if precedence_less ig my_idx then
               let my_name = name in
-              let name = List.nth_exn ctxt.infix_group_names idx in
+              let name = List.nth_exn (infix_group_names ctxt) idx in
               return_err
                 (Error.Infix_group_recursive_precedence (name, my_name))
             else return ()
@@ -634,111 +671,115 @@ let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
     | None -> return_err (Error.Infix_group_not_found id)
   in
   let%bind precedence = return_map ~f precedence in
-  let group = Infix_group.{associativity; precedence} in
-  return {ctxt with infix_groups= group :: ctxt.infix_groups}
+  let group = Infix_group.Infix_group {associativity; precedence} in
+  let (Context r) = ctxt in
+  return (Context {r with infix_groups= group :: r.infix_groups})
 
 let add_infix_decl (ctxt : t)
     (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) : t result =
   let module U = Untyped_ast.Infix_declaration in
-  let%bind {U.name= name, _; U.group= group, _} =
+  let%bind (U.Infix_declaration {name= name, _; group= group, _}) =
     spanned_lift unt_infix_decl
   in
   match find_infix_group_name ctxt group with
   | None -> return_err (Error.Infix_group_not_found group)
   | Some idx ->
       let decl = (name, idx) in
-      return {ctxt with infix_decls= decl :: ctxt.infix_decls}
+      let (Context r) = ctxt in
+      return (Context {r with infix_decls= decl :: r.infix_decls})
 
 let add_function_declaration (ctxt : t)
     (unt_func : Untyped_ast.Func.t Spanned.t) : t result =
   let module F = Untyped_ast.Func in
+  let module D = Function_declaration in
   let unt_func, _ = unt_func in
-  let {F.name; F.params; F.ret_ty; _} = unt_func in
+  let (F.Func {name; params; ret_ty; _}) = unt_func in
   let%bind params, parm_sp =
     let f ((name, ty), _) =
-      let%bind ty = Type.of_untyped ~ctxt:ctxt.type_context ty in
-      return Binding.{name; mutability= Type.Immutable; ty}
+      let%bind ty = Type.of_untyped ~ctxt:(type_context ctxt) ty in
+      return (Binding.Binding {name; mutability= Type.Immutable; ty})
     in
     spanned_bind (return_map ~f params)
   in
   let%bind ret_ty =
     match ret_ty with
-    | Some ret_ty -> Type.of_untyped ~ctxt:ctxt.type_context ret_ty
+    | Some ret_ty -> Type.of_untyped ~ctxt:(type_context ctxt) ret_ty
     | None -> return (Type.Builtin Type.Unit)
   in
   (* check for duplicates *)
   let rec check_for_duplicates search = function
     | [] -> None
-    | (f, sp) :: _ when Name.equal f.Function_declaration.name search ->
-        Some (f, sp)
+    | (f, sp) :: _ when Name.equal (D.name f) search -> Some (f, sp)
     | _ :: xs -> check_for_duplicates search xs
   in
-  match check_for_duplicates name ctxt.function_context with
+  match check_for_duplicates name (function_context ctxt) with
   | Some (_, sp) ->
       return_err
         (Error.Defined_function_multiple_times {name; original_declaration= sp})
   | None ->
-      let decl = (Function_declaration.{name; params; ret_ty}, parm_sp) in
-      return {ctxt with function_context= decl :: ctxt.function_context}
+      let module D = Function_declaration in
+      let decl = (D.Declaration {name; params; ret_ty}, parm_sp) in
+      let (Context r) = ctxt in
+      return (Context {r with function_context= decl :: r.function_context})
 
 let add_function_definition (ctxt : t)
     (unt_func : Untyped_ast.Func.t Spanned.t) : t result =
   let module F = Untyped_ast.Func in
+  let module D = Function_declaration in
   let unt_func, _ = unt_func in
   let decl =
-    let num_funcs = List.length ctxt.function_context in
-    let idx = num_funcs - 1 - List.length ctxt.function_definitions in
-    let decl, _ = Functions.decl_by_index ctxt.function_context idx in
-    assert (Name.equal decl.Function_declaration.name unt_func.F.name) ;
+    let num_funcs = List.length (function_context ctxt) in
+    let idx = num_funcs - 1 - List.length (function_definitions ctxt) in
+    let decl, _ = Functions.decl_by_index (function_context ctxt) idx in
+    assert (Name.equal (D.name decl) (F.name unt_func)) ;
     decl
   in
   let%bind body, body_sp =
-    spanned_bind
-      (typeck_block decl.Function_declaration.params ctxt unt_func.F.body)
+    spanned_bind (typeck_block (D.params decl) ctxt (F.body unt_func))
   in
   let body_ty =
-    match body.Expr.expr with
+    match Expr.Block.expr body with
     | Some e -> Expr.base_type_sp e
     | None -> Type.Builtin Type.Unit
   in
-  if Type.equal body_ty decl.Function_declaration.ret_ty then
-    return
-      { ctxt with
-        function_definitions= (body, body_sp) :: ctxt.function_definitions }
+  if Type.equal body_ty (D.ret_ty decl) then
+    let (Context r) = ctxt in
+    let function_definitions = (body, body_sp) :: r.function_definitions in
+    return (Context {r with function_definitions})
   else
     return_err
-      (Error.Return_type_mismatch
-         {expected= decl.Function_declaration.ret_ty; found= body_ty})
+      (Error.Return_type_mismatch {expected= D.ret_ty decl; found= body_ty})
 
 let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
   let module U = Untyped_ast in
   let%bind type_context =
-    match Type.Context.make unt_ast.U.types with
+    match Type.Context.make (U.types unt_ast) with
     | Result.Ok o, sp -> (Result.Ok o, sp)
     | Result.Error e, sp -> (Result.Error (e, Type.Context.empty), sp)
   in
   let ret =
     let init =
-      { type_context
-      ; infix_group_names= []
-      ; infix_groups= []
-      ; infix_decls= []
-      ; function_context= []
-      ; function_definitions= [] }
+      Context
+        { type_context
+        ; infix_group_names= []
+        ; infix_groups= []
+        ; infix_decls= []
+        ; function_context= []
+        ; function_definitions= [] }
     in
     let%bind init =
-      return_fold unt_ast.U.infix_groups ~init ~f:add_infix_group_name
+      return_fold (U.infix_groups unt_ast) ~init ~f:add_infix_group_name
     in
     let%bind init =
-      return_fold unt_ast.U.infix_groups ~init ~f:add_infix_group
+      return_fold (U.infix_groups unt_ast) ~init ~f:add_infix_group
     in
     let%bind init =
-      return_fold unt_ast.U.infix_decls ~init ~f:add_infix_decl
+      return_fold (U.infix_decls unt_ast) ~init ~f:add_infix_decl
     in
     let%bind init =
-      return_fold unt_ast.U.funcs ~init ~f:add_function_declaration
+      return_fold (U.funcs unt_ast) ~init ~f:add_function_declaration
     in
-    return_fold unt_ast.U.funcs ~init ~f:add_function_definition
+    return_fold (U.funcs unt_ast) ~init ~f:add_function_definition
   in
   match ret with
   | Result.Ok o, sp -> (Result.Ok o, sp)

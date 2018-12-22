@@ -2,15 +2,22 @@ open Cafec
 module Out = Stdio.Out_channel
 module In = Stdio.In_channel
 
-type compile_style =
-  | Typecheck
-  | Interpret
-  | Compile
+type compile_style = Typecheck | Interpret | Compile
 
-type command_line_arguments =
-  {filename: string; print_parse_ast: bool; style: compile_style}
+type args =
+  | Args :
+      { filename: string
+      ; print_parse_ast: bool
+      ; style: compile_style }
+      -> args
 
-let parse_command_line () : (command_line_arguments, string) Result.t =
+let args_filename (Args {filename; _}) = filename
+
+let args_print_parse_ast (Args {print_parse_ast; _}) = print_parse_ast
+
+let args_style (Args {style; _}) = style
+
+let parse_command_line () : (args, string) Result.t =
   let print_parse_ast = ref false in
   let typeck_only = ref false in
   let interpret = ref false in
@@ -31,7 +38,7 @@ let parse_command_line () : (command_line_arguments, string) Result.t =
       , "interpret, instead of using the LLVM backend" )
     ; ( "--typecheck-only"
       , Set typeck_only
-      , "only typecheck, don't interpret or compile" )]
+      , "only typecheck, don't interpret or compile" ) ]
   in
   Caml.Arg.parse cmd_options get_filename "cafec [filename]" ;
   match !error with
@@ -47,20 +54,17 @@ let parse_command_line () : (command_line_arguments, string) Result.t =
             else if !interpret then Interpret
             else Compile
           in
-          Ok
-            { filename
-            ; print_parse_ast= !print_parse_ast
-            ; style }
+          Ok (Args {filename; print_parse_ast= !print_parse_ast; style})
     | None -> Error "no filename specified" )
 
 let get_parse_ast args =
-  match In.with_file args.filename ~f:Parse.parse with
+  match In.with_file (args_filename args) ~f:Parse.parse with
   | Error e, sp ->
       Out.eprintf "Parse error: %s\n"
         (Spanned.to_string ~f:Parse.Error.to_string (e, sp)) ;
       Caml.exit 1
   | Ok parse_ast, _ ->
-      if args.print_parse_ast then
+      if args_print_parse_ast args then
         Out.print_endline (Parse.Ast.to_string parse_ast) ;
       parse_ast
 
@@ -76,7 +80,7 @@ let get_typed_ast args =
 let interpret ty_ast _args =
   let ctxt = Interpreter.make ty_ast in
   let string = Nfc_string.of_string_unsafe "main" in
-  let name = Name.{string; kind= Identifier; fixity= Nonfix} in
+  let name = Name.Name {string; kind= Name.Identifier; fixity= Name.Nonfix} in
   match Interpreter.get_function ctxt ~name with
   | Some f ->
       let v = Interpreter.call ctxt f [] in
@@ -89,7 +93,7 @@ let interpret ty_ast _args =
 
 let main args =
   let typed_ast = get_typed_ast args in
-  match args.style with
+  match args_style args with
   | Typecheck -> ()
   | Interpret -> interpret typed_ast args
   | Compile -> failwith "compiler backend doesn't exist yet"

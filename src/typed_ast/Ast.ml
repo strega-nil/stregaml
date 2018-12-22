@@ -1,37 +1,69 @@
 module Stmt = Types.Ast_Stmt
-module Binding = Types.Ast_Binding
+
+module Binding = struct
+  include Types.Ast_Binding
+
+  let name (Binding r) = r.name
+
+  let mutability (Binding r) = r.mutability
+
+  let ty (Binding r) = r.ty
+end
 
 module Expr = struct
   include Types.Ast_Expr
-  module Type = Types.Ast_Expr_Type
+  module Builtin = Types.Ast_Expr_Builtin
 
-  let base_type {ty= {Type.ty; _}; _} = ty
+  module Type = struct
+    include Types.Ast_Expr_Type
 
-  let base_type_sp ({ty= {Type.ty; _}; _}, _) = ty
+    let category (Type r) = r.category
 
-  let full_type {ty; _} = ty
+    let ty (Type r) = r.ty
+  end
 
-  let full_type_sp ({ty; _}, _) = ty
+  module Local = struct
+    include Types.Ast_Expr_Local
 
-  let block_base_type = function
-    | {expr= Some expr; _} -> base_type_sp expr
-    | {expr= None; _} -> Types.Type.Builtin Types.Type.Unit
+    let binding (Local r) = r.binding
+  end
 
-  let block_base_type_sp (blk, _) = block_base_type blk
+  let base_type (Expr {ty= Type.Type {ty; _}; _}) = ty
 
-  let block_full_type = function
-    | {expr= Some expr; _} -> full_type_sp expr
-    | {expr= None; _} ->
-        {Type.category= Type.Value; Type.ty= Types.Type.Builtin Types.Type.Unit}
+  let base_type_sp (Expr {ty= Type.Type {ty; _}; _}, _) = ty
 
-  let block_full_type_sp (blk, _) = block_full_type blk
+  let full_type (Expr {ty; _}) = ty
+
+  let full_type_sp (Expr {ty; _}, _) = ty
+
+  module Block = struct
+    include Types.Ast_Expr_Block
+
+    let expr (Block r) = r.expr
+
+    let stmts (Block r) = r.stmts
+
+    let base_type blk =
+      match expr blk with
+      | Some expr -> base_type_sp expr
+      | None -> Types.Type.Builtin Types.Type.Unit
+
+    let base_type_sp (blk, _) = base_type blk
+
+    let full_type blk =
+      match expr blk with
+      | Some expr -> full_type_sp expr
+      | None ->
+          Type.Type
+            {category= Type.Value; ty= Types.Type.Builtin Types.Type.Unit}
+
+    let full_type_sp (blk, _) = full_type blk
+  end
 
   let unit_value =
-    { variant= Unit_literal
-    ; ty=
-        {Type.ty= Types.Type.Builtin Types.Type.Unit; Type.category= Type.Value}
-    }
-
-  module Local = Types.Ast_Expr_Local
-  module Builtin = Types.Ast_Expr_Builtin
+    Expr
+      { variant= Unit_literal
+      ; ty=
+          Type.Type
+            {ty= Types.Type.Builtin Types.Type.Unit; category= Type.Value} }
 end

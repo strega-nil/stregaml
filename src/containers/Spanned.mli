@@ -1,5 +1,19 @@
 module Span : sig
-  type t = {start_line: int; start_column: int; end_line: int; end_column: int}
+  type t =
+    | Span :
+        { start_line: int
+        ; start_column: int
+        ; end_line: int
+        ; end_column: int }
+        -> t
+
+  val start_line : t -> int
+
+  val start_column : t -> int
+
+  val end_line : t -> int
+
+  val end_column : t -> int
 
   val equal : t -> t -> bool
 

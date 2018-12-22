@@ -4,21 +4,25 @@ include Types.Type
 module Structural = Types.Type_Structural
 
 module Context = struct
-  type user_defined_type = {data: Structural.t}
+  type user_type = User_type : {data: Structural.t} -> user_type
+
+  let user_type_data (User_type r) = r.data
 
   (* note: const after construction *)
-  type nonrec t =
-    { user_defined: user_defined_type array
-    ; names: (Nfc_string.t Spanned.t * t) array }
+  type t =
+    | Context :
+        { user_types: user_type array
+        ; names: (Nfc_string.t Spanned.t * Types.Type.t) array }
+        -> t
 
   let make lst =
     let module PType = Parse.Ast.Type in
     let defs, defs_len, aliases, aliases_len =
       let module Def = PType.Definition in
       let rec helper defs defs_len aliases aliases_len = function
-        | ({Def.name; Def.kind= Def.Alias ty}, _) :: rest ->
+        | (Def.Definition {name; kind= Def.Alias ty}, _) :: rest ->
             helper defs defs_len ((name, ty) :: aliases) (aliases_len + 1) rest
-        | ({Def.name; Def.kind= Def.User_defined {data}}, _) :: rest ->
+        | (Def.Definition {name; kind= Def.User_defined {data}}, _) :: rest ->
             helper ((name, data) :: defs) (defs_len + 1) aliases aliases_len
               rest
         | [] -> (defs, defs_len, aliases, aliases_len)
@@ -68,8 +72,8 @@ module Context = struct
           return (Builtin (Function {params; ret_ty}))
     in
     let names_len = defs_len + aliases_len in
-    let user_defined =
-      let default = {data= Structural.Record []} in
+    let user_types =
+      let default = User_type {data= Structural.Record []} in
       Array.create ~len:defs_len default
     in
     let names =
@@ -98,13 +102,13 @@ module Context = struct
             in
             return_map ~f lst
           in
-          let (Data.T {kind; members}) = def in
+          let (Data.Data {kind; members}) = def in
           let%bind members = typed_members members in
           match kind with
           | Data.Record -> return (Structural.Record members)
           | Data.Variant -> return (Structural.Variant members)
         in
-        user_defined.(index) <- {data} ;
+        user_types.(index) <- User_type {data} ;
         names.(index) <- ((name, name_sp), User_defined index) ;
         return ()
     in
@@ -115,9 +119,13 @@ module Context = struct
       return ()
     in
     let%bind () = return_iteri ~f:fill_aliases aliases in
-    return {user_defined; names}
+    return (Context {user_types; names})
 
-  let empty = {user_defined= [||]; names= [||]}
+  let empty = Context {user_types= [||]; names= [||]}
+
+  let user_types (Context r) = r.user_types
+
+  let names (Context r) = r.names
 end
 
 let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
@@ -128,7 +136,7 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
   match unt_ty with
   | U.Named name -> (
       let f ((name', _), _) = Nfc_string.equal name' name in
-      match Array.find ~f ctxt.Context.names with
+      match Array.find ~f (Context.names ctxt) with
       | Some (_, ty) -> return ty
       | None -> (
         match (name :> string) with
@@ -164,7 +172,7 @@ let rec equal l r =
 let structural ty ~(ctxt : Context.t) =
   match ty with
   | Builtin b -> Structural.Builtin b
-  | User_defined idx -> Context.(ctxt.user_defined.(idx).data)
+  | User_defined idx -> Context.user_type_data (Context.user_types ctxt).(idx)
 
 let rec to_string ty ~(ctxt : Context.t) =
   match ty with
@@ -184,5 +192,5 @@ let rec to_string ty ~(ctxt : Context.t) =
       in
       String.concat ["func("; params; ") -> "; to_string ret_ty ~ctxt]
   | User_defined idx ->
-      let (name, _), _ = ctxt.Context.names.(idx) in
+      let (name, _), _ = (Context.names ctxt).(idx) in
       (name :> string)

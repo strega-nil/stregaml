@@ -29,9 +29,29 @@ module Expr : sig
       include Types.Ast_Expr
   end
 
+  module Block : sig
+    include module type of struct
+        include Types.Ast_Expr_Block
+    end
+
+    val to_string : t -> indent:int -> string
+
+    val stmts : t -> Types.Ast_Stmt.t Spanned.t list
+
+    val expr : t -> Types.Ast_Expr.t Spanned.t option
+
+    val with_stmt : t -> Types.Ast_Stmt.t Spanned.t -> t
+  end
+
   val to_string : t -> indent:int -> string
 
-  val block_to_string : block -> indent:int -> string
+  val qualified_path : qualified -> Nfc_string.t Spanned.t list
+
+  val qualified_name : qualified -> Name.t Spanned.t
+
+  val pattern_constructor : pattern -> qualified Spanned.t
+
+  val pattern_binding : pattern -> Name.t Spanned.t
 end
 
 module Func : sig
@@ -40,6 +60,14 @@ module Func : sig
   end
 
   val to_string : t -> string
+
+  val name : t -> Name.t
+
+  val params : t -> (Name.t Spanned.t * Type.t Spanned.t) Spanned.t list
+
+  val ret_ty : t -> Type.t Spanned.t option
+
+  val body : t -> Expr.Block.t Spanned.t
 end
 
 module Infix_group : sig
@@ -63,3 +91,19 @@ include module type of struct
 end
 
 val to_string : t -> string
+
+val funcs : t -> Func.t Spanned.t list
+
+val infix_decls : t -> Infix_declaration.t Spanned.t list
+
+val infix_groups : t -> Infix_group.t Spanned.t list
+
+val types : t -> Type.Definition.t Spanned.t list
+
+val with_func : t -> Func.t Spanned.t -> t
+
+val with_infix_decl : t -> Infix_declaration.t Spanned.t -> t
+
+val with_infix_group : t -> Infix_group.t Spanned.t -> t
+
+val with_type : t -> Type.Definition.t Spanned.t -> t

@@ -18,7 +18,7 @@ let make unt_ast =
   match Internal.make unt_ast with
   | Ok ast, sp ->
       (*let number_of_types = List.length ast.Internal.type_defs in*)
-      let number_of_functions = List.length ast.Internal.function_context in
+      let number_of_functions = List.length (Internal.function_context ast) in
       (Ok {number_of_functions; ast}, sp)
   | Error e, sp -> (Error e, sp)
 
@@ -38,10 +38,8 @@ let type_seq ast =
 let number_of_functions {number_of_functions; _} = number_of_functions
 
 let function_seq ast =
-  let {ast= {Internal.function_context; Internal.function_definitions; _}; _} =
-    ast
-  in
-  let init = (function_context, function_definitions) in
+  let {ast; _} = ast in
+  let init = Internal.(function_context ast, function_definitions ast) in
   let f = function
     | [], [] -> None
     | decl :: ctxt, def :: defs -> Some ((decl, def), (ctxt, defs))

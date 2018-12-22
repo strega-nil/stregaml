@@ -4,4 +4,4 @@
   ((name Cafec_Parse)
   (libraries (base ppx_let Cafec_Containers uutf uucp))
   (preprocess (pps (ppx_let)))
-  (flags (:standard -w +a-4@8 -open Base -open Cafec_Containers))))
+  (flags (:standard -w +a-4-41@8 -open Base -open Cafec_Containers))))

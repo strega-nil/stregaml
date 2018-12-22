@@ -1,10 +1,16 @@
-type fixity = Nonfix | Infix | Prefix
+type fixity = Nonfix : fixity | Infix : fixity | Prefix : fixity
 
-type kind = Identifier | Operator
+type kind = Identifier : kind | Operator : kind
 
-type t = {string: Nfc_string.t; fixity: fixity; kind: kind}
+type t = Name : {string: Nfc_string.t; fixity: fixity; kind: kind} -> t
 
-let to_ident_string {string; fixity; kind} =
+let string (Name {string; _}) = string
+
+let fixity (Name {fixity; _}) = fixity
+
+let kind (Name {kind; _}) = kind
+
+let to_ident_string (Name {string; fixity; kind}) =
   match (fixity, kind) with
   | Nonfix, Identifier -> (string :> string)
   | Nonfix, Operator -> String.concat ["("; (string :> string); ")"]
@@ -26,6 +32,7 @@ let equal_kind lk rk =
   | Operator, Operator -> true
   | _ -> false
 
-let equal {string= ls; kind= lk; fixity= lf} {string= rs; kind= rk; fixity= rf}
-    =
-  equal_fixity lf rf && equal_kind lk rk && Nfc_string.equal ls rs
+let equal lhs rhs =
+  equal_fixity (fixity lhs) (fixity rhs)
+  && equal_kind (kind lhs) (kind rhs)
+  && Nfc_string.equal (string lhs) (string rhs)

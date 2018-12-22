@@ -2,7 +2,9 @@ open! Types.Pervasives
 
 exception Bug_lexer of string
 
-type t = {decoder: Uutf.decoder; mutable peek: Uchar.t option}
+type t = Lexer : {decoder: Uutf.decoder; mutable peek: Uchar.t option} -> t
+
+let decoder (Lexer r) = r.decoder
 
 let make ch =
   let decoder =
@@ -10,7 +12,7 @@ let make ch =
       ~nln:(`NLF (Uchar.of_char '\n'))
       ~encoding:`UTF_8 (`Channel ch)
   in
-  {decoder; peek= None}
+  Lexer {decoder; peek= None}
 
 (* the actual lexer functions *)
 let ( =~ ) uch ch = Uchar.equal uch (Uchar.of_char ch)
@@ -110,31 +112,36 @@ let is_operator_continue ch = ch =~ '\'' || is_operator_start ch
 
 let current_span lex =
   let open Spanned.Span in
-  let line = Uutf.decoder_line lex.decoder in
-  let col = Uutf.decoder_col lex.decoder in
-  {start_line= line; start_column= col; end_line= line; end_column= col + 1}
+  let line = Uutf.decoder_line (decoder lex) in
+  let col = Uutf.decoder_col (decoder lex) in
+  Span
+    {start_line= line; start_column= col; end_line= line; end_column= col + 1}
 
-let peek_ch lex : Uchar.t option result =
-  match lex.peek with
+let peek_ch (Lexer r as lex) : Uchar.t option result =
+  match r.peek with
   | Some uch -> (Ok (Some uch), current_span lex)
   | None -> (
-    match Uutf.decode lex.decoder with
+    match Uutf.decode r.decoder with
     | `Await -> assert false
     | `Uchar uch ->
         let uch = Some uch in
-        lex.peek <- uch ;
+        r.peek <- uch ;
         (Ok uch, current_span lex)
     | `End -> (Ok None, Spanned.Span.made_up)
     | `Malformed s -> (Error (Error.Malformed_input s), current_span lex) )
 
-let next_ch lex =
+let next_ch (Lexer r as lex) =
   match peek_ch lex with
   | (Result.Ok _, _) as o ->
-      lex.peek <- None ;
+      r.peek <- None ;
       o
   | (Result.Error _, _) as e -> e
 
-let eat_ch lex = lex.peek <- None
+let eat_ch (Lexer lex) =
+  match lex.peek with
+  | Some _ -> lex.peek <- None
+  | None ->
+      failwith "internal error: lexer eat_ch without knowing the character"
 
 let rec eat_whitespace lex =
   let%bind ch = peek_ch lex in

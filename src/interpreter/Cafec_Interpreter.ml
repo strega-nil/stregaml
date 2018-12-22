@@ -8,7 +8,9 @@ module Type = Ast.Type
   They should be immutable,
   but ocaml doesn't have immutable arrays
 *)
-type t = {funcs: (Name.t * Expr.block) array}
+type t = Interpreter : {funcs: (Name.t * Expr.Block.t) array} -> t
+
+let funcs (Interpreter {funcs}) = funcs
 
 module Value = struct
   include Types.Value
@@ -34,7 +36,7 @@ module Value = struct
     | Bool false -> "false"
     | Constructor idx -> "variant::" ^ Int.to_string idx
     | Reference place ->
-        let Types.Expr_result.({is_mut; value; _}) = place in
+        let (Types.Expr_result.Place.Place {is_mut; value}) = place in
         let pointer = if is_mut then "&mut " else "&" in
         String.concat [pointer; "{"; to_string !value ctxt; "}"]
     | Variant (idx, v) ->
@@ -49,7 +51,7 @@ module Value = struct
         in
         String.concat ["{ "; members; " }"]
     | Function n ->
-        let name, _ = ctxt.funcs.((n :> int)) in
+        let name, _ = (funcs ctxt).((n :> int)) in
         Printf.sprintf "<function %s>" (Name.to_ident_string name)
 end
 
@@ -58,55 +60,49 @@ module Expr_result = struct
 
   let to_value = function
     | Value value -> value
-    | Place {value; _} -> Value.clone !value
+    | Place (Place.Place {value; _}) -> Value.clone !value
 
   let reference ~is_mut = function
     | Value _ -> assert false
-    | Place place ->
-        let is_mut = place.is_mut && is_mut in
-        let place = {place with is_mut} in
+    | Place (Place.Place {is_mut= place_is_mut; value}) ->
+        let is_mut = place_is_mut && is_mut in
+        let place = Place.Place {is_mut; value} in
         Value (Value.Reference place)
 
   let deref r =
     let r = to_value r in
     match r with Value.Reference p -> Place p | _ -> assert false
 
-  let assign place imm =
-    assert place.is_mut ;
-    assert place.header.in_scope ;
-    place.value := imm
+  let assign (Place.Place {is_mut; value}) imm =
+    assert is_mut ;
+    value := imm
 end
 
 module Object = struct
-  type t = {header: Expr_result.object_header; is_mut: bool; value: Value.t ref}
+  type t = Object : {is_mut: bool; value: Value.t ref} -> t
 
-  let place {header; is_mut; value} =
-    {Expr_result.header; Expr_result.is_mut; Expr_result.value}
+  let place (Object {is_mut; value}) = Expr_result.Place.Place {is_mut; value}
 
   let obj ~is_mut value =
     let value = ref value in
-    let header = Expr_result.{in_scope= true} in
-    {header; is_mut; value}
-
-  let drop obj =
-    assert obj.header.Expr_result.in_scope ;
-    (obj.header).Expr_result.in_scope <- true
+    Object {is_mut; value}
 end
 
 let make ast =
+  let module D = Ast.Function_declaration in
   let seq = ref (Ast.function_seq ast) in
   let helper _ =
     match Sequence.next !seq with
     | None -> assert false
-    | Some ((({Ast.Function_declaration.name; _}, _), (expr, _)), rest) ->
+    | Some (((D.Declaration {name; _}, _), (expr, _)), rest) ->
         seq := rest ;
         (name, expr)
   in
-  {funcs= Array.init (Ast.number_of_functions ast) ~f:helper}
+  Interpreter {funcs= Array.init (Ast.number_of_functions ast) ~f:helper}
 
 let get_function ctxt ~name =
   match
-    Array.findi ctxt.funcs ~f:(fun _ (name', _) -> Name.equal name name')
+    Array.findi (funcs ctxt) ~f:(fun _ (name', _) -> Name.equal name name')
   with
   | None -> None
   | Some (n, _) -> Some (Value.function_index_of_int n)
@@ -114,7 +110,7 @@ let get_function ctxt ~name =
 let is_mut = function Type.Immutable -> false | Type.Mutable -> true
 
 let call ctxt (idx : Value.function_index) (args : Value.t list) =
-  let rec eval_block ctxt locals Expr.({stmts; expr}) =
+  let rec eval_block ctxt locals (Expr.Block.Block {stmts; expr}) =
     let rec helper locals = function
       | [] -> locals
       | (stmt, _) :: xs -> (
@@ -122,8 +118,8 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
         | Stmt.Expression e ->
             let _ = eval ctxt locals e in
             helper locals xs
-        | Stmt.Let {expr= expr, _; binding= Ast.Binding.({mutability; _}); _}
-          ->
+        | Stmt.Let
+            {expr= expr, _; binding= Ast.Binding.Binding {mutability; _}; _} ->
             let v = Expr_result.to_value (eval ctxt locals expr) in
             let locals = Object.obj ~is_mut:(is_mut mutability) v :: locals in
             helper locals xs )
@@ -146,7 +142,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
       in
       (lhs, rhs)
     in
-    let Expr.({variant; _}) = e in
+    let (Expr.Expr {variant; _}) = e in
     match variant with
     | Expr.Unit_literal -> Expr_result.Value Value.Unit
     | Expr.Bool_literal b -> Expr_result.Value (Value.Bool b)
@@ -163,7 +159,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
       | Value.Bool true -> eval_block ctxt locals thn
       | Value.Bool false -> eval_block ctxt locals els
       | _ -> assert false )
-    | Expr.Local Expr.Local.({index; _}) ->
+    | Expr.Local (Expr.Local.Local {index; _}) ->
         Expr_result.Place (Object.place (List.nth_exn locals index))
     | Expr.Builtin (Expr.Builtin.Add (lhs, rhs)) ->
         let lhs, rhs = eval_builtin_args lhs rhs in
@@ -180,7 +176,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | Expr.Call ((e, _), args) -> (
       match Expr_result.to_value (eval ctxt locals e) with
       | Value.Function func ->
-          let _, expr = ctxt.funcs.((func :> int)) in
+          let _, expr = (funcs ctxt).((func :> int)) in
           let ready_arg (arg, _) =
             let imm = Expr_result.to_value (eval ctxt locals arg) in
             (* we should actually be figuring out whether these should be mut *)
@@ -188,7 +184,6 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           in
           let args = List.map args ~f:ready_arg in
           let ret = eval_block ctxt args expr in
-          List.iter ~f:Object.drop args ;
           ret
       | Value.Constructor idx ->
           let arg =
@@ -217,11 +212,11 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
         match v with
         | Expr_result.Value (Value.Record members) ->
             Expr_result.Value !(members.(idx))
-        | Expr_result.Place Expr_result.({value; is_mut; header}) -> (
+        | Expr_result.(Place (Place.Place {value; is_mut})) -> (
           match !value with
           | Value.Record members ->
               let value = members.(idx) in
-              Expr_result.Place Expr_result.{value; is_mut; header}
+              Expr_result.(Place (Place.Place {value; is_mut}))
           | _ -> assert false )
         | _ -> assert false )
     | Expr.Assign {dest= dest, _; source= source, _} -> (
@@ -233,6 +228,6 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
             Expr_result.assign place source ;
             Expr_result.Value Value.Unit )
   in
-  let _, blk = ctxt.funcs.((idx :> int)) in
+  let _, blk = (funcs ctxt).((idx :> int)) in
   let args = List.map ~f:(Object.obj ~is_mut:false) args in
   Expr_result.to_value (eval_block ctxt args blk)

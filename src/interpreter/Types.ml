@@ -1,13 +1,13 @@
 module rec Value : sig
   type t =
-    | Unit
-    | Bool of bool
-    | Integer of int
-    | Function of Function_index.t
-    | Reference of Expr_result.place
-    | Constructor of int
-    | Variant of int * t ref
-    | Record of t ref array
+    | Unit : t
+    | Bool : bool -> t
+    | Integer : int -> t
+    | Function : Function_index.t -> t
+    | Reference : Expr_result.Place.t -> t
+    | Constructor : int -> t
+    | Variant : int * t ref -> t
+    | Record : t ref array -> t
 end =
   Value
 
@@ -22,10 +22,10 @@ end = struct
 end
 
 and Expr_result : sig
-  type object_header = {mutable in_scope: bool}
+  module Place : sig
+    type t = Place : {is_mut: bool; value: Value.t ref} -> t
+  end
 
-  type place = {header: object_header; is_mut: bool; value: Value.t ref}
-
-  type t = Value of Value.t | Place of place
+  type t = Value : Value.t -> t | Place : Place.t -> t
 end =
   Expr_result

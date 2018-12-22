@@ -131,12 +131,12 @@ place is of type: `%s`|}
   | Unknown_builtin name ->
       Printf.sprintf "Builtin `%s` is unknown" (name :> string)
   | Unordered_operators {op1= op1, _; op2= op2, _} ->
+      let module E = Cafec_Parse.Ast.Expr in
       let op_to_string = function
-        | Cafec_Parse.Ast.Expr.Infix_assign -> "<-"
-        | Cafec_Parse.Ast.Expr.Infix_name Name.({string; kind= Operator; _}) ->
+        | E.Infix_assign -> "<-"
+        | E.Infix_name (Name.Name {string; kind= Name.Operator; _}) ->
             (string :> string)
-        | Cafec_Parse.Ast.Expr.Infix_name Name.({string; kind= Identifier; _})
-          ->
+        | E.Infix_name (Name.Name {string; kind= Name.Identifier; _}) ->
             "\\" ^ (string :> string)
       in
       Printf.sprintf
@@ -150,14 +150,14 @@ place is of type: `%s`|}
         {|Attempted to define prefix operator `%s` with invalid number of parameters.
   expected: 1
   found: %d|}
-        (name.Name.string :> string)
+        (Name.string name :> string)
         num_params
   | Infix_function_wrong_arity {name; num_params} ->
       Printf.sprintf
         {|Attempted to define infix operator `%s` with invalid number of parameters.
   expected: 2
   found: %d|}
-        (name.Name.string :> string)
+        (Name.string name :> string)
         num_params
   | Defined_function_multiple_times {name; original_declaration} ->
       Printf.sprintf

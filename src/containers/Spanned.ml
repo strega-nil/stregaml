@@ -1,13 +1,28 @@
 module Span = struct
-  type t = {start_line: int; start_column: int; end_line: int; end_column: int}
+  type t =
+    | Span :
+        { start_line: int
+        ; start_column: int
+        ; end_line: int
+        ; end_column: int }
+        -> t
+
+  let start_line (Span r) = r.start_line
+
+  let start_column (Span r) = r.start_column
+
+  let end_line (Span r) = r.end_line
+
+  let end_column (Span r) = r.end_column
 
   let equal t1 t2 =
-    t1.start_line = t2.start_line
-    && t1.start_column = t2.start_column
-    && t1.end_line = t2.end_line
-    && t1.end_column = t2.end_column
+    start_line t1 = start_line t2
+    && start_column t1 = start_column t2
+    && end_line t1 = end_line t2
+    && end_column t1 = end_column t2
 
-  let made_up = {start_line= 0; start_column= 0; end_line= 0; end_column= 0}
+  let made_up =
+    Span {start_line= 0; start_column= 0; end_line= 0; end_column= 0}
 
   let is_made_up sp = equal sp made_up
 
@@ -15,12 +30,13 @@ module Span = struct
     if is_made_up fst then snd
     else if is_made_up snd then fst
     else
-      { start_line= fst.start_line
-      ; start_column= fst.start_column
-      ; end_line= snd.end_line
-      ; end_column= snd.end_column }
+      Span
+        { start_line= start_line fst
+        ; start_column= start_column fst
+        ; end_line= end_line snd
+        ; end_column= end_column snd }
 
-  let to_string {start_line; start_column; end_line; end_column} =
+  let to_string (Span {start_line; start_column; end_line; end_column}) =
     Printf.sprintf "(%d, %d) to (%d, %d)" start_line start_column end_line
       end_column
 end
