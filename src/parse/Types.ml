@@ -150,9 +150,9 @@ and Ast_Expr : sig
     | Dereference : Ast_Expr.t Spanned.t -> t
     | Record_literal :
         { ty: Ast_Type.t Spanned.t
-        ; members: (Nfc_string.t * t Spanned.t) Spanned.t list }
+        ; members: (Name.t * t Spanned.t) Spanned.t list }
         -> t
-    | Record_access : t Spanned.t * Nfc_string.t -> t
+    | Record_access : t Spanned.t * Name.t -> t
 end =
   Ast_Expr
 

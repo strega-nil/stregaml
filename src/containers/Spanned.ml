@@ -84,40 +84,54 @@ module Result = struct
 
     let span_of (_, sp) = sp
 
-    let return_map lst ~f =
-      let open! Let_syntax in
-      let rec helper f = function
-        | [] -> return []
-        | x :: xs ->
-            let%bind x = f x in
-            let%bind rest = helper f xs in
-            return (x :: rest)
-      in
-      helper f lst
+    module Return = struct
+      module List = struct
+        let map lst ~f =
+          let open! Let_syntax in
+          let rec helper f = function
+            | [] -> return []
+            | x :: xs ->
+                let%bind x = f x in
+                let%bind rest = helper f xs in
+                return (x :: rest)
+          in
+          helper f lst
 
-    let return_fold lst ~init ~f =
-      let rec helper f folded sp lst =
-        match lst with
-        | [] ->
-            let%bind () = with_span sp in
-            folded
-        | x :: xs -> (
-          match folded with
-          | Result.Ok o, sp ->
-              let folded = f o x in
-              helper f folded sp xs
-          | Result.Error e, sp -> (Result.Error e, sp) )
-      in
-      helper f (return init) Span.made_up lst
+        let fold lst ~init ~f =
+          let rec helper f folded sp lst =
+            match lst with
+            | [] ->
+                let%bind () = with_span sp in
+                folded
+            | x :: xs -> (
+              match folded with
+              | Result.Ok o, sp ->
+                  let folded = f o x in
+                  helper f folded sp xs
+              | Result.Error e, sp -> (Result.Error e, sp) )
+          in
+          helper f (return init) Span.made_up lst
 
-    let return_iteri lst ~f =
-      let open! Let_syntax in
-      let rec helper f index = function
-        | [] -> return ()
-        | x :: xs ->
-            let%bind () = f index x in
-            helper f (index + 1) xs
-      in
-      helper f 0 lst
+        let iter lst ~f =
+          let open! Let_syntax in
+          let rec helper f = function
+            | [] -> return ()
+            | x :: xs ->
+                let%bind () = f x in
+                helper f xs
+          in
+          helper f lst
+
+        let iteri lst ~f =
+          let open! Let_syntax in
+          let rec helper f index = function
+            | [] -> return ()
+            | x :: xs ->
+                let%bind () = f index x in
+                helper f (index + 1) xs
+          in
+          helper f 0 lst
+      end
+    end
   end
 end

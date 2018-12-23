@@ -1,11 +1,14 @@
 * cleanup
-  - remove all the reimplementations of "find index of field in type"
+  - abstract out the "filling out array" logic
+    - "X_some : bool array + X : t array"
+  - switch the remaining lists in the mid-end into arrays
+    - preferably const arrays - do that when doing the above
 * recursive types
   - first - check for it
   - second - see pointers
 * LLVM backend
 * externals
-* ADTs + pattern matching
+* real pattern matching
 * effects
   - syntax:
     ```cafe

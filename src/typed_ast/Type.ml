@@ -1,7 +1,11 @@
 open! Types.Pervasives
 module Parse = Cafec_Parse
 include Types.Type
-module Structural = Types.Type_Structural
+
+module Structural = struct
+  include Types.Type_Structural
+  module Kind = Types.Type_Structural_Kind
+end
 
 module Context = struct
   type user_type = User_type : {data: Structural.t} -> user_type
@@ -63,7 +67,7 @@ module Context = struct
           return (Builtin (Reference {mutability; pointee}))
       | PType.Function {params; ret_ty} ->
           let f (x, _) = get_ast_type x in
-          let%bind params = return_map ~f params in
+          let%bind params = Return.List.map ~f params in
           let%bind ret_ty =
             match ret_ty with
             | Some (ty, _) -> get_ast_type ty
@@ -73,7 +77,7 @@ module Context = struct
     in
     let names_len = defs_len + aliases_len in
     let user_types =
-      let default = User_type {data= Structural.Record []} in
+      let default = User_type {data= Structural.Record [||]} in
       Array.create ~len:defs_len default
     in
     let names =
@@ -100,7 +104,8 @@ module Context = struct
               let%bind ty = get_ast_type ty in
               return (name, ty)
             in
-            return_map ~f lst
+            let%bind lst = Return.List.map ~f lst in
+            return (Array.of_list lst)
           in
           let (Data.Data {kind; members}) = def in
           let%bind members = typed_members members in
@@ -112,13 +117,13 @@ module Context = struct
         names.(index) <- ((name, name_sp), User_defined index) ;
         return ()
     in
-    let%bind () = return_iteri ~f:fill_defs defs in
+    let%bind () = Return.List.iteri ~f:fill_defs defs in
     let fill_aliases index (name, ty) =
       let%bind ty = get_ast_type ty in
       names.(index + defs_len) <- (name, ty) ;
       return ()
     in
-    let%bind () = return_iteri ~f:fill_aliases aliases in
+    let%bind () = Return.List.iteri ~f:fill_aliases aliases in
     return (Context {user_types; names})
 
   let empty = Context {user_types= [||]; names= [||]}
@@ -151,7 +156,7 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
   | U.Function {params; ret_ty} ->
       let f ty = of_untyped ty ~ctxt in
       let default = return (Builtin Unit) in
-      let%bind params = return_map ~f params in
+      let%bind params = Return.List.map ~f params in
       let%bind ret_ty = Option.value_map ~f ~default ret_ty in
       return (Builtin (Function {params; ret_ty}))
 

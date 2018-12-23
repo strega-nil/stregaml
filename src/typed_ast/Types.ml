@@ -15,19 +15,19 @@ module rec Error : sig
     | Mutable_reference_taken_to_immutable_place : t
     | Dereference_of_non_reference : Type.t -> t
     | Record_literal_non_record_type : Type.t -> t
-    | Record_literal_duplicate_members : Nfc_string.t -> t
+    | Record_literal_duplicate_members : Name.t -> t
     | Record_literal_incorrect_type :
-        { field: Nfc_string.t
+        { field: Name.t
         ; field_ty: Type.t
         ; member_ty: Type.t }
         -> t
-    | Record_literal_extra_field : Type.t * Nfc_string.t -> t
+    | Record_literal_extra_field : Type.t * Name.t -> t
     | Record_literal_missing_field : Type.t * Nfc_string.t -> t
-    | Record_access_non_record_type : Type.t * Nfc_string.t -> t
-    | Record_access_non_member : Type.t * Nfc_string.t -> t
+    | Record_access_non_record_type : Type.t * Name.t -> t
+    | Record_access_non_member : Type.t * Name.t -> t
     | Match_non_variant_type : Type.t -> t
     | Match_branches_of_different_type : {expected: Type.t; found: Type.t} -> t
-    | Match_repeated_branches : Nfc_string.t -> t
+    | Match_repeated_branches : Name.t -> t
     | Pattern_of_wrong_type : {expected: Type.t; found: Type.t} -> t
     | If_non_bool : Type.t -> t
     | If_branches_of_differing_type : Type.t * Type.t -> t
@@ -73,12 +73,19 @@ end =
   Type
 
 and Type_Structural : sig
+  type members = (Nfc_string.t * Type.t) array
+
   type t =
     | Builtin : Type.builtin -> t
-    | Record : (Nfc_string.t * Type.t) list -> t
-    | Variant : (Nfc_string.t * Type.t) list -> t
+    | Record : members -> t
+    | Variant : members -> t
 end =
   Type_Structural
+
+and Type_Structural_Kind : sig
+  type t = Cafec_Parse.Ast.Type.Data.kind = Record | Variant
+end =
+  Type_Structural_Kind
 
 and Ast_Expr_Type : sig
   (* type owned = Owned | Borrowed *)

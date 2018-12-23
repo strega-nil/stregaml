@@ -59,18 +59,18 @@ place is of type: `%s`|}
         (Type.to_string ty ~ctxt)
   | Record_literal_duplicate_members member ->
       Printf.sprintf "Record literal - member `%s` initialized multiple times"
-        (member :> string)
+        (Name.to_ident_string member)
   | Record_literal_incorrect_type {field; field_ty; member_ty} ->
       Printf.sprintf
         {|Record literal - initializing member `%s` with incorrect type:
   type of member    : %s
   type of expression: %s|}
-        (field :> string)
+        (Name.to_ident_string field)
         (Type.to_string member_ty ~ctxt)
         (Type.to_string field_ty ~ctxt)
   | Record_literal_extra_field (ty, member) ->
       Printf.sprintf "Record literal - member `%s` not in type `%s`"
-        (member :> string)
+        (Name.to_ident_string member)
         (Type.to_string ty ~ctxt)
   | Record_literal_missing_field (ty, member) ->
       Printf.sprintf "Record literal - member `%s` of type `%s` missing"
@@ -78,14 +78,14 @@ place is of type: `%s`|}
         (Type.to_string ty ~ctxt)
   | Record_access_non_record_type (ty, member) ->
       Printf.sprintf
-        "Attempted to access the `%s` member of a non-struct type: `%s`"
-        (member :> string)
+        "Attempted to access the `%s` member of a non-record type: `%s`"
+        (Name.to_ident_string member)
         (Type.to_string ty ~ctxt)
   | Record_access_non_member (ty, member) ->
       Printf.sprintf
         "Attempted to access the `%s` member of a type without that member: \
          `%s`"
-        (member :> string)
+        (Name.to_ident_string member)
         (Type.to_string ty ~ctxt)
   | Match_non_variant_type ty ->
       Printf.sprintf
@@ -100,7 +100,7 @@ place is of type: `%s`|}
         (Type.to_string found ~ctxt)
   | Match_repeated_branches name ->
       Printf.sprintf "`match` expression has duplicated pattern: `%s`"
-        (name :> string)
+        (Name.to_ident_string name)
   | Pattern_of_wrong_type {expected; found} ->
       Printf.sprintf
         {|`match` pattern of incorrect type:

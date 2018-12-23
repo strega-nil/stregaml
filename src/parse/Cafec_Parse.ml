@@ -355,7 +355,10 @@ and parse_match_expression (parser : t) : Ast.Expr.t result =
 and parse_record_literal (parser : t)
     ~(path : Nfc_string.t Spanned.t list Spanned.t) : Ast.Expr.t result =
   let f parser =
-    let%bind name = get_identifier parser in
+    let%bind name =
+      let%bind string = get_identifier parser in
+      return (Name.Name {string; kind= Name.Identifier; fixity= Name.Nonfix})
+    in
     let%bind () = get_specific parser Ctxt_keyword.equal_tok in
     let%bind expr = spanned_bind (parse_expression parser) in
     return (name, expr)
@@ -425,8 +428,11 @@ and parse_postfix (parser : t) ((initial, sp) : Ast.Expr.t Spanned.t) :
       return (Ast.Expr.Call ((initial, sp), args))
   | Token.Dot ->
       eat_token parser ;
-      let%bind member = get_identifier parser in
-      return (Ast.Expr.Record_access ((initial, sp), member))
+      let%bind string = get_identifier parser in
+      let name =
+        Name.Name {string; kind= Name.Identifier; fixity= Name.Nonfix}
+      in
+      return (Ast.Expr.Record_access ((initial, sp), name))
   | _ -> failwith "function called incorrectly"
 
 and parse_return_type (parser : t) : Ast.Type.t Spanned.t option result =

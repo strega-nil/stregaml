@@ -12,7 +12,13 @@ module Context : sig
   val make : Cafec_Parse.Ast.Type.Definition.t Spanned.t list -> t result
 end
 
-module Structural = Types.Type_Structural
+module Structural : sig
+  include module type of struct
+      include Types.Type_Structural
+  end
+
+  module Kind = Types.Type_Structural_Kind
+end
 
 val structural : t -> ctxt:Context.t -> Structural.t
 

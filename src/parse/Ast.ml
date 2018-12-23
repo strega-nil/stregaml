@@ -129,20 +129,19 @@ module Implementation_stmt_expr = struct
         String.concat [open_paren parens; "*"; place; close_paren parens]
     | Record_literal {ty= ty, _; members} ->
         let members =
-          let f (((name : Nfc_string.t), (expr, _)), _) =
+          let f ((name, (expr, _)), _) =
             String.concat
-              [ (name :> string)
+              [ Name.to_ident_string name
               ; " = "
               ; expr_to_string expr ~indent:(indent + 1) ]
           in
           String.concat ~sep:"; " (List.map ~f members)
         in
         String.concat [Type.to_string ty; "::{ "; members; " }"]
-    | Record_access ((e, _), member) ->
+    | Record_access ((e, _), name) ->
         let record = expr_to_string e ~parens:true ~indent:(indent + 1) in
-        let member = (member :> string) in
-        String.concat
-          [open_paren parens; record; "."; member; close_paren parens]
+        let name = Name.to_ident_string name in
+        String.concat [open_paren parens; record; "."; name; close_paren parens]
 
   and block_to_string (Types.Ast_Expr_Block.Block {stmts; expr}) ~indent =
     let stmts =
