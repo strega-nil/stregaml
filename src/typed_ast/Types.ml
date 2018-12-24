@@ -37,7 +37,10 @@ module rec Error : sig
         ; expected: int
         ; found: int }
         -> t
-    | Builtin_invalid_arguments : {name: Nfc_string.t; found: Type.t list} -> t
+    | Builtin_invalid_arguments :
+        { name: Nfc_string.t
+        ; found: Type.t Array.t }
+        -> t
     | Unordered_operators :
         { op1: Cafec_Parse.Ast.Expr.infix Spanned.t
         ; op2: Cafec_Parse.Ast.Expr.infix Spanned.t }
@@ -53,8 +56,8 @@ module rec Error : sig
     | Defined_type_multiple_times : Nfc_string.t -> t
     | Return_type_mismatch : {expected: Type.t; found: Type.t} -> t
     | Invalid_function_arguments :
-        { expected: Type.t list
-        ; found: Type.t list }
+        { expected: Type.t Array.t
+        ; found: Type.t Array.t }
         -> t
 end =
   Error
@@ -67,7 +70,7 @@ and Type : sig
     | Bool : builtin
     | Int32 : builtin
     | Reference : {mutability: mutability; pointee: t} -> builtin
-    | Function : {params: t list; ret_ty: t} -> builtin
+    | Function : {params: t Array.t; ret_ty: t} -> builtin
 
   and t = Builtin : builtin -> t | User_defined : int -> t
 end =
@@ -146,7 +149,7 @@ and Ast_Expr : sig
         -> variant
     | Assign : {dest: t Spanned.t; source: t Spanned.t} -> variant
     | Builtin : Ast_Expr_Builtin.t -> variant
-    | Call : t Spanned.t * t Spanned.t list -> variant
+    | Call : t Spanned.t * t Spanned.t Array.t -> variant
     | Block : Ast_Expr_Block.t Spanned.t -> variant
     | Reference : {mutability: Type.mutability; place: t Spanned.t} -> variant
     | Dereference : t Spanned.t -> variant

@@ -42,8 +42,8 @@ module Value = struct
           let f idx e =
             String.concat [Int.to_string idx; " = "; to_string !e ctxt]
           in
-          String.concat_array ~sep:"; "
-            (Array.to_mutable_inplace (Array.mapi ~f members))
+          String.concat_sequence ~sep:"; "
+            (Sequence.mapi ~f (Array.to_sequence members))
         in
         String.concat ["{ "; members; " }"]
     | Function n ->
@@ -178,14 +178,17 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
             (* we should actually be figuring out whether these should be mut *)
             Object.obj ~is_mut:false imm
           in
-          let args = List.map args ~f:ready_arg in
+          let args =
+            Sequence.to_list
+              (Sequence.map ~f:ready_arg (Array.to_sequence args))
+          in
           let ret = eval_block ctxt args expr in
           ret
       | Value.Constructor idx ->
+          assert (Array.length args = 1) ;
           let arg =
-            match args with
-            | [(arg, _)] -> Expr_result.to_value (eval ctxt locals arg)
-            | _ -> assert false
+            let arg, _ = args.(0) in
+            Expr_result.to_value (eval ctxt locals arg)
           in
           Expr_result.Value (Value.Variant (idx, ref arg))
       | _ -> assert false )

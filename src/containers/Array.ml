@@ -21,6 +21,9 @@ type unordered_error = Duplicate of int | Empty_cell of int
 let compare f lhs rhs =
   Mutable.compare f (Impl.to_mutable lhs) (Impl.to_mutable rhs)
 
+let equal (type a) (lhs : a t) (rhs : a t) ~(equal : a -> a -> bool) : bool =
+  Mutable.equal ~equal (Impl.to_mutable lhs) (Impl.to_mutable rhs)
+
 (* Container *)
 let mem (type a) (arr : a t) (el : a) ~(equal : a -> a -> bool) : bool =
   Mutable.mem (Impl.to_mutable arr) el ~equal
@@ -85,6 +88,10 @@ external get : 'a t -> int -> 'a = "%array_safe_get"
 external unsafe_get : 'a t -> int -> 'a = "%array_unsafe_get"
 
 let empty () = Impl.of_mutable [||]
+
+let singleton (type a) (el : a) : a t = Impl.of_mutable [|el|]
+
+let doubleton (type a) (el1 : a) (el2 : a) : a t = Impl.of_mutable [|el1; el2|]
 
 let create ~len el = Impl.of_mutable (Mutable.create ~len el)
 

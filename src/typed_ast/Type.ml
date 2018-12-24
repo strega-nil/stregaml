@@ -66,7 +66,10 @@ module Context = struct
           return (Builtin (Reference {mutability; pointee}))
       | PType.Function {params; ret_ty} ->
           let f (x, _) = get_ast_type x in
-          let%bind params = Return.List.map ~f params in
+          let%bind params =
+            Return.Array.of_sequence ~len:(List.length params)
+              (Sequence.map ~f (Sequence.of_list params))
+          in
           let%bind ret_ty =
             match ret_ty with
             | Some (ty, _) -> get_ast_type ty
@@ -162,7 +165,10 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
   | U.Function {params; ret_ty} ->
       let f ty = of_untyped ty ~ctxt in
       let default = return (Builtin Unit) in
-      let%bind params = Return.List.map ~f params in
+      let%bind params =
+        Return.Array.of_sequence ~len:(List.length params)
+          (Sequence.map ~f (Sequence.of_list params))
+      in
       let%bind ret_ty = Option.value_map ~f ~default ret_ty in
       return (Builtin (Function {params; ret_ty}))
 
@@ -176,7 +182,7 @@ let rec equal l r =
     | Mutable, Mutable | Immutable, Immutable -> equal l.pointee r.pointee
     | _ -> false )
   | Builtin (Function f1), Builtin (Function f2) ->
-      equal f1.ret_ty f2.ret_ty && List.equal f1.params f2.params ~equal
+      equal f1.ret_ty f2.ret_ty && Array.equal f1.params f2.params ~equal
   | User_defined u1, User_defined u2 -> u1 = u2
   | _ -> false
 
@@ -199,7 +205,8 @@ let rec to_string ty ~(ctxt : Context.t) =
   | Builtin (Function {params; ret_ty}) ->
       let params =
         let f ty = to_string ty ~ctxt in
-        String.concat ~sep:", " (List.map ~f params)
+        String.concat_sequence ~sep:", "
+          (Sequence.map ~f (Array.to_sequence params))
       in
       String.concat ["func("; params; ") -> "; to_string ret_ty ~ctxt]
   | User_defined idx ->

@@ -1,5 +1,6 @@
 module Array = Array
 module Mutable_array = Array.Mutable
+module String = String
 module Spanned = Spanned
 module Nfc_string = Nfc_string
 module Name = Name

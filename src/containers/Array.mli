@@ -6,6 +6,8 @@ type unordered_error = Duplicate of int | Empty_cell of int
 
 val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
 
+val equal : 'a t -> 'a t -> equal:('a -> 'a -> bool) -> bool
+
 include Container.S1 with type 'a t := 'a t
 
 val max_length : int
@@ -15,6 +17,10 @@ external get : 'a t -> int -> 'a = "%array_safe_get"
 external unsafe_get : 'a t -> int -> 'a = "%array_unsafe_get"
 
 val empty : unit -> 'a t
+
+val singleton : 'a -> 'a t
+
+val doubleton : 'a -> 'a -> 'a t
 
 val create : len:int -> 'a -> 'a t
 

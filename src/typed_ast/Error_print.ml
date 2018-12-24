@@ -4,7 +4,7 @@ include Types.Error
 let to_string err ~ctxt =
   let type_list tys =
     let f ty = Type.to_string ty ~ctxt in
-    String.concat ~sep:", " (List.map ~f tys)
+    String.concat_sequence ~sep:", " (Sequence.map ~f tys)
   in
   match err with
   | Name_not_found name ->
@@ -130,7 +130,7 @@ place is of type: `%s`|}
         {|Builtin `%s` passed arguments of incorrect type:
   found: `(%s)`|}
         (name :> string)
-        (type_list found)
+        (type_list (Array.to_sequence found))
   | Unknown_builtin name ->
       Printf.sprintf "Builtin `%s` is unknown" (name :> string)
   | Unordered_operators {op1= op1, _; op2= op2, _} ->
@@ -182,4 +182,5 @@ place is of type: `%s`|}
         {|Function arguments did not match the parameter types:
   expected: `(%s)`
   found: `(%s)`|}
-        (type_list expected) (type_list found)
+        (type_list (Array.to_sequence expected))
+        (type_list (Array.to_sequence found))

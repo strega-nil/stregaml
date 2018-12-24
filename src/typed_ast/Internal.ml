@@ -7,7 +7,11 @@ module Binding = Ast.Binding
 
 module Function_declaration = struct
   type t =
-    | Declaration : {name: Name.t; params: Binding.t list; ret_ty: Type.t} -> t
+    | Declaration :
+        { name: Name.t
+        ; params: Binding.t array
+        ; ret_ty: Type.t }
+        -> t
 
   let name (Declaration {name; _}) = name
 
@@ -247,15 +251,17 @@ and typeck_call callee args =
     match callee_ty with
     | Type.Builtin (Type.Function {params; ret_ty}) ->
         let correct_types args params =
-          let f a p = Type.equal (T.base_type_sp a) p in
-          if List.length args <> List.length params then false
-          else List.for_all2_exn ~f args params
+          let f (a, p) = Type.equal (T.base_type_sp a) p in
+          if Array.length args <> Array.length params then false
+          else
+            Sequence.for_all ~f
+              (Sequence.zip (Array.to_sequence args) (Array.to_sequence params))
         in
         if correct_types args params then return ret_ty
         else
           return_err
             (Error.Invalid_function_arguments
-               {expected= params; found= List.map ~f:T.base_type_sp args})
+               {expected= params; found= Array.map ~f:T.base_type_sp args})
     | ty -> return_err (Error.Call_of_non_function ty)
   in
   return (T.Expr {variant= T.Call (callee, args); ty= value_type ret_ty})
@@ -287,7 +293,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
         let name = (name, sp) in
         let name = (U.Name (U.Qualified {path= []; name}), sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
-        typeck_call callee [e0; e1]
+        typeck_call callee (Array.doubleton e0 e1)
   in
   match rest with
   | [] -> spanned_lift e0
@@ -430,8 +436,8 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         match (a1_ty, a2_ty) with
         | Type.Builtin Type.Int32, Type.Builtin Type.Int32 -> return ()
         | _ ->
-            return_err
-              (Error.Builtin_invalid_arguments {name; found= [a1_ty; a2_ty]})
+            let found = Array.doubleton a1_ty a2_ty in
+            return_err (Error.Builtin_invalid_arguments {name; found})
       in
       match (name :> string) with
       | "less_eq" ->
@@ -458,14 +464,17 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Call (callee, args) ->
       let%bind callee = spanned_bind (typeck_expression locals ctxt callee) in
       let f x = spanned_bind (typeck_expression locals ctxt x) in
-      let%bind args = Return.List.map ~f args in
+      let%bind args =
+        Return.Array.of_sequence ~len:(List.length args)
+          (Sequence.map ~f (Sequence.of_list args))
+      in
       typeck_call callee args
   | U.Prefix_operator ((name, sp), expr) ->
       let name = (name, sp) in
       let name = (U.Name (U.Qualified {path= []; name}), sp) in
       let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
       let%bind arg = spanned_bind (typeck_expression locals ctxt expr) in
-      typeck_call callee [arg]
+      typeck_call callee (Array.singleton arg)
   | U.Infix_list (first, rest) ->
       let%bind first = spanned_bind (typeck_expression locals ctxt first) in
       typeck_infix_list locals ctxt first rest
@@ -486,7 +495,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
               in
               let params =
                 let f (Binding.Binding {ty; _}) = ty in
-                List.map ~f (Function_declaration.params decl)
+                Array.map ~f (Function_declaration.params decl)
               in
               let ret_ty = Function_declaration.ret_ty decl in
               value_type (Type.Builtin (Type.Function {params; ret_ty}))
@@ -508,7 +517,8 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | Some x -> return x
         | None -> name_not_found ty name
       in
-      let ty = Type.(Builtin (Function {params= [ty_member]; ret_ty= ty})) in
+      let params = Array.singleton ty_member in
+      let ty = Type.(Builtin (Function {params; ret_ty= ty})) in
       return (T.Expr {variant= T.Constructor (ty, idx); ty= value_type ty})
   | U.Name _ -> failwith "paths with size > 1 not supported"
   | U.Block blk ->
@@ -687,7 +697,9 @@ let add_function_declaration (ctxt : t)
       let%bind ty = Type.of_untyped ~ctxt:(type_context ctxt) ty in
       return (Binding.Binding {name; mutability= Type.Immutable; ty})
     in
-    spanned_bind (Return.List.map ~f params)
+    spanned_bind
+      (Return.Array.of_sequence ~len:(List.length params)
+         (Sequence.map ~f (Sequence.of_list params)))
   in
   let%bind ret_ty =
     match ret_ty with
@@ -723,7 +735,8 @@ let add_function_definition (ctxt : t)
     decl
   in
   let%bind body, body_sp =
-    spanned_bind (typeck_block (D.params decl) ctxt (F.body unt_func))
+    spanned_bind
+      (typeck_block (Array.to_list (D.params decl)) ctxt (F.body unt_func))
   in
   let body_ty =
     match Expr.Block.expr body with
