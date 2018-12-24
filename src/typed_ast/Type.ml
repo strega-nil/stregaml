@@ -74,30 +74,42 @@ module Context = struct
           in
           return (Builtin (Function {params; ret_ty}))
     in
-    let names_len = defs_len + aliases_len in
-    (* TODO: figure out how to remove these hacks *)
-    let user_types =
-      let default = User_type {data= Structural.Record (Array.empty ())} in
-      Mutable_array.create ~len:defs_len default
-    in
-    let names =
-      let default =
-        ((Nfc_string.empty, Spanned.Span.made_up), User_defined (-1))
+    let%bind names =
+      let names_len = defs_len + aliases_len in
+      let user_defined index ((name, sp), _) =
+        return ((name, sp), User_defined index)
       in
-      Mutable_array.create ~len:names_len default
+      let alias (name, ty) =
+        let%bind ty = get_ast_type ty in
+        return (name, ty)
+      in
+      Return.Array.of_sequence ~len:names_len
+        (Sequence.append
+           (Sequence.mapi ~f:user_defined (Sequence.of_list defs))
+           (Sequence.map ~f:alias (Sequence.of_list aliases)))
     in
-    let rec exists_duplicate idx end_idx name =
-      if idx = end_idx then false
-      else
-        let (name_idx, _), _ = Mutable_array.get names idx in
-        if Nfc_string.equal name_idx name then true
-        else exists_duplicate (idx + 1) end_idx name
+    let%bind () =
+      (* check for duplicates *)
+      let rec mem_from name idx arr =
+        if idx = Array.length arr then None
+        else
+          let (el, _), _ = arr.(idx) in
+          if Nfc_string.equal name el then Some idx
+          else mem_from name (idx + 1) arr
+      in
+      let rec check_duplicates idx =
+        if idx = Array.length names then return ()
+        else
+          let (name, _), _ = names.(idx) in
+          match mem_from name (idx + 1) names with
+          | Some _ -> return_err (Error.Type_defined_multiple_times name)
+          | None -> check_duplicates (idx + 1)
+      in
+      check_duplicates 0
     in
-    let fill_defs index ((name, name_sp), def) =
-      let module Data = PType.Data in
-      if exists_duplicate 0 index name then
-        return_err (Error.Type_defined_multiple_times name)
-      else
+    let%bind user_types =
+      let f (_, def) =
+        let module Data = PType.Data in
         let%bind data =
           let typed_members lst =
             let f ((name, ty), _) =
@@ -113,21 +125,12 @@ module Context = struct
           | Data.Record -> return (Structural.Record members)
           | Data.Variant -> return (Structural.Variant members)
         in
-        Mutable_array.set user_types index (User_type {data}) ;
-        Mutable_array.set names index ((name, name_sp), User_defined index) ;
-        return ()
+        return (User_type {data})
+      in
+      Return.Array.of_sequence ~len:defs_len
+        (Sequence.map ~f (Sequence.of_list defs))
     in
-    let%bind () = Return.List.iteri ~f:fill_defs defs in
-    let fill_aliases index (name, ty) =
-      let%bind ty = get_ast_type ty in
-      Mutable_array.set names (index + defs_len) (name, ty) ;
-      return ()
-    in
-    let%bind () = Return.List.iteri ~f:fill_aliases aliases in
-    return
-      (Context
-         { user_types= Array.of_mutable_inplace user_types
-         ; names= Array.of_mutable_inplace names })
+    return (Context {user_types; names})
 
   let empty = Context {user_types= Array.empty (); names= Array.empty ()}
 

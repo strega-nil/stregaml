@@ -98,10 +98,17 @@ let of_sequence (type a) ~(len : int) (seq : a Sequence.t) : a t =
   | Some (el, seq) ->
       let ret = Mutable.create el ~len in
       let length_init = ref 1 in
-      let f idx el = Mutable.set ret (idx + 1) el in
+      let f idx el =
+        Mutable.set ret (idx + 1) el ;
+        length_init := idx + 2
+      in
       Sequence.iteri seq ~f ;
       if !length_init = len then Impl.of_mutable ret
-      else raise (Invalid_argument "`seq` didn't have `len` elements")
+      else
+        let error =
+          Printf.sprintf "length of `seq` (%d) != `len` (%d)" !length_init len
+        in
+        raise (Invalid_argument error)
 
 let of_sequence_unordered (type a) ~(len : int) (seq : (int * a) Sequence.t) :
     (a t, unordered_error) Result.t =
