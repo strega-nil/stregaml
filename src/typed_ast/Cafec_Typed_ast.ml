@@ -6,43 +6,14 @@ module Type = Type
 module Internal = Internal
 module Function_declaration = Internal.Function_declaration
 
-(*
-type type_kind = Internal.type_kind = Type_alias of Type.t
+type t = Internal.t
 
-type type_def = Internal.type_def = {tname: string; kind: type_kind}
-*)
+let make unt_ast = Internal.make unt_ast
 
-type t = {number_of_functions: int; ast: Internal.t}
-
-let make unt_ast =
-  match Internal.make unt_ast with
-  | Ok ast, sp ->
-      (*let number_of_types = List.length ast.Internal.type_defs in*)
-      let number_of_functions = List.length (Internal.function_context ast) in
-      (Ok {number_of_functions; ast}, sp)
-  | Error e, sp -> (Error e, sp)
-
-(*
-let number_of_types {number_of_types; _} = number_of_types
-
-let type_seq ast =
-  let rec helper types () =
-    match types with
-    | [] -> Seq.Nil
-    | ty :: types -> Seq.Cons (ty, helper types)
-  in
-  let {ast= {Internal.type_defs; _}; _} = ast in
-  helper type_defs
-*)
-
-let number_of_functions {number_of_functions; _} = number_of_functions
+let number_of_functions ast =
+  List.length (Internal.function_context ast)
 
 let function_seq ast =
-  let {ast; _} = ast in
-  let init = Internal.(function_context ast, function_definitions ast) in
-  let f = function
-    | [], [] -> None
-    | decl :: ctxt, def :: defs -> Some ((decl, def), (ctxt, defs))
-    | _ -> assert false
-  in
-  Sequence.unfold ~init ~f
+  Sequence.zip
+    (Sequence.of_list (Internal.function_context ast))
+    (Sequence.of_list (Internal.function_definitions ast))
