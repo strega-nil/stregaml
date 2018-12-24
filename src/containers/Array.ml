@@ -184,3 +184,58 @@ let fold_right (type a b) (arr : a t) ~(f : a -> b -> b) ~(init : b) : b =
 
 let findi (type a) (arr : a t) ~(f : int -> a -> bool) : (int * a) option =
   Mutable.findi (Impl.to_mutable arr) ~f
+
+let find_from (type a) (arr : a t) (idx : int) ~(f : a -> bool) : a option =
+  let rec check_after_idx idx =
+    if idx = length arr then None
+    else
+      let cur = get arr idx in
+      if f cur then Some cur else check_after_idx (idx + 1)
+  in
+  check_after_idx idx
+
+let findi_from (type a) (arr : a t) (idx : int) ~(f : int -> a -> bool) :
+    (int * a) option =
+  let rec check_after_idx idx =
+    if idx = length arr then None
+    else
+      let cur = get arr idx in
+      if f idx cur then Some (idx, cur) else check_after_idx (idx + 1)
+  in
+  check_after_idx idx
+
+let mem_from (type a) (arr : a t) (el : a) (idx : int)
+    ~(equal : a -> a -> bool) : bool =
+  let rec check_after_idx idx =
+    if idx = length arr then false
+    else
+      let cur = get arr idx in
+      if equal el cur then true else check_after_idx (idx + 1)
+  in
+  check_after_idx idx
+
+let find_nonconsecutive_duplicates (type a) (arr : a t)
+    ~(equal : a -> a -> bool) : (a * a) option =
+  let rec check_for_dups idx =
+    if idx = length arr then None
+    else
+      let cur = get arr idx in
+      let f el = equal cur el in
+      match find_from ~f arr (idx + 1) with
+      | Some el -> Some (cur, el)
+      | None -> check_for_dups (idx + 1)
+  in
+  check_for_dups 0
+
+let findi_nonconsecutive_duplicates (type a) (arr : a t)
+    ~(equal : int * a -> int * a -> bool) : ((int * a) * (int * a)) option =
+  let rec check_for_dups idx =
+    if idx = length arr then None
+    else
+      let cur = get arr idx in
+      let f el_idx el = equal (idx, cur) (el_idx, el) in
+      match findi_from ~f arr (idx + 1) with
+      | Some latter -> Some ((idx, cur), latter)
+      | None -> check_for_dups (idx + 1)
+  in
+  check_for_dups 0

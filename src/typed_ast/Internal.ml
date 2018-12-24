@@ -9,7 +9,7 @@ module Function_declaration = struct
   type t =
     | Declaration :
         { name: Name.t
-        ; params: Binding.t array
+        ; params: Binding.t Array.t
         ; ret_ty: Type.t }
         -> t
 
@@ -31,7 +31,7 @@ module Infix_group = struct
   type t =
     | Infix_group :
         { associativity: associativity
-        ; precedence: precedence list }
+        ; precedence: precedence Array.t }
         -> t
 
   let associativity (Infix_group {associativity; _}) = associativity
@@ -39,28 +39,46 @@ module Infix_group = struct
   let precedence (Infix_group {precedence; _}) = precedence
 end
 
-(* these should really all be arrays, probably *)
-type t =
-  | Context :
-      { type_context: Type.Context.t
-      ; infix_group_names: Nfc_string.t list
-      ; infix_groups: Infix_group.t list
-      ; infix_decls: (Name.t * int) list
-      ; function_context: Function_declaration.t Spanned.t list
-      ; function_definitions: Expr.Block.t Spanned.t list }
-      -> t
+module Context = struct
+  type t =
+    | Context :
+        { type_context: Type.Context.t
+        ; infix_group_names: Nfc_string.t Array.t
+        ; infix_groups: Infix_group.t Array.t
+        ; infix_decls: (Name.t * int) list
+        ; function_context: Function_declaration.t Spanned.t list
+        ; function_definitions: Expr.Block.t Spanned.t list }
+        -> t
 
-let type_context (Context r) = r.type_context
+  let type_context (Context r) = r.type_context
 
-let infix_group_names (Context r) = r.infix_group_names
+  let infix_group_names (Context r) = r.infix_group_names
 
-let infix_groups (Context r) = r.infix_groups
+  let infix_groups (Context r) = r.infix_groups
 
-let infix_decls (Context r) = r.infix_decls
+  let infix_decls (Context r) = r.infix_decls
 
-let function_context (Context r) = r.function_context
+  let function_context (Context r) = r.function_context
 
-let function_definitions (Context r) = r.function_definitions
+  let function_definitions (Context r) = r.function_definitions
+
+  let with_type_context (Context r) type_context = Context {r with type_context}
+
+  let with_infix_group_names (Context r) infix_group_names =
+    Context {r with infix_group_names}
+
+  let with_infix_groups (Context r) infix_groups = Context {r with infix_groups}
+
+  let with_infix_decls (Context r) infix_decls = Context {r with infix_decls}
+
+  let with_function_context (Context r) function_context =
+    Context {r with function_context}
+
+  let with_function_definitions (Context r) function_definitions =
+    Context {r with function_definitions}
+end
+
+include Context
 
 type 'a result = ('a, Error.t) Spanned.Result.t
 
@@ -146,7 +164,7 @@ module Bind_order = struct
     let get_infix_group ctxt op =
       let f (name, _) = Name.equal op name in
       match List.find ~f (infix_decls ctxt) with
-      | Some (_, idx) -> Some (idx, List.nth_exn (infix_groups ctxt) idx)
+      | Some (_, idx) -> Some (idx, (infix_groups ctxt).(idx))
       | None -> None
     in
     let order_named ctxt op1 op2 =
@@ -157,19 +175,16 @@ module Bind_order = struct
           | T.Assoc_end -> Some End
           | T.Assoc_none -> Some Unordered
         else
-          let rec check_all_sub_precedences = function
-            | [] -> None
-            | T.Less idx :: xs -> (
-                let info = List.nth_exn (infix_groups ctxt) idx in
-                (*
-                  note: since ig < ig2, this means that no matter what,
-                  ig binds looser than ig2
-                *)
-                match order_infix_groups idx info idx2 with
-                | Some _ -> Some End
-                | None -> check_all_sub_precedences xs )
+          let precedence info =
+            (*
+              note: since ig < ig2, this means that no matter what,
+              ig binds looser than ig2
+            *)
+            match order_infix_groups idx info idx2 with
+            | Some _ -> Some End
+            | None -> None
           in
-          check_all_sub_precedences (T.precedence info)
+          Array.find_map ~f:precedence (infix_groups ctxt)
       in
       let order_infix_groups_comm (idx1, info1) (idx2, info2) =
         match order_infix_groups idx1 info1 idx2 with
@@ -612,66 +627,27 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
 
 let find_infix_group_name ctxt id =
   let f _ name = Nfc_string.equal id name in
-  match List.findi ~f (infix_group_names ctxt) with
+  match Array.findi ~f (infix_group_names ctxt) with
   | Some (i, _) -> Some i
   | None -> None
 
-let add_infix_group_name (ctxt : t)
-    (group : Untyped_ast.Infix_group.t Spanned.t) : t result =
+let type_infix_group_name (_ : t) (group : Untyped_ast.Infix_group.t Spanned.t)
+    : Nfc_string.t result =
   let module U = Untyped_ast.Infix_group in
   let U.Infix_group {name= name, _; _}, _ = group in
-  let (Context r) = ctxt in
-  match find_infix_group_name ctxt name with
-  | Some _ -> return_err (Error.Infix_group_defined_multiple_times name)
-  | None ->
-      return (Context {r with infix_group_names= name :: r.infix_group_names})
+  return name
 
-let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
-    t result =
+let type_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
+    Infix_group.t result =
   let module U = Untyped_ast.Infix_group in
-  let names_len = List.length (infix_group_names ctxt) in
-  let ig_len = List.length (infix_groups ctxt) in
-  let rec precedence_less ig idx =
-    let rec helper = function
-      | [] -> false
-      | Infix_group.Less idx' :: _ when idx = idx' -> true
-      | Infix_group.Less idx' :: xs ->
-          let ig_idx = idx' - names_len + ig_len in
-          let prec_less =
-            if ig_idx < 0 then false
-            else
-              let ig = List.nth_exn (infix_groups ctxt) ig_idx in
-              precedence_less ig idx
-          in
-          prec_less || helper xs
-    in
-    helper (Infix_group.precedence ig)
-  in
-  let U.Infix_group {associativity; precedence; name= name, _}, _ = group in
+  let U.Infix_group {associativity; precedence; _}, _ = group in
   let f (U.Less (id, _)) =
     match find_infix_group_name ctxt id with
-    | Some idx ->
-        (* get the index of idx in the _current_ ctxt.infix_groups *)
-        let ig_idx = idx - names_len + ig_len in
-        let my_idx = names_len - ig_len - 1 in
-        let%bind () =
-          if ig_idx < 0 then return ()
-          else
-            let ig = List.nth_exn (infix_groups ctxt) ig_idx in
-            if precedence_less ig my_idx then
-              let my_name = name in
-              let name = List.nth_exn (infix_group_names ctxt) idx in
-              return_err
-                (Error.Infix_group_recursive_precedence (name, my_name))
-            else return ()
-        in
-        return (Infix_group.Less idx)
+    | Some idx -> return (Infix_group.Less idx)
     | None -> return_err (Error.Infix_group_not_found id)
   in
-  let%bind precedence = Return.List.map ~f precedence in
-  let group = Infix_group.Infix_group {associativity; precedence} in
-  let (Context r) = ctxt in
-  return (Context {r with infix_groups= group :: r.infix_groups})
+  let%bind precedence = Return.Array.of_list_map ~f precedence in
+  return (Infix_group.Infix_group {associativity; precedence})
 
 let add_infix_decl (ctxt : t)
     (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) : t result =
@@ -751,6 +727,20 @@ let add_function_definition (ctxt : t)
     return_err
       (Error.Return_type_mismatch {expected= D.ret_ty decl; found= body_ty})
 
+let precedence_less infix_groups lhs rhs =
+  (*
+    tries to find an idx = rhs in lhs's tree of less-than precedences
+    depth-first
+  *)
+  let rec f (Infix_group.Less idx) =
+    if idx = rhs then true
+    else
+      let prec = Infix_group.precedence infix_groups.(idx) in
+      Array.exists ~f prec
+  in
+  let prec = Infix_group.precedence infix_groups.(lhs) in
+  Array.exists ~f prec
+
 let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
   let module U = Untyped_ast in
   let%bind type_context =
@@ -758,29 +748,55 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
     | Result.Ok o, sp -> (Result.Ok o, sp)
     | Result.Error e, sp -> (Result.Error (e, Type.Context.empty), sp)
   in
+  let check_for_errors arr ~equal ~err =
+    match Array.findi_nonconsecutive_duplicates arr ~equal with
+    | Some (idx_el1, idx_el2) -> return_err (err idx_el1 idx_el2)
+    | None -> return ()
+  in
   let ret =
-    let init =
+    let ctxt =
       Context
         { type_context
-        ; infix_group_names= []
-        ; infix_groups= []
+        ; infix_group_names= Array.empty ()
+        ; infix_groups= Array.empty ()
         ; infix_decls= []
         ; function_context= []
         ; function_definitions= [] }
     in
-    let%bind init =
-      Return.List.fold (U.infix_groups unt_ast) ~init ~f:add_infix_group_name
+    let%bind ctxt =
+      let%bind infix_group_names =
+        Return.Array.of_list_map
+          ~f:(type_infix_group_name ctxt)
+          (U.infix_groups unt_ast)
+      in
+      let equal (_, name1) (_, name2) = Nfc_string.equal name1 name2 in
+      let err (_, name) _ = Error.Infix_group_defined_multiple_times name in
+      let%bind () = check_for_errors infix_group_names ~equal ~err in
+      return (with_infix_group_names ctxt infix_group_names)
     in
-    let%bind init =
-      Return.List.fold (U.infix_groups unt_ast) ~init ~f:add_infix_group
+    let%bind ctxt =
+      let%bind infix_groups =
+        Return.Array.of_list_map ~f:(type_infix_group ctxt)
+          (U.infix_groups unt_ast)
+      in
+      let equal (idx1, _) (idx2, _) =
+        precedence_less infix_groups idx1 idx2
+        && precedence_less infix_groups idx2 idx1
+      in
+      let err (idx1, _) (idx2, _) =
+        let names = infix_group_names ctxt in
+        Error.Infix_group_recursive_precedence (names.(idx1), names.(idx2))
+      in
+      let%bind () = check_for_errors infix_groups ~equal ~err in
+      return (with_infix_groups ctxt infix_groups)
     in
-    let%bind init =
-      Return.List.fold (U.infix_decls unt_ast) ~init ~f:add_infix_decl
+    let%bind ctxt =
+      Return.List.fold (U.infix_decls unt_ast) ~init:ctxt ~f:add_infix_decl
     in
-    let%bind init =
-      Return.List.fold (U.funcs unt_ast) ~init ~f:add_function_declaration
+    let%bind ctxt =
+      Return.List.fold (U.funcs unt_ast) ~init:ctxt ~f:add_function_declaration
     in
-    Return.List.fold (U.funcs unt_ast) ~init ~f:add_function_definition
+    Return.List.fold (U.funcs unt_ast) ~init:ctxt ~f:add_function_definition
   in
   match ret with
   | Result.Ok o, sp -> (Result.Ok o, sp)

@@ -73,6 +73,14 @@ module Result :
                len:int
             -> (int * 'a, 'e) t Sequence.t
             -> (('a Array.t, 'e) t, Array.unordered_error) Result.t
+
+          val of_list_map :
+            'a list -> f:('a -> ('b, 'e) t) -> ('b Array.t, 'e) t
+
+          val of_list_map_unordered :
+               'a list
+            -> f:('a -> (int * 'b, 'e) t)
+            -> (('b Array.t, 'e) t, Array.unordered_error) Result.t
         end
       end
     end

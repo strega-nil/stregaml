@@ -93,22 +93,11 @@ module Context = struct
     in
     let%bind () =
       (* check for duplicates *)
-      let rec mem_from name idx arr =
-        if idx = Array.length arr then None
-        else
-          let (el, _), _ = arr.(idx) in
-          if Nfc_string.equal name el then Some idx
-          else mem_from name (idx + 1) arr
-      in
-      let rec check_duplicates idx =
-        if idx = Array.length names then return ()
-        else
-          let (name, _), _ = names.(idx) in
-          match mem_from name (idx + 1) names with
-          | Some _ -> return_err (Error.Type_defined_multiple_times name)
-          | None -> check_duplicates (idx + 1)
-      in
-      check_duplicates 0
+      let equal ((name, _), _) ((name', _), _) = Nfc_string.equal name name' in
+      match Array.find_nonconsecutive_duplicates names ~equal with
+      | Some (((name, _), _), _) ->
+          return_err (Error.Type_defined_multiple_times name)
+      | None -> return ()
     in
     let%bind user_types =
       let f (_, def) =

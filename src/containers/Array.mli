@@ -58,3 +58,23 @@ val foldi : 'a t -> init:'b -> f:(int -> 'b -> 'a -> 'b) -> 'b
 val fold_right : 'a t -> f:('a -> 'b -> 'b) -> init:'b -> 'b
 
 val findi : 'a t -> f:(int -> 'a -> bool) -> (int * 'a) option
+
+val find_from : 'a t -> int -> f:('a -> bool) -> 'a option
+
+val findi_from : 'a t -> int -> f:(int -> 'a -> bool) -> (int * 'a) option
+
+val mem_from : 'a t -> 'a -> int -> equal:('a -> 'a -> bool) -> bool
+
+val find_nonconsecutive_duplicates :
+  'a t -> equal:('a -> 'a -> bool) -> ('a * 'a) option
+(**
+  note: O(n^2)
+  if compiled programs continue getting bigger,
+  it'd probably be a good idea to switch to maps
+  calls [equal] exactly n * (n + 1) / 2 times.
+*)
+
+val findi_nonconsecutive_duplicates :
+     'a t
+  -> equal:(int * 'a -> int * 'a -> bool)
+  -> ((int * 'a) * (int * 'a)) option

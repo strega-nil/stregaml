@@ -167,6 +167,17 @@ module Result = struct
           | Result.Ok arr -> Result.Ok (Result.Ok arr, !span)
           | Result.Error e -> Result.Error e
           | exception E e -> Result.Ok (Result.Error e, !span)
+
+        let of_list_map (type a b e) (lst : a list) ~(f : a -> (b, e) t) :
+            (b Array.t, e) t =
+          of_sequence ~len:(Base.List.length lst)
+            (Sequence.map ~f (Sequence.of_list lst))
+
+        let of_list_map_unordered (type a b e) (lst : a list)
+            ~(f : a -> (int * b, e) t) :
+            ((b Array.t, e) t, Array.unordered_error) Result.t =
+          of_sequence_unordered ~len:(Base.List.length lst)
+            (Sequence.map ~f (Sequence.of_list lst))
       end
     end
   end
