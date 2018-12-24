@@ -59,7 +59,7 @@ place is of type: `%s`|}
         (Type.to_string ty ~ctxt)
   | Record_literal_duplicate_members member ->
       Printf.sprintf "Record literal - member `%s` initialized multiple times"
-        (Name.to_ident_string member)
+        (member :> string)
   | Record_literal_incorrect_type {field; field_ty; member_ty} ->
       Printf.sprintf
         {|Record literal - initializing member `%s` with incorrect type:
@@ -100,7 +100,10 @@ place is of type: `%s`|}
         (Type.to_string found ~ctxt)
   | Match_repeated_branches name ->
       Printf.sprintf "`match` expression has duplicated pattern: `%s`"
-        (Name.to_ident_string name)
+        (name :> string)
+  | Match_missing_branch name ->
+      Printf.sprintf "`match` expression is missing pattern: `%s`"
+        (name :> string)
   | Pattern_of_wrong_type {expected; found} ->
       Printf.sprintf
         {|`match` pattern of incorrect type:

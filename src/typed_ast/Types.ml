@@ -15,7 +15,7 @@ module rec Error : sig
     | Mutable_reference_taken_to_immutable_place : t
     | Dereference_of_non_reference : Type.t -> t
     | Record_literal_non_record_type : Type.t -> t
-    | Record_literal_duplicate_members : Name.t -> t
+    | Record_literal_duplicate_members : Nfc_string.t -> t
     | Record_literal_incorrect_type :
         { field: Name.t
         ; field_ty: Type.t
@@ -27,7 +27,8 @@ module rec Error : sig
     | Record_access_non_member : Type.t * Name.t -> t
     | Match_non_variant_type : Type.t -> t
     | Match_branches_of_different_type : {expected: Type.t; found: Type.t} -> t
-    | Match_repeated_branches : Name.t -> t
+    | Match_repeated_branches : Nfc_string.t -> t
+    | Match_missing_branch : Nfc_string.t -> t
     | Pattern_of_wrong_type : {expected: Type.t; found: Type.t} -> t
     | If_non_bool : Type.t -> t
     | If_branches_of_differing_type : Type.t * Type.t -> t
@@ -73,7 +74,7 @@ end =
   Type
 
 and Type_Structural : sig
-  type members = (Nfc_string.t * Type.t) array
+  type members = (Nfc_string.t * Type.t) Array.t
 
   type t =
     | Builtin : Type.builtin -> t
@@ -136,7 +137,7 @@ and Ast_Expr : sig
     | Integer_literal : int -> variant
     | Match :
         { cond: t Spanned.t
-        ; arms: (Type.t * Ast_Expr_Block.t Spanned.t) array }
+        ; arms: (Type.t * Ast_Expr_Block.t Spanned.t) Array.t }
         -> variant
     | If_else :
         { cond: t Spanned.t
@@ -149,7 +150,7 @@ and Ast_Expr : sig
     | Block : Ast_Expr_Block.t Spanned.t -> variant
     | Reference : {mutability: Type.mutability; place: t Spanned.t} -> variant
     | Dereference : t Spanned.t -> variant
-    | Record_literal : {ty: Type.t Spanned.t; members: t array} -> variant
+    | Record_literal : {ty: Type.t Spanned.t; members: t Array.t} -> variant
     | Record_access : t Spanned.t * int -> variant
     | Global_function : int -> variant
     | Constructor : Type.t * int -> variant

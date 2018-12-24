@@ -63,7 +63,5 @@ module Expr : sig
 
   val full_type_sp : t Spanned.t -> Type.t
 
-  (* useful for filling arrays *)
-
   val unit_value : t
 end

@@ -333,15 +333,9 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> return_err (Error.Match_non_variant_type cond_ty)
       in
       let members_len = Array.length members in
-      let arms_some = Array.create ~len:members_len false in
-      let arms =
-        let ty = Type.Builtin Type.Unit in
-        let blk = T.Block.Block {stmts= []; expr= None} in
-        Array.create ~len:members_len (ty, (blk, Spanned.Span.made_up))
-      in
       let arms_ty = ref None in
-      let%bind () =
-        let insert_arm pat blk =
+      let%bind arms =
+        let f ((pat, _), blk) =
           let (U.Pattern {constructor= constructor, _; binding}) = pat in
           let%bind cty, (arm_name, _) =
             match U.qualified_path constructor with
@@ -362,11 +356,6 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
             | Some x -> return x
             | None -> name_not_found cond_ty arm_name
           in
-          let%bind () =
-            if arms_some.(index) then
-              return_err (Error.Match_repeated_branches arm_name)
-            else return ()
-          in
           let binding =
             Ast.Binding.Binding
               {name= binding; mutability= Type.Immutable; ty= bind_ty}
@@ -375,7 +364,9 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
           let%bind () =
             match !arms_ty with
-            | None -> return (arms_ty := Some (T.Block.base_type_sp blk))
+            | None ->
+                arms_ty := Some (T.Block.base_type_sp blk) ;
+                return ()
             | Some ty ->
                 let arm_ty = T.Block.base_type_sp blk in
                 if Type.equal arm_ty ty then return ()
@@ -384,17 +375,20 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                     (Error.Match_branches_of_different_type
                        {expected= ty; found= arm_ty})
           in
-          arms.(index) <- (bind_ty, blk) ;
-          arms_some.(index) <- true ;
-          return ()
+          return (index, (bind_ty, blk))
         in
-        let rec helper = function
-          | [] -> return ()
-          | ((pat, _), blk) :: xs ->
-              let%bind () = insert_arm pat blk in
-              helper xs
+        let tmp =
+          Return.Array.of_sequence_unordered ~len:members_len
+            (Sequence.map ~f (Sequence.of_list parse_arms))
         in
-        helper parse_arms
+        match tmp with
+        | Result.Ok o -> o
+        | Result.Error (Array.Empty_cell idx) ->
+            let name, _ = members.(idx) in
+            return_err (Error.Match_missing_branch name)
+        | Result.Error (Array.Duplicate idx) ->
+            let name, _ = members.(idx) in
+            return_err (Error.Match_repeated_branches name)
       in
       let variant = T.Match {cond; arms} in
       let ty =
@@ -559,12 +553,8 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> return_err (Error.Record_literal_non_record_type ty)
       in
       let find_field = find_field ~members:type_members in
-      let members_len = Array.length type_members in
-      let members_init : bool array = Array.create ~len:members_len false in
-      let members_typed : T.t array =
-        Array.create ~len:members_len T.unit_value
-      in
-      let%bind () =
+      let%bind members_typed =
+        let members_len = Array.length type_members in
         let f ((name, expr), _) =
           let%bind expr = typeck_expression locals ctxt expr in
           let ety = T.base_type expr in
@@ -578,22 +568,20 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                        {field= name; field_ty= ety; member_ty= mty})
             | None -> return_err (Error.Record_literal_extra_field (ty, name))
           in
-          if members_init.(idx) then
-            return_err (Error.Record_literal_duplicate_members name)
-          else (
-            members_typed.(idx) <- expr ;
-            members_init.(idx) <- true ;
-            return () )
+          return (idx, expr)
         in
-        Return.List.iter ~f members
-      in
-      let%bind () =
-        let f _ el = not el in
-        match Array.findi ~f members_init with
-        | None -> return ()
-        | Some (idx, _) ->
+        let tmp =
+          Return.Array.of_sequence_unordered ~len:members_len
+            (Sequence.map ~f (Sequence.of_list members))
+        in
+        match tmp with
+        | Result.Ok o -> o
+        | Result.Error (Array.Empty_cell idx) ->
             let name, ty = type_members.(idx) in
             return_err (Error.Record_literal_missing_field (ty, name))
+        | Result.Error (Array.Duplicate idx) ->
+            let name, _ = type_members.(idx) in
+            return_err (Error.Record_literal_duplicate_members name)
       in
       return
         (T.Expr

@@ -12,11 +12,10 @@ module Context = struct
 
   let user_type_data (User_type r) = r.data
 
-  (* note: const after construction *)
   type t =
     | Context :
-        { user_types: user_type array
-        ; names: (Nfc_string.t Spanned.t * Types.Type.t) array }
+        { user_types: user_type Array.t
+        ; names: (Nfc_string.t Spanned.t * Types.Type.t) Array.t }
         -> t
 
   let make lst =
@@ -76,20 +75,21 @@ module Context = struct
           return (Builtin (Function {params; ret_ty}))
     in
     let names_len = defs_len + aliases_len in
+    (* TODO: figure out how to remove these hacks *)
     let user_types =
-      let default = User_type {data= Structural.Record [||]} in
-      Array.create ~len:defs_len default
+      let default = User_type {data= Structural.Record (Array.empty ())} in
+      Mutable_array.create ~len:defs_len default
     in
     let names =
       let default =
         ((Nfc_string.empty, Spanned.Span.made_up), User_defined (-1))
       in
-      Array.create ~len:names_len default
+      Mutable_array.create ~len:names_len default
     in
     let rec exists_duplicate idx end_idx name =
       if idx = end_idx then false
       else
-        let (name_idx, _), _ = names.(idx) in
+        let (name_idx, _), _ = Mutable_array.get names idx in
         if Nfc_string.equal name_idx name then true
         else exists_duplicate (idx + 1) end_idx name
     in
@@ -113,20 +113,23 @@ module Context = struct
           | Data.Record -> return (Structural.Record members)
           | Data.Variant -> return (Structural.Variant members)
         in
-        user_types.(index) <- User_type {data} ;
-        names.(index) <- ((name, name_sp), User_defined index) ;
+        Mutable_array.set user_types index (User_type {data}) ;
+        Mutable_array.set names index ((name, name_sp), User_defined index) ;
         return ()
     in
     let%bind () = Return.List.iteri ~f:fill_defs defs in
     let fill_aliases index (name, ty) =
       let%bind ty = get_ast_type ty in
-      names.(index + defs_len) <- (name, ty) ;
+      Mutable_array.set names (index + defs_len) (name, ty) ;
       return ()
     in
     let%bind () = Return.List.iteri ~f:fill_aliases aliases in
-    return (Context {user_types; names})
+    return
+      (Context
+         { user_types= Array.of_mutable_inplace user_types
+         ; names= Array.of_mutable_inplace names })
 
-  let empty = Context {user_types= [||]; names= [||]}
+  let empty = Context {user_types= Array.empty (); names= Array.empty ()}
 
   let user_types (Context r) = r.user_types
 

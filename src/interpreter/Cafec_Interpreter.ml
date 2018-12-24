@@ -3,12 +3,7 @@ module Expr = Ast.Expr
 module Stmt = Ast.Stmt
 module Type = Ast.Type
 
-(*
-  NOTE(ubsan): NEVER modify these arrays.
-  They should be immutable,
-  but ocaml doesn't have immutable arrays
-*)
-type t = Interpreter : {funcs: (Name.t * Expr.Block.t) array} -> t
+type t = Interpreter : {funcs: (Name.t * Expr.Block.t) Array.t} -> t
 
 let funcs (Interpreter {funcs}) = funcs
 
@@ -47,7 +42,8 @@ module Value = struct
           let f idx e =
             String.concat [Int.to_string idx; " = "; to_string !e ctxt]
           in
-          String.concat_array ~sep:"; " (Array.mapi ~f members)
+          String.concat_array ~sep:"; "
+            (Array.to_mutable_inplace (Array.mapi ~f members))
         in
         String.concat ["{ "; members; " }"]
     | Function n ->

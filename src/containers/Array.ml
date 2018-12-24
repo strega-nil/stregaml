@@ -3,42 +3,20 @@ module Mutable = Base.Array
 module Impl : sig
   type +'a t
 
-  type -'a maybe_initialized
-
   val to_mutable : 'a t -> 'a Mutable.t
 
   val of_mutable : 'a Mutable.t -> 'a t
-
-  val create_uninitialized : int -> 'a maybe_initialized Mutable.t
-
-  val initialized_elt : 'a -> 'a maybe_initialized
-
-  val assert_initialized : 'a maybe_initialized Mutable.t -> 'a t
 end = struct
-  type +'a t = Caml.Obj.t Mutable.t
+  type +'a t = Caml.Obj.t
 
-  type -'a maybe_initialized = Caml.Obj.t
+  let to_mutable (type a) (arr : a t) : a Mutable.t = Caml.Obj.obj arr
 
-  let to_mutable (type a) (arr : a t) : a Mutable.t = Caml.Obj.magic arr
-
-  let of_mutable (type a) (mut : a Mutable.t) : a t = Caml.Obj.magic mut
-
-  let create_uninitialized (type a) (len : int) : a maybe_initialized Mutable.t
-      =
-    Mutable.create ~len (Caml.Obj.repr 0)
-
-  let initialized_elt (type a) (el : a) : a maybe_initialized =
-    Caml.Obj.repr el
-
-  let assert_initialized (type a) (mut : a maybe_initialized Mutable.t) : a t =
-    of_mutable mut
+  let of_mutable (type a) (mut : a Mutable.t) : a t = Caml.Obj.repr mut
 end
 
 type +'a t = 'a Impl.t
 
-type unordered_error = [`Duplicate of int | `Empty of int]
-
-type 'e unordered_user_error = [unordered_error | `User_error of 'e]
+type unordered_error = Duplicate of int | Empty_cell of int
 
 let compare f lhs rhs =
   Mutable.compare f (Impl.to_mutable lhs) (Impl.to_mutable rhs)
@@ -106,9 +84,56 @@ external get : 'a t -> int -> 'a = "%array_safe_get"
 
 external unsafe_get : 'a t -> int -> 'a = "%array_unsafe_get"
 
+let empty () = Impl.of_mutable [||]
+
 let create ~len el = Impl.of_mutable (Mutable.create ~len el)
 
 let init len ~f = Impl.of_mutable (Mutable.init len ~f)
+
+let of_sequence (type a) ~(len : int) (seq : a Sequence.t) : a t =
+  match Sequence.next seq with
+  | None ->
+      assert (len = 0) ;
+      empty ()
+  | Some (el, seq) ->
+      let ret = Mutable.create el ~len in
+      let length_init = ref 1 in
+      let f idx el = Mutable.set ret (idx + 1) el in
+      Sequence.iteri seq ~f ;
+      if !length_init = len then Impl.of_mutable ret
+      else raise (Invalid_argument "`seq` didn't have `len` elements")
+
+let of_sequence_unordered (type a) ~(len : int) (seq : (int * a) Sequence.t) :
+    (a t, unordered_error) Result.t =
+  let rec helper ret ret_some seq =
+    match Sequence.next seq with
+    | Some ((idx, el), seq) ->
+        if Mutable.get ret_some idx then Result.Error (Duplicate idx)
+        else
+          let () = Mutable.set ret idx el in
+          let () = Mutable.set ret_some idx true in
+          helper ret ret_some seq
+    | None -> (
+      match Mutable.findi ret_some ~f:(fun _ x -> not x) with
+      | None -> Result.Ok (Impl.of_mutable ret)
+      | Some (idx, _) -> Result.Error (Empty_cell idx) )
+  in
+  match Sequence.next seq with
+  | None ->
+      assert (len = 0) ;
+      Result.Ok (empty ())
+  | Some ((idx, el), seq) ->
+      let ret = Mutable.create el ~len in
+      let ret_some = Mutable.create false ~len in
+      let () = Mutable.set ret_some idx true in
+      helper ret ret_some seq
+
+let to_sequence (type a) (arr : a t) : a Sequence.t =
+  (*
+    since nobody can get mutable access to these `a` outside of this function,
+    there's no problem with using this
+  *)
+  Mutable.to_sequence_mutable (Impl.to_mutable arr)
 
 let append fst snd =
   Impl.of_mutable (Mutable.append (Impl.to_mutable fst) (Impl.to_mutable snd))
@@ -119,162 +144,20 @@ let concat (type a) (lst : a t list) : a t =
 
 let to_mutable = to_array
 
+let to_mutable_inplace = Impl.to_mutable
+
 let of_list lst = Impl.of_mutable (Mutable.of_list lst)
-
-let of_list_map (type a b) (lst : a list) ~(f : a -> b) : b t =
-  let len = List.length lst in
-  let ret = Impl.create_uninitialized len in
-  let f index x = Mutable.set ret index (Impl.initialized_elt (f x)) in
-  List.iteri ~f lst ;
-  Impl.assert_initialized ret
-
-let of_list_map_unordered (type a b) (lst : a list) ~(f : a -> int * b) :
-    (b t, unordered_error) Result.t =
-  let len = List.length lst in
-  let ret = Impl.create_uninitialized len in
-  let ret_some = Mutable.create ~len false in
-  let rec helper = function
-    | [] -> (
-      match Mutable.findi ret_some ~f:(fun _ x -> not x) with
-      | None -> Result.Ok ()
-      | Some (idx, _) -> Result.Error (`Empty idx) )
-    | x :: xs ->
-        let idx, el = f x in
-        if Mutable.get ret_some idx then Result.Error (`Duplicate idx)
-        else (
-          Mutable.set ret idx (Impl.initialized_elt el) ;
-          Mutable.set ret_some idx true ;
-          helper xs )
-  in
-  match helper lst with
-  | Result.Ok () -> Result.Ok (Impl.assert_initialized ret)
-  | Result.Error e -> Result.Error e
-
-let of_list_map_result (type a b e) (lst : a list) ~(f : a -> (b, e) Result.t)
-    : (b t, e) Result.t =
-  let len = List.length lst in
-  let ret = Impl.create_uninitialized len in
-  let rec helper index = function
-    | [] -> Result.Ok ()
-    | x :: xs -> (
-      match f x with
-      | Result.Ok el ->
-          Mutable.set ret index (Impl.initialized_elt el) ;
-          helper (index + 1) xs
-      | Result.Error e -> Result.Error e )
-  in
-  match helper 0 lst with
-  | Result.Ok () -> Result.Ok (Impl.assert_initialized ret)
-  | Result.Error e -> Result.Error e
-
-let of_list_map_unordered_result (type a b e) (lst : a list)
-    ~(f : a -> (int * b, e) Result.t) : (b t, e unordered_user_error) Result.t
-    =
-  let len = List.length lst in
-  let ret = Impl.create_uninitialized len in
-  let ret_some = Mutable.create ~len false in
-  let rec helper = function
-    | [] -> (
-      match Mutable.findi ret_some ~f:(fun _ x -> not x) with
-      | None -> Result.Ok ()
-      | Some (idx, _) -> Result.Error (`Empty idx) )
-    | x :: xs -> (
-      match f x with
-      | Result.Ok (idx, el) ->
-          if Mutable.get ret_some idx then Result.Error (`Duplicate idx)
-          else (
-            Mutable.set ret idx (Impl.initialized_elt el) ;
-            Mutable.set ret_some idx true ;
-            helper xs )
-      | Result.Error e -> Result.Error (`User_error e) )
-  in
-  match helper lst with
-  | Result.Ok () -> Result.Ok (Impl.assert_initialized ret)
-  | Result.Error e -> Result.Error e
 
 let of_mutable (type a) (mut : a Mutable.t) : a t =
   Impl.of_mutable (Mutable.copy mut)
 
-let of_mutable_map (type a b) (mut : a Mutable.t) ~(f : a -> b) : b t =
-  Impl.of_mutable (Mutable.map mut ~f)
-
-let of_mutable_map_unordered (type a b) (mut : a Mutable.t) ~(f : a -> int * b)
-    : (b t, unordered_error) Result.t =
-  let len = Mutable.length mut in
-  let ret = Impl.create_uninitialized len in
-  let ret_some : bool Mutable.t = Mutable.create ~len false in
-  let rec helper index len mut =
-    if index = len then
-      match Mutable.findi ret_some ~f:(fun _ x -> not x) with
-      | None -> Result.Ok ()
-      | Some (idx, _) -> Result.Error (`Empty idx)
-    else
-      let idx, el = f (Mutable.get mut index) in
-      if Mutable.get ret_some idx then Result.Error (`Duplicate idx)
-      else (
-        Mutable.set ret idx (Impl.initialized_elt el) ;
-        Mutable.set ret_some idx true ;
-        helper (index + 1) len mut )
-  in
-  match helper 0 len mut with
-  | Result.Ok () -> Result.Ok (Impl.assert_initialized ret)
-  | Result.Error e -> Result.Error e
-
-let of_mutable_map_result (type a b e) (mut : a Mutable.t)
-    ~(f : a -> (b, e) Result.t) : (b t, e) Result.t =
-  let len = Mutable.length mut in
-  let ret = Impl.create_uninitialized len in
-  let rec helper index len mut =
-    if index = len then Result.Ok ()
-    else
-      match f (Mutable.get mut index) with
-      | Result.Ok el ->
-          Mutable.set ret index (Impl.initialized_elt el) ;
-          helper (index + 1) len mut
-      | Result.Error e -> Result.Error e
-  in
-  match helper 0 len mut with
-  | Result.Ok () -> Result.Ok (Impl.assert_initialized ret)
-  | Result.Error e -> Result.Error e
-
-let of_mutable_map_unordered_result (type a b e) (mut : a Mutable.t)
-    ~(f : a -> (int * b, e) Result.t) : (b t, e unordered_user_error) Result.t
-    =
-  let len = Mutable.length mut in
-  let ret = Impl.create_uninitialized len in
-  let ret_some : bool Mutable.t = Mutable.create ~len false in
-  let rec helper index len mut =
-    if index = len then
-      match Mutable.findi ret_some ~f:(fun _ x -> not x) with
-      | None -> Result.Ok ()
-      | Some (idx, _) -> Result.Error (`Empty idx)
-    else
-      match f (Mutable.get mut index) with
-      | Result.Ok (idx, el) ->
-          if Mutable.get ret_some idx then Result.Error (`Duplicate idx)
-          else (
-            Mutable.set ret idx (Impl.initialized_elt el) ;
-            Mutable.set ret_some idx true ;
-            helper (index + 1) len mut )
-      | Result.Error e -> Result.Error (`User_error e)
-  in
-  match helper 0 len mut with
-  | Result.Ok () -> Result.Ok (Impl.assert_initialized ret)
-  | Result.Error e -> Result.Error e
-
-let map (type a) (arr : a t) = of_mutable_map (Impl.to_mutable arr)
-
-let map_unordered (type a) (arr : a t) =
-  of_mutable_map_unordered (Impl.to_mutable arr)
-
-let map_result (type a) (arr : a t) =
-  of_mutable_map_result (Impl.to_mutable arr)
-
-let map_unordered_result (type a) (arr : a t) =
-  of_mutable_map_unordered_result (Impl.to_mutable arr)
+let of_mutable_inplace = Impl.of_mutable
 
 let iteri (type a) (arr : a t) ~(f : int -> a -> unit) : unit =
   Mutable.iteri (Impl.to_mutable arr) ~f
+
+let map (type a b) (arr : a t) ~(f : a -> b) =
+  Impl.of_mutable (Mutable.map (Impl.to_mutable arr) ~f)
 
 let mapi (type a b) (arr : a t) ~(f : int -> a -> b) : b t =
   Impl.of_mutable (Mutable.mapi (Impl.to_mutable arr) ~f)
