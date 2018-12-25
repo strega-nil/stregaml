@@ -1,5 +1,3 @@
-* cleanup
-  - switch the remaining lists in the mid-end into arrays
 * recursive types
   - first - check for it
   - second - see pointers
