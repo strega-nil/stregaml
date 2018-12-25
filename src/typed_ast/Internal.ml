@@ -118,29 +118,11 @@ let find_field :
 module Functions : sig
   val index_by_name :
     Function_declaration.t Spanned.t Array.t -> Name.t -> int option
-
-  val decl_by_index :
-       Function_declaration.t Spanned.t Array.t
-    -> int
-    -> Function_declaration.t Spanned.t
-
-  val expr_by_index :
-    Expr.Block.t Spanned.t list -> int -> Expr.Block.t Spanned.t
 end = struct
   let index_by_name ctxt search =
     let module D = Function_declaration in
     let f _ (D.Declaration {name; _}, _) = Name.equal name search in
     match Array.findi ~f ctxt with Some (idx, _) -> Some idx | None -> None
-
-  let decl_by_index ctxt idx = ctxt.(idx)
-
-  let expr_by_index func_defs idx =
-    let rec helper = function
-      | 0, expr :: _ -> expr
-      | n, _ :: defs -> helper (n - 1, defs)
-      | _, [] -> assert false
-    in
-    if idx < 0 then assert false else helper (idx, func_defs)
 end
 
 module Bind_order = struct
@@ -210,6 +192,10 @@ let value_type ty =
 let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   let module U = Untyped_ast in
   let module T = Ast in
+  (*
+    TODO: fix this
+    probably want to do a fold on locals?
+  *)
   let rec typeck_stmts locals = function
     | [] -> return ([], locals)
     | (s, sp) :: xs -> (
@@ -240,6 +226,7 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   in
   let U.Expr.Block.Block {stmts; expr}, sp = unt_blk in
   let%bind stmts, locals = typeck_stmts locals stmts in
+  let stmts = Array.of_list stmts in
   let%bind expr =
     match expr with
     | Some e ->
@@ -388,10 +375,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           in
           return (index, (bind_ty, blk))
         in
-        let tmp =
-          Return.Array.of_sequence_unordered ~len:members_len
-            (Sequence.map ~f (Sequence.of_list parse_arms))
-        in
+        let tmp = Return.Array.of_list_map_unordered ~f parse_arms in
         match tmp with
         | Result.Ok o -> o
         | Result.Error (Array.Empty_cell idx) ->
@@ -495,9 +479,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | None -> return_err (Error.Name_not_found name)
         | Some idx ->
             let ty =
-              let decl, _ =
-                Functions.decl_by_index (function_context ctxt) idx
-              in
+              let decl, _ = (function_context ctxt).(idx) in
               let params =
                 let f (Binding.Binding {ty; _}) = ty in
                 Array.map ~f (Function_declaration.params decl)

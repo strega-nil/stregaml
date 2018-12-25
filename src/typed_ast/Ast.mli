@@ -40,7 +40,7 @@ module Expr : sig
 
     val expr : t -> Types.Ast_Expr.t Spanned.t option
 
-    val stmts : t -> Types.Ast_Stmt.t Spanned.t list
+    val stmts : t -> Types.Ast_Stmt.t Spanned.t Array.t
 
     val base_type : t -> Types.Type.t
 

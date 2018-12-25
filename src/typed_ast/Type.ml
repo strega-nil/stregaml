@@ -66,10 +66,7 @@ module Context = struct
           return (Builtin (Reference {mutability; pointee}))
       | PType.Function {params; ret_ty} ->
           let f (x, _) = get_ast_type x in
-          let%bind params =
-            Return.Array.of_sequence ~len:(List.length params)
-              (Sequence.map ~f (Sequence.of_list params))
-          in
+          let%bind params = Return.Array.of_list_map ~f params in
           let%bind ret_ty =
             match ret_ty with
             | Some (ty, _) -> get_ast_type ty
@@ -108,8 +105,7 @@ module Context = struct
               let%bind ty = get_ast_type ty in
               return (name, ty)
             in
-            let%bind lst = Return.List.map ~f lst in
-            return (Array.of_list lst)
+            Return.Array.of_list_map ~f lst
           in
           let (Data.Data {kind; members}) = def in
           let%bind members = typed_members members in
@@ -119,8 +115,7 @@ module Context = struct
         in
         return (User_type {data})
       in
-      Return.Array.of_sequence ~len:defs_len
-        (Sequence.map ~f (Sequence.of_list defs))
+      Return.Array.of_list_map ~f defs
     in
     return (Context {user_types; names})
 
@@ -154,10 +149,7 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
   | U.Function {params; ret_ty} ->
       let f ty = of_untyped ty ~ctxt in
       let default = return (Builtin Unit) in
-      let%bind params =
-        Return.Array.of_sequence ~len:(List.length params)
-          (Sequence.map ~f (Sequence.of_list params))
-      in
+      let%bind params = Return.Array.of_list_map ~f params in
       let%bind ret_ty = Option.value_map ~f ~default ret_ty in
       return (Builtin (Function {params; ret_ty}))
 

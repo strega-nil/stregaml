@@ -125,7 +125,7 @@ end =
 and Ast_Expr_Block : sig
   type t =
     | Block :
-        { stmts: Ast_Stmt.t Spanned.t list
+        { stmts: Ast_Stmt.t Spanned.t Array.t
         ; expr: Ast_Expr.t Spanned.t option }
         -> t
 end =

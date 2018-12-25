@@ -107,20 +107,17 @@ let is_mut = function Type.Immutable -> false | Type.Mutable -> true
 
 let call ctxt (idx : Value.function_index) (args : Value.t list) =
   let rec eval_block ctxt locals (Expr.Block.Block {stmts; expr}) =
-    let rec helper locals = function
-      | [] -> locals
-      | (stmt, _) :: xs -> (
-        match stmt with
-        | Stmt.Expression e ->
-            let _ = eval ctxt locals e in
-            helper locals xs
-        | Stmt.Let
-            {expr= expr, _; binding= Ast.Binding.Binding {mutability; _}; _} ->
-            let v = Expr_result.to_value (eval ctxt locals expr) in
-            let locals = Object.obj ~is_mut:(is_mut mutability) v :: locals in
-            helper locals xs )
+    let f locals = function
+      | Stmt.Expression e, _ ->
+          ignore (eval ctxt locals e) ;
+          locals
+      | Stmt.Let {expr; binding}, _ ->
+          let expr, _ = expr in
+          let (Ast.Binding.Binding {mutability; _}) = binding in
+          let v = Expr_result.to_value (eval ctxt locals expr) in
+          Object.obj ~is_mut:(is_mut mutability) v :: locals
     in
-    let locals = helper locals stmts in
+    let locals = Array.fold stmts ~f ~init:locals in
     match expr with
     | Some (e, _) -> eval ctxt locals e
     | None -> Expr_result.Value Value.Unit
