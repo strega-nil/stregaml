@@ -49,11 +49,9 @@ module rec Error : sig
     | Call_of_non_function : Type.t -> t
     | Prefix_function_wrong_arity : {name: Name.t; num_params: int} -> t
     | Infix_function_wrong_arity : {name: Name.t; num_params: int} -> t
-    | Defined_function_multiple_times :
-        { name: Name.t
-        ; original_declaration: Spanned.Span.t }
-        -> t
+    | Defined_function_multiple_times : Name.t -> t
     | Defined_type_multiple_times : Nfc_string.t -> t
+    | Defined_infix_declaration_multiple_times : Name.t -> t
     | Return_type_mismatch : {expected: Type.t; found: Type.t} -> t
     | Invalid_function_arguments :
         { expected: Type.t Array.t

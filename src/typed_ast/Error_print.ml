@@ -162,14 +162,14 @@ place is of type: `%s`|}
   found: %d|}
         (Name.string name :> string)
         num_params
-  | Defined_function_multiple_times {name; original_declaration} ->
-      Printf.sprintf
-        {|Defined function `%s` multiple times
-  (original declaration at %s)|}
+  | Defined_function_multiple_times name ->
+      Printf.sprintf "Defined function `%s` multiple times"
         (Name.to_ident_string name)
-        (Spanned.Span.to_string original_declaration)
   | Defined_type_multiple_times name ->
       Printf.sprintf "Defined type `%s` multiple times" (name :> string)
+  | Defined_infix_declaration_multiple_times name ->
+      Printf.sprintf "Defined infix declaration for `%s` multiple times"
+        (Name.to_ident_string name)
   | Return_type_mismatch {expected; found} ->
       Printf.sprintf
         {|Return value did not match the return type.

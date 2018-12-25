@@ -10,9 +10,9 @@ type t = Internal.t
 
 let make unt_ast = Internal.make unt_ast
 
-let number_of_functions ast = List.length (Internal.function_context ast)
+let number_of_functions ast = Array.length (Internal.function_context ast)
 
 let function_seq ast =
   Sequence.zip
-    (Sequence.of_list (Internal.function_context ast))
-    (Sequence.of_list (Internal.function_definitions ast))
+    (Array.to_sequence (Internal.function_context ast))
+    (Array.to_sequence (Internal.function_definitions ast))

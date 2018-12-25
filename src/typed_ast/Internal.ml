@@ -45,9 +45,9 @@ module Context = struct
         { type_context: Type.Context.t
         ; infix_group_names: Nfc_string.t Array.t
         ; infix_groups: Infix_group.t Array.t
-        ; infix_decls: (Name.t * int) list
-        ; function_context: Function_declaration.t Spanned.t list
-        ; function_definitions: Expr.Block.t Spanned.t list }
+        ; infix_decls: (Name.t * int) Array.t
+        ; function_context: Function_declaration.t Spanned.t Array.t
+        ; function_definitions: Expr.Block.t Spanned.t Array.t }
         -> t
 
   let type_context (Context r) = r.type_context
@@ -117,10 +117,10 @@ let find_field :
 
 module Functions : sig
   val index_by_name :
-    Function_declaration.t Spanned.t list -> Name.t -> int option
+    Function_declaration.t Spanned.t Array.t -> Name.t -> int option
 
   val decl_by_index :
-       Function_declaration.t Spanned.t list
+       Function_declaration.t Spanned.t Array.t
     -> int
     -> Function_declaration.t Spanned.t
 
@@ -129,20 +129,10 @@ module Functions : sig
 end = struct
   let index_by_name ctxt search =
     let module D = Function_declaration in
-    let rec helper n = function
-      | (D.Declaration {name; _}, _) :: _ when Name.equal name search -> Some n
-      | _ :: names -> helper (n + 1) names
-      | [] -> None
-    in
-    helper 0 ctxt
+    let f _ (D.Declaration {name; _}, _) = Name.equal name search in
+    match Array.findi ~f ctxt with Some (idx, _) -> Some idx | None -> None
 
-  let decl_by_index ctxt idx =
-    let rec helper = function
-      | 0, decl :: _ -> decl
-      | n, _ :: decls -> helper (n - 1, decls)
-      | _, [] -> assert false
-    in
-    if idx < 0 then assert false else helper (idx, ctxt)
+  let decl_by_index ctxt idx = ctxt.(idx)
 
   let expr_by_index func_defs idx =
     let rec helper = function
@@ -163,7 +153,7 @@ module Bind_order = struct
     let module T = Infix_group in
     let get_infix_group ctxt op =
       let f (name, _) = Name.equal op name in
-      match List.find ~f (infix_decls ctxt) with
+      match Array.find ~f (infix_decls ctxt) with
       | Some (_, idx) -> Some (idx, (infix_groups ctxt).(idx))
       | None -> None
     in
@@ -649,21 +639,20 @@ let type_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
   let%bind precedence = Return.Array.of_list_map ~f precedence in
   return (Infix_group.Infix_group {associativity; precedence})
 
-let add_infix_decl (ctxt : t)
-    (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) : t result =
+let type_infix_decl (ctxt : t)
+    (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) :
+    (Name.t * int) result =
   let module U = Untyped_ast.Infix_declaration in
   let%bind (U.Infix_declaration {name= name, _; group= group, _}) =
     spanned_lift unt_infix_decl
   in
   match find_infix_group_name ctxt group with
   | None -> return_err (Error.Infix_group_not_found group)
-  | Some idx ->
-      let decl = (name, idx) in
-      let (Context r) = ctxt in
-      return (Context {r with infix_decls= decl :: r.infix_decls})
+  | Some idx -> return (name, idx)
 
-let add_function_declaration (ctxt : t)
-    (unt_func : Untyped_ast.Func.t Spanned.t) : t result =
+let type_function_declaration (ctxt : t)
+    (unt_func : Untyped_ast.Func.t Spanned.t) :
+    Function_declaration.t Spanned.t result =
   let module F = Untyped_ast.Func in
   let module D = Function_declaration in
   let unt_func, _ = unt_func in
@@ -682,31 +671,15 @@ let add_function_declaration (ctxt : t)
     | Some ret_ty -> Type.of_untyped ~ctxt:(type_context ctxt) ret_ty
     | None -> return (Type.Builtin Type.Unit)
   in
-  (* check for duplicates *)
-  let rec check_for_duplicates search = function
-    | [] -> None
-    | (f, sp) :: _ when Name.equal (D.name f) search -> Some (f, sp)
-    | _ :: xs -> check_for_duplicates search xs
-  in
-  match check_for_duplicates name (function_context ctxt) with
-  | Some (_, sp) ->
-      return_err
-        (Error.Defined_function_multiple_times {name; original_declaration= sp})
-  | None ->
-      let module D = Function_declaration in
-      let decl = (D.Declaration {name; params; ret_ty}, parm_sp) in
-      let (Context r) = ctxt in
-      return (Context {r with function_context= decl :: r.function_context})
+  return (D.Declaration {name; params; ret_ty}, parm_sp)
 
-let add_function_definition (ctxt : t)
-    (unt_func : Untyped_ast.Func.t Spanned.t) : t result =
+let type_function_definition (ctxt : t) (idx : int)
+    (unt_func : Untyped_ast.Func.t Spanned.t) : Expr.Block.t Spanned.t result =
   let module F = Untyped_ast.Func in
   let module D = Function_declaration in
   let unt_func, _ = unt_func in
   let decl =
-    let num_funcs = List.length (function_context ctxt) in
-    let idx = num_funcs - 1 - List.length (function_definitions ctxt) in
-    let decl, _ = Functions.decl_by_index (function_context ctxt) idx in
+    let decl, _ = (function_context ctxt).(idx) in
     assert (Name.equal (D.name decl) (F.name unt_func)) ;
     decl
   in
@@ -719,10 +692,7 @@ let add_function_definition (ctxt : t)
     | Some e -> Expr.base_type_sp e
     | None -> Type.Builtin Type.Unit
   in
-  if Type.equal body_ty (D.ret_ty decl) then
-    let (Context r) = ctxt in
-    let function_definitions = (body, body_sp) :: r.function_definitions in
-    return (Context {r with function_definitions})
+  if Type.equal body_ty (D.ret_ty decl) then return (body, body_sp)
   else
     return_err
       (Error.Return_type_mismatch {expected= D.ret_ty decl; found= body_ty})
@@ -759,9 +729,9 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
         { type_context
         ; infix_group_names= Array.empty ()
         ; infix_groups= Array.empty ()
-        ; infix_decls= []
-        ; function_context= []
-        ; function_definitions= [] }
+        ; infix_decls= Array.empty ()
+        ; function_context= Array.empty ()
+        ; function_definitions= Array.empty () }
     in
     let%bind ctxt =
       let%bind infix_group_names =
@@ -791,12 +761,39 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
       return (with_infix_groups ctxt infix_groups)
     in
     let%bind ctxt =
-      Return.List.fold (U.infix_decls unt_ast) ~init:ctxt ~f:add_infix_decl
+      let%bind infix_decls =
+        Return.Array.of_list_map ~f:(type_infix_decl ctxt)
+          (U.infix_decls unt_ast)
+      in
+      let equal (_, (name1, _)) (_, (name2, _)) = Name.equal name1 name2 in
+      let err (_, (name, _)) (_, _) =
+        Error.Defined_infix_declaration_multiple_times name
+      in
+      let%bind () = check_for_errors infix_decls ~equal ~err in
+      return (with_infix_decls ctxt infix_decls)
     in
     let%bind ctxt =
-      Return.List.fold (U.funcs unt_ast) ~init:ctxt ~f:add_function_declaration
+      let%bind function_context =
+        Return.Array.of_list_map
+          ~f:(type_function_declaration ctxt)
+          (U.funcs unt_ast)
+      in
+      let module D = Function_declaration in
+      let equal (_, (decl1, _)) (_, (decl2, _)) =
+        Name.equal (D.name decl1) (D.name decl2)
+      in
+      let err (_, (decl, _)) (_, _) =
+        Error.Defined_function_multiple_times (D.name decl)
+      in
+      let%bind () = check_for_errors function_context ~equal ~err in
+      return (with_function_context ctxt function_context)
     in
-    Return.List.fold (U.funcs unt_ast) ~init:ctxt ~f:add_function_definition
+    let%bind function_definitions =
+      Sequence.of_list (U.funcs unt_ast)
+      |> Sequence.mapi ~f:(type_function_definition ctxt)
+      |> Return.Array.of_sequence ~len:(List.length (U.funcs unt_ast))
+    in
+    return (with_function_definitions ctxt function_definitions)
   in
   match ret with
   | Result.Ok o, sp -> (Result.Ok o, sp)
