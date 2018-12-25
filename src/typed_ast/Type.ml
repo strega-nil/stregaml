@@ -12,11 +12,10 @@ module Context = struct
 
   let user_type_data (User_type r) = r.data
 
-  (* note: const after construction *)
   type t =
     | Context :
-        { user_types: user_type array
-        ; names: (Nfc_string.t Spanned.t * Types.Type.t) array }
+        { user_types: user_type Array.t
+        ; names: (Nfc_string.t Spanned.t * Types.Type.t) Array.t }
         -> t
 
   let make lst =
@@ -67,7 +66,7 @@ module Context = struct
           return (Builtin (Reference {mutability; pointee}))
       | PType.Function {params; ret_ty} ->
           let f (x, _) = get_ast_type x in
-          let%bind params = Return.List.map ~f params in
+          let%bind params = Return.Array.of_list_map ~f params in
           let%bind ret_ty =
             match ret_ty with
             | Some (ty, _) -> get_ast_type ty
@@ -75,37 +74,38 @@ module Context = struct
           in
           return (Builtin (Function {params; ret_ty}))
     in
-    let names_len = defs_len + aliases_len in
-    let user_types =
-      let default = User_type {data= Structural.Record [||]} in
-      Array.create ~len:defs_len default
-    in
-    let names =
-      let default =
-        ((Nfc_string.empty, Spanned.Span.made_up), User_defined (-1))
+    let%bind names =
+      let names_len = defs_len + aliases_len in
+      let user_defined index ((name, sp), _) =
+        return ((name, sp), User_defined index)
       in
-      Array.create ~len:names_len default
+      let alias (name, ty) =
+        let%bind ty = get_ast_type ty in
+        return (name, ty)
+      in
+      Return.Array.of_sequence ~len:names_len
+        (Sequence.append
+           (Sequence.mapi ~f:user_defined (Sequence.of_list defs))
+           (Sequence.map ~f:alias (Sequence.of_list aliases)))
     in
-    let rec exists_duplicate idx end_idx name =
-      if idx = end_idx then false
-      else
-        let (name_idx, _), _ = names.(idx) in
-        if Nfc_string.equal name_idx name then true
-        else exists_duplicate (idx + 1) end_idx name
+    let%bind () =
+      (* check for duplicates *)
+      let equal ((name, _), _) ((name', _), _) = Nfc_string.equal name name' in
+      match Array.find_nonconsecutive_duplicates names ~equal with
+      | Some (((name, _), _), _) ->
+          return_err (Error.Type_defined_multiple_times name)
+      | None -> return ()
     in
-    let fill_defs index ((name, name_sp), def) =
-      let module Data = PType.Data in
-      if exists_duplicate 0 index name then
-        return_err (Error.Type_defined_multiple_times name)
-      else
+    let%bind user_types =
+      let f (_, def) =
+        let module Data = PType.Data in
         let%bind data =
           let typed_members lst =
             let f ((name, ty), _) =
               let%bind ty = get_ast_type ty in
               return (name, ty)
             in
-            let%bind lst = Return.List.map ~f lst in
-            return (Array.of_list lst)
+            Return.Array.of_list_map ~f lst
           in
           let (Data.Data {kind; members}) = def in
           let%bind members = typed_members members in
@@ -113,20 +113,13 @@ module Context = struct
           | Data.Record -> return (Structural.Record members)
           | Data.Variant -> return (Structural.Variant members)
         in
-        user_types.(index) <- User_type {data} ;
-        names.(index) <- ((name, name_sp), User_defined index) ;
-        return ()
+        return (User_type {data})
+      in
+      Return.Array.of_list_map ~f defs
     in
-    let%bind () = Return.List.iteri ~f:fill_defs defs in
-    let fill_aliases index (name, ty) =
-      let%bind ty = get_ast_type ty in
-      names.(index + defs_len) <- (name, ty) ;
-      return ()
-    in
-    let%bind () = Return.List.iteri ~f:fill_aliases aliases in
     return (Context {user_types; names})
 
-  let empty = Context {user_types= [||]; names= [||]}
+  let empty = Context {user_types= Array.empty (); names= Array.empty ()}
 
   let user_types (Context r) = r.user_types
 
@@ -156,7 +149,7 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
   | U.Function {params; ret_ty} ->
       let f ty = of_untyped ty ~ctxt in
       let default = return (Builtin Unit) in
-      let%bind params = Return.List.map ~f params in
+      let%bind params = Return.Array.of_list_map ~f params in
       let%bind ret_ty = Option.value_map ~f ~default ret_ty in
       return (Builtin (Function {params; ret_ty}))
 
@@ -170,7 +163,7 @@ let rec equal l r =
     | Mutable, Mutable | Immutable, Immutable -> equal l.pointee r.pointee
     | _ -> false )
   | Builtin (Function f1), Builtin (Function f2) ->
-      equal f1.ret_ty f2.ret_ty && List.equal f1.params f2.params ~equal
+      equal f1.ret_ty f2.ret_ty && Array.equal f1.params f2.params ~equal
   | User_defined u1, User_defined u2 -> u1 = u2
   | _ -> false
 
@@ -193,7 +186,8 @@ let rec to_string ty ~(ctxt : Context.t) =
   | Builtin (Function {params; ret_ty}) ->
       let params =
         let f ty = to_string ty ~ctxt in
-        String.concat ~sep:", " (List.map ~f params)
+        String.concat_sequence ~sep:", "
+          (Sequence.map ~f (Array.to_sequence params))
       in
       String.concat ["func("; params; ") -> "; to_string ret_ty ~ctxt]
   | User_defined idx ->

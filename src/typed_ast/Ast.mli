@@ -40,7 +40,7 @@ module Expr : sig
 
     val expr : t -> Types.Ast_Expr.t Spanned.t option
 
-    val stmts : t -> Types.Ast_Stmt.t Spanned.t list
+    val stmts : t -> Types.Ast_Stmt.t Spanned.t Array.t
 
     val base_type : t -> Types.Type.t
 
@@ -62,8 +62,6 @@ module Expr : sig
   val full_type : t -> Type.t
 
   val full_type_sp : t Spanned.t -> Type.t
-
-  (* useful for filling arrays *)
 
   val unit_value : t
 end

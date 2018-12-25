@@ -132,6 +132,53 @@ module Result = struct
           in
           helper f 0 lst
       end
+
+      module Array = struct
+        let of_sequence (type a e) ~(len : int) (seq : (a, e) t Sequence.t) :
+            (a Array.t, e) t =
+          let exception E of e in
+          let span = ref Span.made_up in
+          let f = function
+            | Result.Ok o, sp ->
+                span := Span.union !span sp ;
+                o
+            | Result.Error e, sp ->
+                span := sp ;
+                raise (E e)
+          in
+          match Array.of_sequence ~len (Sequence.map seq ~f) with
+          | arr -> (Result.Ok arr, !span)
+          | exception E e -> (Result.Error e, !span)
+
+        let of_sequence_unordered (type a e) ~(len : int)
+            (seq : (int * a, e) t Sequence.t) :
+            ((a Array.t, e) t, Array.unordered_error) Result.t =
+          let exception E of e in
+          let span = ref Span.made_up in
+          let f = function
+            | Result.Ok (idx, o), sp ->
+                span := Span.union !span sp ;
+                (idx, o)
+            | Result.Error e, sp ->
+                span := sp ;
+                raise (E e)
+          in
+          match Array.of_sequence_unordered ~len (Sequence.map seq ~f) with
+          | Result.Ok arr -> Result.Ok (Result.Ok arr, !span)
+          | Result.Error e -> Result.Error e
+          | exception E e -> Result.Ok (Result.Error e, !span)
+
+        let of_list_map (type a b e) (lst : a list) ~(f : a -> (b, e) t) :
+            (b Array.t, e) t =
+          of_sequence ~len:(Base.List.length lst)
+            (Sequence.map ~f (Sequence.of_list lst))
+
+        let of_list_map_unordered (type a b e) (lst : a list)
+            ~(f : a -> (int * b, e) t) :
+            ((b Array.t, e) t, Array.unordered_error) Result.t =
+          of_sequence_unordered ~len:(Base.List.length lst)
+            (Sequence.map ~f (Sequence.of_list lst))
+      end
     end
   end
 end

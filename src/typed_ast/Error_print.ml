@@ -4,7 +4,7 @@ include Types.Error
 let to_string err ~ctxt =
   let type_list tys =
     let f ty = Type.to_string ty ~ctxt in
-    String.concat ~sep:", " (List.map ~f tys)
+    String.concat_sequence ~sep:", " (Sequence.map ~f tys)
   in
   match err with
   | Name_not_found name ->
@@ -59,7 +59,7 @@ place is of type: `%s`|}
         (Type.to_string ty ~ctxt)
   | Record_literal_duplicate_members member ->
       Printf.sprintf "Record literal - member `%s` initialized multiple times"
-        (Name.to_ident_string member)
+        (member :> string)
   | Record_literal_incorrect_type {field; field_ty; member_ty} ->
       Printf.sprintf
         {|Record literal - initializing member `%s` with incorrect type:
@@ -100,7 +100,10 @@ place is of type: `%s`|}
         (Type.to_string found ~ctxt)
   | Match_repeated_branches name ->
       Printf.sprintf "`match` expression has duplicated pattern: `%s`"
-        (Name.to_ident_string name)
+        (name :> string)
+  | Match_missing_branch name ->
+      Printf.sprintf "`match` expression is missing pattern: `%s`"
+        (name :> string)
   | Pattern_of_wrong_type {expected; found} ->
       Printf.sprintf
         {|`match` pattern of incorrect type:
@@ -127,7 +130,7 @@ place is of type: `%s`|}
         {|Builtin `%s` passed arguments of incorrect type:
   found: `(%s)`|}
         (name :> string)
-        (type_list found)
+        (type_list (Array.to_sequence found))
   | Unknown_builtin name ->
       Printf.sprintf "Builtin `%s` is unknown" (name :> string)
   | Unordered_operators {op1= op1, _; op2= op2, _} ->
@@ -159,14 +162,14 @@ place is of type: `%s`|}
   found: %d|}
         (Name.string name :> string)
         num_params
-  | Defined_function_multiple_times {name; original_declaration} ->
-      Printf.sprintf
-        {|Defined function `%s` multiple times
-  (original declaration at %s)|}
+  | Defined_function_multiple_times name ->
+      Printf.sprintf "Defined function `%s` multiple times"
         (Name.to_ident_string name)
-        (Spanned.Span.to_string original_declaration)
   | Defined_type_multiple_times name ->
       Printf.sprintf "Defined type `%s` multiple times" (name :> string)
+  | Defined_infix_declaration_multiple_times name ->
+      Printf.sprintf "Defined infix declaration for `%s` multiple times"
+        (Name.to_ident_string name)
   | Return_type_mismatch {expected; found} ->
       Printf.sprintf
         {|Return value did not match the return type.
@@ -179,4 +182,5 @@ place is of type: `%s`|}
         {|Function arguments did not match the parameter types:
   expected: `(%s)`
   found: `(%s)`|}
-        (type_list expected) (type_list found)
+        (type_list (Array.to_sequence expected))
+        (type_list (Array.to_sequence found))

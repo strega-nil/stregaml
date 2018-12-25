@@ -15,7 +15,7 @@ module rec Error : sig
     | Mutable_reference_taken_to_immutable_place : t
     | Dereference_of_non_reference : Type.t -> t
     | Record_literal_non_record_type : Type.t -> t
-    | Record_literal_duplicate_members : Name.t -> t
+    | Record_literal_duplicate_members : Nfc_string.t -> t
     | Record_literal_incorrect_type :
         { field: Name.t
         ; field_ty: Type.t
@@ -27,7 +27,8 @@ module rec Error : sig
     | Record_access_non_member : Type.t * Name.t -> t
     | Match_non_variant_type : Type.t -> t
     | Match_branches_of_different_type : {expected: Type.t; found: Type.t} -> t
-    | Match_repeated_branches : Name.t -> t
+    | Match_repeated_branches : Nfc_string.t -> t
+    | Match_missing_branch : Nfc_string.t -> t
     | Pattern_of_wrong_type : {expected: Type.t; found: Type.t} -> t
     | If_non_bool : Type.t -> t
     | If_branches_of_differing_type : Type.t * Type.t -> t
@@ -36,7 +37,10 @@ module rec Error : sig
         ; expected: int
         ; found: int }
         -> t
-    | Builtin_invalid_arguments : {name: Nfc_string.t; found: Type.t list} -> t
+    | Builtin_invalid_arguments :
+        { name: Nfc_string.t
+        ; found: Type.t Array.t }
+        -> t
     | Unordered_operators :
         { op1: Cafec_Parse.Ast.Expr.infix Spanned.t
         ; op2: Cafec_Parse.Ast.Expr.infix Spanned.t }
@@ -45,15 +49,13 @@ module rec Error : sig
     | Call_of_non_function : Type.t -> t
     | Prefix_function_wrong_arity : {name: Name.t; num_params: int} -> t
     | Infix_function_wrong_arity : {name: Name.t; num_params: int} -> t
-    | Defined_function_multiple_times :
-        { name: Name.t
-        ; original_declaration: Spanned.Span.t }
-        -> t
+    | Defined_function_multiple_times : Name.t -> t
     | Defined_type_multiple_times : Nfc_string.t -> t
+    | Defined_infix_declaration_multiple_times : Name.t -> t
     | Return_type_mismatch : {expected: Type.t; found: Type.t} -> t
     | Invalid_function_arguments :
-        { expected: Type.t list
-        ; found: Type.t list }
+        { expected: Type.t Array.t
+        ; found: Type.t Array.t }
         -> t
 end =
   Error
@@ -66,14 +68,14 @@ and Type : sig
     | Bool : builtin
     | Int32 : builtin
     | Reference : {mutability: mutability; pointee: t} -> builtin
-    | Function : {params: t list; ret_ty: t} -> builtin
+    | Function : {params: t Array.t; ret_ty: t} -> builtin
 
   and t = Builtin : builtin -> t | User_defined : int -> t
 end =
   Type
 
 and Type_Structural : sig
-  type members = (Nfc_string.t * Type.t) array
+  type members = (Nfc_string.t * Type.t) Array.t
 
   type t =
     | Builtin : Type.builtin -> t
@@ -123,7 +125,7 @@ end =
 and Ast_Expr_Block : sig
   type t =
     | Block :
-        { stmts: Ast_Stmt.t Spanned.t list
+        { stmts: Ast_Stmt.t Spanned.t Array.t
         ; expr: Ast_Expr.t Spanned.t option }
         -> t
 end =
@@ -136,7 +138,7 @@ and Ast_Expr : sig
     | Integer_literal : int -> variant
     | Match :
         { cond: t Spanned.t
-        ; arms: (Type.t * Ast_Expr_Block.t Spanned.t) array }
+        ; arms: (Type.t * Ast_Expr_Block.t Spanned.t) Array.t }
         -> variant
     | If_else :
         { cond: t Spanned.t
@@ -145,11 +147,11 @@ and Ast_Expr : sig
         -> variant
     | Assign : {dest: t Spanned.t; source: t Spanned.t} -> variant
     | Builtin : Ast_Expr_Builtin.t -> variant
-    | Call : t Spanned.t * t Spanned.t list -> variant
+    | Call : t Spanned.t * t Spanned.t Array.t -> variant
     | Block : Ast_Expr_Block.t Spanned.t -> variant
     | Reference : {mutability: Type.mutability; place: t Spanned.t} -> variant
     | Dereference : t Spanned.t -> variant
-    | Record_literal : {ty: Type.t Spanned.t; members: t array} -> variant
+    | Record_literal : {ty: Type.t Spanned.t; members: t Array.t} -> variant
     | Record_access : t Spanned.t * int -> variant
     | Global_function : int -> variant
     | Constructor : Type.t * int -> variant

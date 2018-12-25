@@ -7,7 +7,7 @@ module rec Value : sig
     | Reference : Expr_result.Place.t -> t
     | Constructor : int -> t
     | Variant : int * t ref -> t
-    | Record : t ref array -> t
+    | Record : t ref Array.t -> t
 end =
   Value
 

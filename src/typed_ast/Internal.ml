@@ -7,7 +7,11 @@ module Binding = Ast.Binding
 
 module Function_declaration = struct
   type t =
-    | Declaration : {name: Name.t; params: Binding.t list; ret_ty: Type.t} -> t
+    | Declaration :
+        { name: Name.t
+        ; params: Binding.t Array.t
+        ; ret_ty: Type.t }
+        -> t
 
   let name (Declaration {name; _}) = name
 
@@ -27,7 +31,7 @@ module Infix_group = struct
   type t =
     | Infix_group :
         { associativity: associativity
-        ; precedence: precedence list }
+        ; precedence: precedence Array.t }
         -> t
 
   let associativity (Infix_group {associativity; _}) = associativity
@@ -35,28 +39,46 @@ module Infix_group = struct
   let precedence (Infix_group {precedence; _}) = precedence
 end
 
-(* these should really all be arrays, probably *)
-type t =
-  | Context :
-      { type_context: Type.Context.t
-      ; infix_group_names: Nfc_string.t list
-      ; infix_groups: Infix_group.t list
-      ; infix_decls: (Name.t * int) list
-      ; function_context: Function_declaration.t Spanned.t list
-      ; function_definitions: Expr.Block.t Spanned.t list }
-      -> t
+module Context = struct
+  type t =
+    | Context :
+        { type_context: Type.Context.t
+        ; infix_group_names: Nfc_string.t Array.t
+        ; infix_groups: Infix_group.t Array.t
+        ; infix_decls: (Name.t * int) Array.t
+        ; function_context: Function_declaration.t Spanned.t Array.t
+        ; function_definitions: Expr.Block.t Spanned.t Array.t }
+        -> t
 
-let type_context (Context r) = r.type_context
+  let type_context (Context r) = r.type_context
 
-let infix_group_names (Context r) = r.infix_group_names
+  let infix_group_names (Context r) = r.infix_group_names
 
-let infix_groups (Context r) = r.infix_groups
+  let infix_groups (Context r) = r.infix_groups
 
-let infix_decls (Context r) = r.infix_decls
+  let infix_decls (Context r) = r.infix_decls
 
-let function_context (Context r) = r.function_context
+  let function_context (Context r) = r.function_context
 
-let function_definitions (Context r) = r.function_definitions
+  let function_definitions (Context r) = r.function_definitions
+
+  let with_type_context (Context r) type_context = Context {r with type_context}
+
+  let with_infix_group_names (Context r) infix_group_names =
+    Context {r with infix_group_names}
+
+  let with_infix_groups (Context r) infix_groups = Context {r with infix_groups}
+
+  let with_infix_decls (Context r) infix_decls = Context {r with infix_decls}
+
+  let with_function_context (Context r) function_context =
+    Context {r with function_context}
+
+  let with_function_definitions (Context r) function_definitions =
+    Context {r with function_definitions}
+end
+
+include Context
 
 type 'a result = ('a, Error.t) Spanned.Result.t
 
@@ -95,40 +117,12 @@ let find_field :
 
 module Functions : sig
   val index_by_name :
-    Function_declaration.t Spanned.t list -> Name.t -> int option
-
-  val decl_by_index :
-       Function_declaration.t Spanned.t list
-    -> int
-    -> Function_declaration.t Spanned.t
-
-  val expr_by_index :
-    Expr.Block.t Spanned.t list -> int -> Expr.Block.t Spanned.t
+    Function_declaration.t Spanned.t Array.t -> Name.t -> int option
 end = struct
   let index_by_name ctxt search =
     let module D = Function_declaration in
-    let rec helper n = function
-      | (D.Declaration {name; _}, _) :: _ when Name.equal name search -> Some n
-      | _ :: names -> helper (n + 1) names
-      | [] -> None
-    in
-    helper 0 ctxt
-
-  let decl_by_index ctxt idx =
-    let rec helper = function
-      | 0, decl :: _ -> decl
-      | n, _ :: decls -> helper (n - 1, decls)
-      | _, [] -> assert false
-    in
-    if idx < 0 then assert false else helper (idx, ctxt)
-
-  let expr_by_index func_defs idx =
-    let rec helper = function
-      | 0, expr :: _ -> expr
-      | n, _ :: defs -> helper (n - 1, defs)
-      | _, [] -> assert false
-    in
-    if idx < 0 then assert false else helper (idx, func_defs)
+    let f _ (D.Declaration {name; _}, _) = Name.equal name search in
+    match Array.findi ~f ctxt with Some (idx, _) -> Some idx | None -> None
 end
 
 module Bind_order = struct
@@ -141,8 +135,8 @@ module Bind_order = struct
     let module T = Infix_group in
     let get_infix_group ctxt op =
       let f (name, _) = Name.equal op name in
-      match List.find ~f (infix_decls ctxt) with
-      | Some (_, idx) -> Some (idx, List.nth_exn (infix_groups ctxt) idx)
+      match Array.find ~f (infix_decls ctxt) with
+      | Some (_, idx) -> Some (idx, (infix_groups ctxt).(idx))
       | None -> None
     in
     let order_named ctxt op1 op2 =
@@ -153,19 +147,16 @@ module Bind_order = struct
           | T.Assoc_end -> Some End
           | T.Assoc_none -> Some Unordered
         else
-          let rec check_all_sub_precedences = function
-            | [] -> None
-            | T.Less idx :: xs -> (
-                let info = List.nth_exn (infix_groups ctxt) idx in
-                (*
-                  note: since ig < ig2, this means that no matter what,
-                  ig binds looser than ig2
-                *)
-                match order_infix_groups idx info idx2 with
-                | Some _ -> Some End
-                | None -> check_all_sub_precedences xs )
+          let precedence info =
+            (*
+              note: since ig < ig2, this means that no matter what,
+              ig binds looser than ig2
+            *)
+            match order_infix_groups idx info idx2 with
+            | Some _ -> Some End
+            | None -> None
           in
-          check_all_sub_precedences (T.precedence info)
+          Array.find_map ~f:precedence (infix_groups ctxt)
       in
       let order_infix_groups_comm (idx1, info1) (idx2, info2) =
         match order_infix_groups idx1 info1 idx2 with
@@ -201,6 +192,10 @@ let value_type ty =
 let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   let module U = Untyped_ast in
   let module T = Ast in
+  (*
+    TODO: fix this
+    probably want to do a fold on locals?
+  *)
   let rec typeck_stmts locals = function
     | [] -> return ([], locals)
     | (s, sp) :: xs -> (
@@ -231,6 +226,7 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   in
   let U.Expr.Block.Block {stmts; expr}, sp = unt_blk in
   let%bind stmts, locals = typeck_stmts locals stmts in
+  let stmts = Array.of_list stmts in
   let%bind expr =
     match expr with
     | Some e ->
@@ -247,15 +243,17 @@ and typeck_call callee args =
     match callee_ty with
     | Type.Builtin (Type.Function {params; ret_ty}) ->
         let correct_types args params =
-          let f a p = Type.equal (T.base_type_sp a) p in
-          if List.length args <> List.length params then false
-          else List.for_all2_exn ~f args params
+          let f (a, p) = Type.equal (T.base_type_sp a) p in
+          if Array.length args <> Array.length params then false
+          else
+            Sequence.for_all ~f
+              (Sequence.zip (Array.to_sequence args) (Array.to_sequence params))
         in
         if correct_types args params then return ret_ty
         else
           return_err
             (Error.Invalid_function_arguments
-               {expected= params; found= List.map ~f:T.base_type_sp args})
+               {expected= params; found= Array.map ~f:T.base_type_sp args})
     | ty -> return_err (Error.Call_of_non_function ty)
   in
   return (T.Expr {variant= T.Call (callee, args); ty= value_type ret_ty})
@@ -287,7 +285,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
         let name = (name, sp) in
         let name = (U.Name (U.Qualified {path= []; name}), sp) in
         let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
-        typeck_call callee [e0; e1]
+        typeck_call callee (Array.doubleton e0 e1)
   in
   match rest with
   | [] -> spanned_lift e0
@@ -333,15 +331,9 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> return_err (Error.Match_non_variant_type cond_ty)
       in
       let members_len = Array.length members in
-      let arms_some = Array.create ~len:members_len false in
-      let arms =
-        let ty = Type.Builtin Type.Unit in
-        let blk = T.Block.Block {stmts= []; expr= None} in
-        Array.create ~len:members_len (ty, (blk, Spanned.Span.made_up))
-      in
       let arms_ty = ref None in
-      let%bind () =
-        let insert_arm pat blk =
+      let%bind arms =
+        let f ((pat, _), blk) =
           let (U.Pattern {constructor= constructor, _; binding}) = pat in
           let%bind cty, (arm_name, _) =
             match U.qualified_path constructor with
@@ -362,11 +354,6 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
             | Some x -> return x
             | None -> name_not_found cond_ty arm_name
           in
-          let%bind () =
-            if arms_some.(index) then
-              return_err (Error.Match_repeated_branches arm_name)
-            else return ()
-          in
           let binding =
             Ast.Binding.Binding
               {name= binding; mutability= Type.Immutable; ty= bind_ty}
@@ -375,7 +362,9 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
           let%bind () =
             match !arms_ty with
-            | None -> return (arms_ty := Some (T.Block.base_type_sp blk))
+            | None ->
+                arms_ty := Some (T.Block.base_type_sp blk) ;
+                return ()
             | Some ty ->
                 let arm_ty = T.Block.base_type_sp blk in
                 if Type.equal arm_ty ty then return ()
@@ -384,17 +373,17 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                     (Error.Match_branches_of_different_type
                        {expected= ty; found= arm_ty})
           in
-          arms.(index) <- (bind_ty, blk) ;
-          arms_some.(index) <- true ;
-          return ()
+          return (index, (bind_ty, blk))
         in
-        let rec helper = function
-          | [] -> return ()
-          | ((pat, _), blk) :: xs ->
-              let%bind () = insert_arm pat blk in
-              helper xs
-        in
-        helper parse_arms
+        let tmp = Return.Array.of_list_map_unordered ~f parse_arms in
+        match tmp with
+        | Result.Ok o -> o
+        | Result.Error (Array.Empty_cell idx) ->
+            let name, _ = members.(idx) in
+            return_err (Error.Match_missing_branch name)
+        | Result.Error (Array.Duplicate idx) ->
+            let name, _ = members.(idx) in
+            return_err (Error.Match_repeated_branches name)
       in
       let variant = T.Match {cond; arms} in
       let ty =
@@ -436,8 +425,8 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         match (a1_ty, a2_ty) with
         | Type.Builtin Type.Int32, Type.Builtin Type.Int32 -> return ()
         | _ ->
-            return_err
-              (Error.Builtin_invalid_arguments {name; found= [a1_ty; a2_ty]})
+            let found = Array.doubleton a1_ty a2_ty in
+            return_err (Error.Builtin_invalid_arguments {name; found})
       in
       match (name :> string) with
       | "less_eq" ->
@@ -464,14 +453,17 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
   | U.Call (callee, args) ->
       let%bind callee = spanned_bind (typeck_expression locals ctxt callee) in
       let f x = spanned_bind (typeck_expression locals ctxt x) in
-      let%bind args = Return.List.map ~f args in
+      let%bind args =
+        Return.Array.of_sequence ~len:(List.length args)
+          (Sequence.map ~f (Sequence.of_list args))
+      in
       typeck_call callee args
   | U.Prefix_operator ((name, sp), expr) ->
       let name = (name, sp) in
       let name = (U.Name (U.Qualified {path= []; name}), sp) in
       let%bind callee = spanned_bind (typeck_expression locals ctxt name) in
       let%bind arg = spanned_bind (typeck_expression locals ctxt expr) in
-      typeck_call callee [arg]
+      typeck_call callee (Array.singleton arg)
   | U.Infix_list (first, rest) ->
       let%bind first = spanned_bind (typeck_expression locals ctxt first) in
       typeck_infix_list locals ctxt first rest
@@ -487,12 +479,10 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | None -> return_err (Error.Name_not_found name)
         | Some idx ->
             let ty =
-              let decl, _ =
-                Functions.decl_by_index (function_context ctxt) idx
-              in
+              let decl, _ = (function_context ctxt).(idx) in
               let params =
                 let f (Binding.Binding {ty; _}) = ty in
-                List.map ~f (Function_declaration.params decl)
+                Array.map ~f (Function_declaration.params decl)
               in
               let ret_ty = Function_declaration.ret_ty decl in
               value_type (Type.Builtin (Type.Function {params; ret_ty}))
@@ -514,7 +504,8 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | Some x -> return x
         | None -> name_not_found ty name
       in
-      let ty = Type.(Builtin (Function {params= [ty_member]; ret_ty= ty})) in
+      let params = Array.singleton ty_member in
+      let ty = Type.(Builtin (Function {params; ret_ty= ty})) in
       return (T.Expr {variant= T.Constructor (ty, idx); ty= value_type ty})
   | U.Name _ -> failwith "paths with size > 1 not supported"
   | U.Block blk ->
@@ -559,12 +550,8 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | _ -> return_err (Error.Record_literal_non_record_type ty)
       in
       let find_field = find_field ~members:type_members in
-      let members_len = Array.length type_members in
-      let members_init : bool array = Array.create ~len:members_len false in
-      let members_typed : T.t array =
-        Array.create ~len:members_len T.unit_value
-      in
-      let%bind () =
+      let%bind members_typed =
+        let members_len = Array.length type_members in
         let f ((name, expr), _) =
           let%bind expr = typeck_expression locals ctxt expr in
           let ety = T.base_type expr in
@@ -578,22 +565,20 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
                        {field= name; field_ty= ety; member_ty= mty})
             | None -> return_err (Error.Record_literal_extra_field (ty, name))
           in
-          if members_init.(idx) then
-            return_err (Error.Record_literal_duplicate_members name)
-          else (
-            members_typed.(idx) <- expr ;
-            members_init.(idx) <- true ;
-            return () )
+          return (idx, expr)
         in
-        Return.List.iter ~f members
-      in
-      let%bind () =
-        let f _ el = not el in
-        match Array.findi ~f members_init with
-        | None -> return ()
-        | Some (idx, _) ->
+        let tmp =
+          Return.Array.of_sequence_unordered ~len:members_len
+            (Sequence.map ~f (Sequence.of_list members))
+        in
+        match tmp with
+        | Result.Ok o -> o
+        | Result.Error (Array.Empty_cell idx) ->
             let name, ty = type_members.(idx) in
             return_err (Error.Record_literal_missing_field (ty, name))
+        | Result.Error (Array.Duplicate idx) ->
+            let name, _ = type_members.(idx) in
+            return_err (Error.Record_literal_duplicate_members name)
       in
       return
         (T.Expr
@@ -614,82 +599,42 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
 
 let find_infix_group_name ctxt id =
   let f _ name = Nfc_string.equal id name in
-  match List.findi ~f (infix_group_names ctxt) with
+  match Array.findi ~f (infix_group_names ctxt) with
   | Some (i, _) -> Some i
   | None -> None
 
-let add_infix_group_name (ctxt : t)
-    (group : Untyped_ast.Infix_group.t Spanned.t) : t result =
+let type_infix_group_name (_ : t) (group : Untyped_ast.Infix_group.t Spanned.t)
+    : Nfc_string.t result =
   let module U = Untyped_ast.Infix_group in
   let U.Infix_group {name= name, _; _}, _ = group in
-  let (Context r) = ctxt in
-  match find_infix_group_name ctxt name with
-  | Some _ -> return_err (Error.Infix_group_defined_multiple_times name)
-  | None ->
-      return (Context {r with infix_group_names= name :: r.infix_group_names})
+  return name
 
-let add_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
-    t result =
+let type_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
+    Infix_group.t result =
   let module U = Untyped_ast.Infix_group in
-  let names_len = List.length (infix_group_names ctxt) in
-  let ig_len = List.length (infix_groups ctxt) in
-  let rec precedence_less ig idx =
-    let rec helper = function
-      | [] -> false
-      | Infix_group.Less idx' :: _ when idx = idx' -> true
-      | Infix_group.Less idx' :: xs ->
-          let ig_idx = idx' - names_len + ig_len in
-          let prec_less =
-            if ig_idx < 0 then false
-            else
-              let ig = List.nth_exn (infix_groups ctxt) ig_idx in
-              precedence_less ig idx
-          in
-          prec_less || helper xs
-    in
-    helper (Infix_group.precedence ig)
-  in
-  let U.Infix_group {associativity; precedence; name= name, _}, _ = group in
+  let U.Infix_group {associativity; precedence; _}, _ = group in
   let f (U.Less (id, _)) =
     match find_infix_group_name ctxt id with
-    | Some idx ->
-        (* get the index of idx in the _current_ ctxt.infix_groups *)
-        let ig_idx = idx - names_len + ig_len in
-        let my_idx = names_len - ig_len - 1 in
-        let%bind () =
-          if ig_idx < 0 then return ()
-          else
-            let ig = List.nth_exn (infix_groups ctxt) ig_idx in
-            if precedence_less ig my_idx then
-              let my_name = name in
-              let name = List.nth_exn (infix_group_names ctxt) idx in
-              return_err
-                (Error.Infix_group_recursive_precedence (name, my_name))
-            else return ()
-        in
-        return (Infix_group.Less idx)
+    | Some idx -> return (Infix_group.Less idx)
     | None -> return_err (Error.Infix_group_not_found id)
   in
-  let%bind precedence = Return.List.map ~f precedence in
-  let group = Infix_group.Infix_group {associativity; precedence} in
-  let (Context r) = ctxt in
-  return (Context {r with infix_groups= group :: r.infix_groups})
+  let%bind precedence = Return.Array.of_list_map ~f precedence in
+  return (Infix_group.Infix_group {associativity; precedence})
 
-let add_infix_decl (ctxt : t)
-    (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) : t result =
+let type_infix_decl (ctxt : t)
+    (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) :
+    (Name.t * int) result =
   let module U = Untyped_ast.Infix_declaration in
   let%bind (U.Infix_declaration {name= name, _; group= group, _}) =
     spanned_lift unt_infix_decl
   in
   match find_infix_group_name ctxt group with
   | None -> return_err (Error.Infix_group_not_found group)
-  | Some idx ->
-      let decl = (name, idx) in
-      let (Context r) = ctxt in
-      return (Context {r with infix_decls= decl :: r.infix_decls})
+  | Some idx -> return (name, idx)
 
-let add_function_declaration (ctxt : t)
-    (unt_func : Untyped_ast.Func.t Spanned.t) : t result =
+let type_function_declaration (ctxt : t)
+    (unt_func : Untyped_ast.Func.t Spanned.t) :
+    Function_declaration.t Spanned.t result =
   let module F = Untyped_ast.Func in
   let module D = Function_declaration in
   let unt_func, _ = unt_func in
@@ -699,56 +644,54 @@ let add_function_declaration (ctxt : t)
       let%bind ty = Type.of_untyped ~ctxt:(type_context ctxt) ty in
       return (Binding.Binding {name; mutability= Type.Immutable; ty})
     in
-    spanned_bind (Return.List.map ~f params)
+    spanned_bind
+      (Return.Array.of_sequence ~len:(List.length params)
+         (Sequence.map ~f (Sequence.of_list params)))
   in
   let%bind ret_ty =
     match ret_ty with
     | Some ret_ty -> Type.of_untyped ~ctxt:(type_context ctxt) ret_ty
     | None -> return (Type.Builtin Type.Unit)
   in
-  (* check for duplicates *)
-  let rec check_for_duplicates search = function
-    | [] -> None
-    | (f, sp) :: _ when Name.equal (D.name f) search -> Some (f, sp)
-    | _ :: xs -> check_for_duplicates search xs
-  in
-  match check_for_duplicates name (function_context ctxt) with
-  | Some (_, sp) ->
-      return_err
-        (Error.Defined_function_multiple_times {name; original_declaration= sp})
-  | None ->
-      let module D = Function_declaration in
-      let decl = (D.Declaration {name; params; ret_ty}, parm_sp) in
-      let (Context r) = ctxt in
-      return (Context {r with function_context= decl :: r.function_context})
+  return (D.Declaration {name; params; ret_ty}, parm_sp)
 
-let add_function_definition (ctxt : t)
-    (unt_func : Untyped_ast.Func.t Spanned.t) : t result =
+let type_function_definition (ctxt : t) (idx : int)
+    (unt_func : Untyped_ast.Func.t Spanned.t) : Expr.Block.t Spanned.t result =
   let module F = Untyped_ast.Func in
   let module D = Function_declaration in
   let unt_func, _ = unt_func in
   let decl =
-    let num_funcs = List.length (function_context ctxt) in
-    let idx = num_funcs - 1 - List.length (function_definitions ctxt) in
-    let decl, _ = Functions.decl_by_index (function_context ctxt) idx in
+    let decl, _ = (function_context ctxt).(idx) in
     assert (Name.equal (D.name decl) (F.name unt_func)) ;
     decl
   in
   let%bind body, body_sp =
-    spanned_bind (typeck_block (D.params decl) ctxt (F.body unt_func))
+    spanned_bind
+      (typeck_block (Array.to_list (D.params decl)) ctxt (F.body unt_func))
   in
   let body_ty =
     match Expr.Block.expr body with
     | Some e -> Expr.base_type_sp e
     | None -> Type.Builtin Type.Unit
   in
-  if Type.equal body_ty (D.ret_ty decl) then
-    let (Context r) = ctxt in
-    let function_definitions = (body, body_sp) :: r.function_definitions in
-    return (Context {r with function_definitions})
+  if Type.equal body_ty (D.ret_ty decl) then return (body, body_sp)
   else
     return_err
       (Error.Return_type_mismatch {expected= D.ret_ty decl; found= body_ty})
+
+let precedence_less infix_groups lhs rhs =
+  (*
+    tries to find an idx = rhs in lhs's tree of less-than precedences
+    depth-first
+  *)
+  let rec f (Infix_group.Less idx) =
+    if idx = rhs then true
+    else
+      let prec = Infix_group.precedence infix_groups.(idx) in
+      Array.exists ~f prec
+  in
+  let prec = Infix_group.precedence infix_groups.(lhs) in
+  Array.exists ~f prec
 
 let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
   let module U = Untyped_ast in
@@ -757,29 +700,82 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
     | Result.Ok o, sp -> (Result.Ok o, sp)
     | Result.Error e, sp -> (Result.Error (e, Type.Context.empty), sp)
   in
+  let check_for_errors arr ~equal ~err =
+    match Array.findi_nonconsecutive_duplicates arr ~equal with
+    | Some (idx_el1, idx_el2) -> return_err (err idx_el1 idx_el2)
+    | None -> return ()
+  in
   let ret =
-    let init =
+    let ctxt =
       Context
         { type_context
-        ; infix_group_names= []
-        ; infix_groups= []
-        ; infix_decls= []
-        ; function_context= []
-        ; function_definitions= [] }
+        ; infix_group_names= Array.empty ()
+        ; infix_groups= Array.empty ()
+        ; infix_decls= Array.empty ()
+        ; function_context= Array.empty ()
+        ; function_definitions= Array.empty () }
     in
-    let%bind init =
-      Return.List.fold (U.infix_groups unt_ast) ~init ~f:add_infix_group_name
+    let%bind ctxt =
+      let%bind infix_group_names =
+        Return.Array.of_list_map
+          ~f:(type_infix_group_name ctxt)
+          (U.infix_groups unt_ast)
+      in
+      let equal (_, name1) (_, name2) = Nfc_string.equal name1 name2 in
+      let err (_, name) _ = Error.Infix_group_defined_multiple_times name in
+      let%bind () = check_for_errors infix_group_names ~equal ~err in
+      return (with_infix_group_names ctxt infix_group_names)
     in
-    let%bind init =
-      Return.List.fold (U.infix_groups unt_ast) ~init ~f:add_infix_group
+    let%bind ctxt =
+      let%bind infix_groups =
+        Return.Array.of_list_map ~f:(type_infix_group ctxt)
+          (U.infix_groups unt_ast)
+      in
+      let equal (idx1, _) (idx2, _) =
+        precedence_less infix_groups idx1 idx2
+        && precedence_less infix_groups idx2 idx1
+      in
+      let err (idx1, _) (idx2, _) =
+        let names = infix_group_names ctxt in
+        Error.Infix_group_recursive_precedence (names.(idx1), names.(idx2))
+      in
+      let%bind () = check_for_errors infix_groups ~equal ~err in
+      return (with_infix_groups ctxt infix_groups)
     in
-    let%bind init =
-      Return.List.fold (U.infix_decls unt_ast) ~init ~f:add_infix_decl
+    let%bind ctxt =
+      let%bind infix_decls =
+        Return.Array.of_list_map ~f:(type_infix_decl ctxt)
+          (U.infix_decls unt_ast)
+      in
+      let equal (_, (name1, _)) (_, (name2, _)) = Name.equal name1 name2 in
+      let err (_, (name, _)) (_, _) =
+        Error.Defined_infix_declaration_multiple_times name
+      in
+      let%bind () = check_for_errors infix_decls ~equal ~err in
+      return (with_infix_decls ctxt infix_decls)
     in
-    let%bind init =
-      Return.List.fold (U.funcs unt_ast) ~init ~f:add_function_declaration
+    let%bind ctxt =
+      let%bind function_context =
+        Return.Array.of_list_map
+          ~f:(type_function_declaration ctxt)
+          (U.funcs unt_ast)
+      in
+      let module D = Function_declaration in
+      let equal (_, (decl1, _)) (_, (decl2, _)) =
+        Name.equal (D.name decl1) (D.name decl2)
+      in
+      let err (_, (decl, _)) (_, _) =
+        Error.Defined_function_multiple_times (D.name decl)
+      in
+      let%bind () = check_for_errors function_context ~equal ~err in
+      return (with_function_context ctxt function_context)
     in
-    Return.List.fold (U.funcs unt_ast) ~init ~f:add_function_definition
+    let%bind function_definitions =
+      Sequence.of_list (U.funcs unt_ast)
+      |> Sequence.mapi ~f:(type_function_definition ctxt)
+      |> Return.Array.of_sequence ~len:(List.length (U.funcs unt_ast))
+    in
+    return (with_function_definitions ctxt function_definitions)
   in
   match ret with
   | Result.Ok o, sp -> (Result.Ok o, sp)

@@ -64,6 +64,24 @@ module Result :
 
           val iteri : 'a list -> f:(int -> 'a -> (unit, 'e) t) -> (unit, 'e) t
         end
+
+        module Array : sig
+          val of_sequence :
+            len:int -> ('a, 'e) t Sequence.t -> ('a Array.t, 'e) t
+
+          val of_sequence_unordered :
+               len:int
+            -> (int * 'a, 'e) t Sequence.t
+            -> (('a Array.t, 'e) t, Array.unordered_error) Result.t
+
+          val of_list_map :
+            'a list -> f:('a -> ('b, 'e) t) -> ('b Array.t, 'e) t
+
+          val of_list_map_unordered :
+               'a list
+            -> f:('a -> (int * 'b, 'e) t)
+            -> (('b Array.t, 'e) t, Array.unordered_error) Result.t
+        end
       end
     end
   end
