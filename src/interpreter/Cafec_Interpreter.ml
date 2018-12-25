@@ -3,7 +3,8 @@ module Expr = Ast.Expr
 module Stmt = Ast.Stmt
 module Type = Ast.Type
 
-type t = Interpreter : {funcs: (Name.t * Expr.Block.t) Array.t} -> t
+type t =
+  | Interpreter : {funcs: (Name.anyfix Name.t * Expr.Block.t) Array.t} -> t
 
 let funcs (Interpreter {funcs}) = funcs
 

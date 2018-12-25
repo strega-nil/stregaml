@@ -1,13 +1,17 @@
 module rec Error : sig
   type t =
-    | Name_not_found : Name.t -> t
-    | Name_not_found_in_type : Type.t * Name.t -> t
+    | Name_not_found : Name.anyfix Name.t -> t
+    | Name_not_found_in_type : Type.t * Name.anyfix Name.t -> t
     | Type_not_found : Nfc_string.t -> t
     | Type_defined_multiple_times : Nfc_string.t -> t
     | Infix_group_not_found : Nfc_string.t -> t
     | Infix_group_defined_multiple_times : Nfc_string.t -> t
     | Infix_group_recursive_precedence : Nfc_string.t * Nfc_string.t -> t
-    | Incorrect_let_type : {name: Name.t; let_ty: Type.t; expr_ty: Type.t} -> t
+    | Incorrect_let_type :
+        { name: _ Name.t
+        ; let_ty: Type.t
+        ; expr_ty: Type.t }
+        -> t
     | Assignment_to_incompatible_type : {dest: Type.t; source: Type.t} -> t
     | Assignment_to_value : t
     | Assignment_to_immutable_place : t
@@ -17,14 +21,14 @@ module rec Error : sig
     | Record_literal_non_record_type : Type.t -> t
     | Record_literal_duplicate_members : Nfc_string.t -> t
     | Record_literal_incorrect_type :
-        { field: Name.t
+        { field: Name.nonfix Name.t
         ; field_ty: Type.t
         ; member_ty: Type.t }
         -> t
-    | Record_literal_extra_field : Type.t * Name.t -> t
+    | Record_literal_extra_field : Type.t * Name.nonfix Name.t -> t
     | Record_literal_missing_field : Type.t * Nfc_string.t -> t
-    | Record_access_non_record_type : Type.t * Name.t -> t
-    | Record_access_non_member : Type.t * Name.t -> t
+    | Record_access_non_record_type : Type.t * Name.nonfix Name.t -> t
+    | Record_access_non_member : Type.t * Name.nonfix Name.t -> t
     | Match_non_variant_type : Type.t -> t
     | Match_branches_of_different_type : {expected: Type.t; found: Type.t} -> t
     | Match_repeated_branches : Nfc_string.t -> t
@@ -47,11 +51,17 @@ module rec Error : sig
         -> t
     | Unknown_builtin : Nfc_string.t -> t
     | Call_of_non_function : Type.t -> t
-    | Prefix_function_wrong_arity : {name: Name.t; num_params: int} -> t
-    | Infix_function_wrong_arity : {name: Name.t; num_params: int} -> t
-    | Defined_function_multiple_times : Name.t -> t
+    | Prefix_function_wrong_arity :
+        { name: Name.prefix Name.t
+        ; num_params: int }
+        -> t
+    | Infix_function_wrong_arity :
+        { name: Name.infix Name.t
+        ; num_params: int }
+        -> t
+    | Defined_function_multiple_times : _ Name.t -> t
     | Defined_type_multiple_times : Nfc_string.t -> t
-    | Defined_infix_declaration_multiple_times : Name.t -> t
+    | Defined_infix_declaration_multiple_times : Name.infix Name.t -> t
     | Return_type_mismatch : {expected: Type.t; found: Type.t} -> t
     | Invalid_function_arguments :
         { expected: Type.t Array.t
@@ -103,7 +113,7 @@ end =
 and Ast_Binding : sig
   type t =
     | Binding :
-        { name: Name.t Spanned.t
+        { name: Name.anyfix Name.t Spanned.t
         ; mutability: Type.mutability
         ; ty: Type.t }
         -> t

@@ -8,7 +8,7 @@ module Binding = Ast.Binding
 module Function_declaration = struct
   type t =
     | Declaration :
-        { name: Name.t
+        { name: Name.anyfix Name.t
         ; params: Binding.t Array.t
         ; ret_ty: Type.t }
         -> t
@@ -45,7 +45,7 @@ module Context = struct
         { type_context: Type.Context.t
         ; infix_group_names: Nfc_string.t Array.t
         ; infix_groups: Infix_group.t Array.t
-        ; infix_decls: (Name.t * int) Array.t
+        ; infix_decls: (Name.infix Name.t * int) Array.t
         ; function_context: Function_declaration.t Spanned.t Array.t
         ; function_definitions: Expr.Block.t Spanned.t Array.t }
         -> t
@@ -82,8 +82,8 @@ include Context
 
 type 'a result = ('a, Error.t) Spanned.Result.t
 
-let name_not_found ty name =
-  return_err (Error.Name_not_found_in_type (ty, name))
+let name_not_found_in : type f a. Type.t -> f Name.t -> a result =
+ fun ty name -> return_err (Error.Name_not_found_in_type (ty, Name.erase name))
 
 let get_members :
        ?kind:Type.Structural.Kind.t
@@ -104,20 +104,22 @@ let get_members :
   | _ -> None
 
 let find_field :
-    Name.t -> members:Type.Structural.members -> (int * Type.t) option =
+    _ Name.t -> members:Type.Structural.members -> (int * Type.t) option =
  fun name ~members ->
-  match name with
-  | Name.Name {string; kind= Name.Identifier; _} ->
+  match Name.nonfix name with
+  | Some (Name.Name {string; kind= Name.Identifier; fixity= Name.Nonfix}) ->
       let nfc_name = string in
       let f _ (name, _) = Nfc_string.equal nfc_name name in
       Option.map
         ~f:(fun (idx, (_, field_ty)) -> (idx, field_ty))
         (Array.findi members ~f)
-  | _ -> None
+  | Some (Name.Name {kind= Name.Operator; _}) -> None
+  | Some _ -> .
+  | None -> None
 
 module Functions : sig
   val index_by_name :
-    Function_declaration.t Spanned.t Array.t -> Name.t -> int option
+    Function_declaration.t Spanned.t Array.t -> _ Name.t -> int option
 end = struct
   let index_by_name ctxt search =
     let module D = Function_declaration in
@@ -330,7 +332,6 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | Type.Structural.Variant members -> return members
         | _ -> return_err (Error.Match_non_variant_type cond_ty)
       in
-      let members_len = Array.length members in
       let arms_ty = ref None in
       let%bind arms =
         let f ((pat, _), blk) =
@@ -352,7 +353,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
           let%bind index, bind_ty =
             match find_field ~members arm_name with
             | Some x -> return x
-            | None -> name_not_found cond_ty arm_name
+            | None -> name_not_found_in cond_ty arm_name
           in
           let binding =
             Ast.Binding.Binding
@@ -476,7 +477,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
     | None -> (
         let name, _ = name in
         match Functions.index_by_name (function_context ctxt) name with
-        | None -> return_err (Error.Name_not_found name)
+        | None -> return_err (Error.Name_not_found (Name.erase name))
         | Some idx ->
             let ty =
               let decl, _ = (function_context ctxt).(idx) in
@@ -498,11 +499,11 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         let%bind members =
           match get_members ~kind:Type.Structural.Kind.Variant ~ctxt ty with
           | Some x -> return x
-          | None -> name_not_found ty name
+          | None -> name_not_found_in ty name
         in
         match find_field ~members name with
         | Some x -> return x
-        | None -> name_not_found ty name
+        | None -> name_not_found_in ty name
       in
       let params = Array.singleton ty_member in
       let ty = Type.(Builtin (Function {params; ret_ty= ty})) in
@@ -623,7 +624,7 @@ let type_infix_group (ctxt : t) (group : Untyped_ast.Infix_group.t Spanned.t) :
 
 let type_infix_decl (ctxt : t)
     (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) :
-    (Name.t * int) result =
+    (Name.infix Name.t * int) result =
   let module U = Untyped_ast.Infix_declaration in
   let%bind (U.Infix_declaration {name= name, _; group= group, _}) =
     spanned_lift unt_infix_decl
@@ -639,6 +640,7 @@ let type_function_declaration (ctxt : t)
   let module D = Function_declaration in
   let unt_func, _ = unt_func in
   let (F.Func {name; params; ret_ty; _}) = unt_func in
+  let name = Name.erase name in
   let%bind params, parm_sp =
     let f ((name, ty), _) =
       let%bind ty = Type.of_untyped ~ctxt:(type_context ctxt) ty in

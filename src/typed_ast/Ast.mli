@@ -5,7 +5,7 @@ module Binding : sig
       include Types.Ast_Binding
   end
 
-  val name : t -> Name.t Spanned.t
+  val name : t -> Name.anyfix Name.t Spanned.t
 
   val mutability : t -> Type.mutability
 

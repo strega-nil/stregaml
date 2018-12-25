@@ -113,18 +113,18 @@ end =
   Ast_Expr_Block
 
 and Ast_Expr : sig
-  type infix = Infix_assign : infix | Infix_name : Name.t -> infix
+  type infix = Infix_assign : infix | Infix_name : Name.infix Name.t -> infix
 
-  type qualified =
+  type _ qualified =
     | Qualified :
         { path: Nfc_string.t Spanned.t list
-        ; name: Name.t Spanned.t }
-        -> qualified
+        ; name: 'f Name.t Spanned.t }
+        -> 'f qualified
 
   type pattern =
     | Pattern :
-        { constructor: qualified Spanned.t
-        ; binding: Name.t Spanned.t }
+        { constructor: Name.nonfix qualified Spanned.t
+        ; binding: Name.anyfix Name.t Spanned.t }
         -> pattern
 
   type t =
@@ -140,19 +140,19 @@ and Ast_Expr : sig
         ; thn: Ast_Expr_Block.t Spanned.t
         ; els: Ast_Expr_Block.t Spanned.t }
         -> t
-    | Name : qualified -> t
+    | Name : _ qualified -> t
     | Block : Ast_Expr_Block.t Spanned.t -> t
     | Builtin : Nfc_string.t Spanned.t * t Spanned.t list -> t
     | Call : t Spanned.t * t Spanned.t list -> t
-    | Prefix_operator : Name.t Spanned.t * t Spanned.t -> t
+    | Prefix_operator : Name.prefix Name.t Spanned.t * t Spanned.t -> t
     | Infix_list : t Spanned.t * (infix Spanned.t * t Spanned.t) list -> t
     | Reference : {is_mut: bool; place: Ast_Expr.t Spanned.t} -> t
     | Dereference : Ast_Expr.t Spanned.t -> t
     | Record_literal :
         { ty: Ast_Type.t Spanned.t
-        ; members: (Name.t * t Spanned.t) Spanned.t list }
+        ; members: (Name.nonfix Name.t * t Spanned.t) Spanned.t list }
         -> t
-    | Record_access : t Spanned.t * Name.t -> t
+    | Record_access : t Spanned.t * Name.nonfix Name.t -> t
 end =
   Ast_Expr
 
@@ -160,7 +160,7 @@ and Ast_Stmt : sig
   type t =
     | Expression : Ast_Expr.t Spanned.t -> t
     | Let :
-        { name: Name.t Spanned.t
+        { name: Name.anyfix Name.t Spanned.t
         ; is_mut: bool
         ; ty: Ast_Type.t Spanned.t option
         ; expr: Ast_Expr.t Spanned.t }
@@ -171,8 +171,10 @@ end =
 and Ast_Func : sig
   type t =
     | Func :
-        { name: Name.t
-        ; params: (Name.t Spanned.t * Ast_Type.t Spanned.t) Spanned.t list
+        { name: _ Name.t
+        ; params:
+            (Name.anyfix Name.t Spanned.t * Ast_Type.t Spanned.t) Spanned.t
+            list
         ; ret_ty: Ast_Type.t Spanned.t option
         ; body: Ast_Expr_Block.t Spanned.t }
         -> t
@@ -199,7 +201,7 @@ end =
 and Ast_Infix_declaration : sig
   type t =
     | Infix_declaration :
-        { name: Name.t Spanned.t
+        { name: Name.infix Name.t Spanned.t
         ; group: Nfc_string.t Spanned.t }
         -> t
 end =

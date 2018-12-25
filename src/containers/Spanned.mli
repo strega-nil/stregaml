@@ -54,6 +54,10 @@ module Result :
       val span_of : (_, _) t -> Span.t
 
       module Return : sig
+        val map : ('a, 'e) t -> f:('a -> 'b) -> ('b, 'e) t
+
+        val bind : ('a, 'e) t -> f:('a -> ('b, 'e) t) -> ('b, 'e) t
+
         module List : sig
           val map : 'a list -> f:('a -> ('b, 'e) t) -> ('b list, 'e) t
 

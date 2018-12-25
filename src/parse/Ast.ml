@@ -216,7 +216,7 @@ end
 module Func = struct
   include Types.Ast_Func
 
-  let name (Func r) = r.name
+  let name (Func r) = Name.erase r.name
 
   let params (Func r) = r.params
 
@@ -226,7 +226,7 @@ module Func = struct
 
   let to_string self =
     let parameters =
-      let f ((((name : Name.t), _), (ty, _)), _) =
+      let f (((name, _), (ty, _)), _) =
         String.concat [Name.to_ident_string name; ": "; Type.to_string ty]
       in
       String.concat ~sep:", " (List.map ~f (params self))

@@ -85,6 +85,10 @@ module Result = struct
     let span_of (_, sp) = sp
 
     module Return = struct
+      let map = Monad_implementation.map
+
+      let bind = Monad_implementation.bind
+
       module List = struct
         let map lst ~f =
           let open! Let_syntax in

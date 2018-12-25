@@ -45,13 +45,13 @@ module Expr : sig
 
   val to_string : t -> indent:int -> string
 
-  val qualified_path : qualified -> Nfc_string.t Spanned.t list
+  val qualified_path : _ qualified -> Nfc_string.t Spanned.t list
 
-  val qualified_name : qualified -> Name.t Spanned.t
+  val qualified_name : 'f qualified -> 'f Name.t Spanned.t
 
-  val pattern_constructor : pattern -> qualified Spanned.t
+  val pattern_constructor : pattern -> Name.nonfix qualified Spanned.t
 
-  val pattern_binding : pattern -> Name.t Spanned.t
+  val pattern_binding : pattern -> Name.anyfix Name.t Spanned.t
 end
 
 module Func : sig
@@ -61,9 +61,10 @@ module Func : sig
 
   val to_string : t -> string
 
-  val name : t -> Name.t
+  val name : t -> Name.anyfix Name.t
 
-  val params : t -> (Name.t Spanned.t * Type.t Spanned.t) Spanned.t list
+  val params :
+    t -> (Name.anyfix Name.t Spanned.t * Type.t Spanned.t) Spanned.t list
 
   val ret_ty : t -> Type.t Spanned.t option
 

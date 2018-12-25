@@ -1,9 +1,6 @@
-* recursive types
-  - first - check for it
-  - second - see pointers
-* LLVM backend
-* externals
-* real pattern matching
+Laid out in order of when I want to do them
+
+* rework lvalues!
 * effects
   - syntax:
     ```cafe
@@ -26,6 +23,13 @@
       }
     }
     ```
+* MIR
+  - actually lay out types
+    - check for recursive types
+  - write an interpreter for MIR
+  - LLVM backend
+* externals
+* linearity
 * polymorphism!
   - syntax: `type Array[T: type, N: UInt]`
   - ```cafe
@@ -42,6 +46,7 @@
       ...
     }
     ```
+* real pattern matching
 * implicit polymorphism!
   - ```cafe
     func iter_map(lst: List['t], f: func('t) 'e -> 'u)
@@ -50,7 +55,6 @@
       ...
     }
     ```
-* linearity
 
 * names for stuff
   * tamper - build
