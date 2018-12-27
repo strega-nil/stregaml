@@ -1,7 +1,7 @@
 module rec Error : sig
   type t =
     | Name_not_found : Name.anyfix Name.t -> t
-    | Name_not_found_in_type : Type.t * Name.anyfix Name.t -> t
+    | Name_not_found_in_type : Type.value Type.t * Name.anyfix Name.t -> t
     | Type_not_found : Nfc_string.t -> t
     | Type_defined_multiple_times : Nfc_string.t -> t
     | Infix_group_not_found : Nfc_string.t -> t
@@ -9,33 +9,33 @@ module rec Error : sig
     | Infix_group_recursive_precedence : Nfc_string.t * Nfc_string.t -> t
     | Incorrect_let_type :
         { name: _ Name.t
-        ; let_ty: Type.t
-        ; expr_ty: Type.t }
+        ; let_ty: Type.any Type.t
+        ; expr_ty: Type.any Type.t }
         -> t
-    | Assignment_to_incompatible_type : {dest: Type.t; source: Type.t} -> t
+    | Assignment_to_incompatible_type : {dest: Type.value Type.t; source: Type.value Type.t} -> t
     | Assignment_to_value : t
     | Assignment_to_immutable_place : t
     | Reference_taken_to_value : Type.mutability -> t
     | Mutable_reference_taken_to_immutable_place : t
-    | Dereference_of_non_reference : Type.t -> t
-    | Record_literal_non_record_type : Type.t -> t
+    | Dereference_of_non_reference : Type.value Type.t -> t
+    | Record_literal_non_record_type : Type.value Type.t -> t
     | Record_literal_duplicate_members : Nfc_string.t -> t
     | Record_literal_incorrect_type :
         { field: Name.nonfix Name.t
-        ; field_ty: Type.t
-        ; member_ty: Type.t }
+        ; field_ty: Type.value Type.t
+        ; member_ty: Type.value Type.t }
         -> t
-    | Record_literal_extra_field : Type.t * Name.nonfix Name.t -> t
-    | Record_literal_missing_field : Type.t * Nfc_string.t -> t
-    | Record_access_non_record_type : Type.t * Name.nonfix Name.t -> t
-    | Record_access_non_member : Type.t * Name.nonfix Name.t -> t
-    | Match_non_variant_type : Type.t -> t
-    | Match_branches_of_different_type : {expected: Type.t; found: Type.t} -> t
+    | Record_literal_extra_field : Type.value Type.t * Name.nonfix Name.t -> t
+    | Record_literal_missing_field : Type.value Type.t * Nfc_string.t -> t
+    | Record_access_non_record_type : Type.value Type.t * Name.nonfix Name.t -> t
+    | Record_access_non_member : Type.value Type.t * Name.nonfix Name.t -> t
+    | Match_non_variant_type : Type.value Type.t -> t
+    | Match_branches_of_different_type : {expected: Type.value Type.t; found: Type.value Type.t} -> t
     | Match_repeated_branches : Nfc_string.t -> t
     | Match_missing_branch : Nfc_string.t -> t
-    | Pattern_of_wrong_type : {expected: Type.t; found: Type.t} -> t
-    | If_non_bool : Type.t -> t
-    | If_branches_of_differing_type : Type.t * Type.t -> t
+    | Pattern_of_wrong_type : {expected: Type.value Type.t; found: Type.value Type.t} -> t
+    | If_non_bool : Type.value Type.t -> t
+    | If_branches_of_differing_type : Type.value Type.t * Type.value Type.t -> t
     | Builtin_mismatched_arity :
         { name: Nfc_string.t
         ; expected: int
@@ -43,14 +43,14 @@ module rec Error : sig
         -> t
     | Builtin_invalid_arguments :
         { name: Nfc_string.t
-        ; found: Type.t Array.t }
+        ; found: Type.any Type.t Array.t }
         -> t
     | Unordered_operators :
         { op1: Cafec_Parse.Ast.Expr.infix Spanned.t
         ; op2: Cafec_Parse.Ast.Expr.infix Spanned.t }
         -> t
     | Unknown_builtin : Nfc_string.t -> t
-    | Call_of_non_function : Type.t -> t
+    | Call_of_non_function : Type.value Type.t -> t
     | Prefix_function_wrong_arity :
         { name: Name.prefix Name.t
         ; num_params: int }
@@ -59,33 +59,44 @@ module rec Error : sig
         { name: Name.infix Name.t
         ; num_params: int }
         -> t
-    | Defined_function_multiple_times : _ Name.t -> t
+    | Defined_function_multiple_times : Name.anyfix Name.t -> t
     | Defined_type_multiple_times : Nfc_string.t -> t
     | Defined_infix_declaration_multiple_times : Name.infix Name.t -> t
-    | Return_type_mismatch : {expected: Type.t; found: Type.t} -> t
+    | Return_type_mismatch : {expected: Type.any Type.t; found: Type.any Type.t} -> t
     | Invalid_function_arguments :
-        { expected: Type.t Array.t
-        ; found: Type.t Array.t }
+        { expected: Type.any Type.t Array.t
+        ; found: Type.any Type.t Array.t }
         -> t
 end =
   Error
 
 and Type : sig
-  type mutability = Immutable : mutability | Mutable : mutability
+  type mutability = Cafec_Parse.Type.mutability =
+    | Immutable : mutability
+    | Mutable : mutability
+
+  type value = Cafec_Parse.Type.value
+
+  type place = Cafec_Parse.Type.place
+
+  type any = Cafec_Parse.Type.any
 
   type builtin =
     | Unit : builtin
     | Bool : builtin
     | Int32 : builtin
-    | Reference : {mutability: mutability; pointee: t} -> builtin
-    | Function : {params: t Array.t; ret_ty: t} -> builtin
+    | Reference : place t -> builtin
+    | Function : {params: any t Array.t; ret_ty: any t} -> builtin
 
-  and t = Builtin : builtin -> t | User_defined : int -> t
+  and _ t =
+    | Builtin : builtin -> value t
+    | User_defined : int -> value t
+    | Any : _ t -> any t
 end =
   Type
 
 and Type_Structural : sig
-  type members = (Nfc_string.t * Type.t) Array.t
+  type members = (Nfc_string.t * Type.value Type.t) Array.t
 
   type t =
     | Builtin : Type.builtin -> t
@@ -95,27 +106,16 @@ end =
   Type_Structural
 
 and Type_Structural_Kind : sig
-  type t = Cafec_Parse.Ast.Type.Data.kind = Record | Variant
+  type t = Cafec_Parse.Type.Data.kind = Record | Variant
 end =
   Type_Structural_Kind
-
-and Ast_Expr_Type : sig
-  (* type owned = Owned | Borrowed *)
-
-  type category =
-    | Value : category
-    | Place : {mutability: Type.mutability (* ; owned: owned *)} -> category
-
-  type t = Type : {category: category; ty: Type.t} -> t
-end =
-  Ast_Expr_Type
 
 and Ast_Binding : sig
   type t =
     | Binding :
         { name: Name.anyfix Name.t Spanned.t
-        ; mutability: Type.mutability
-        ; ty: Type.t }
+        ; is_mut: bool
+        ; ty: Type.any Type.t }
         -> t
 end =
   Ast_Binding

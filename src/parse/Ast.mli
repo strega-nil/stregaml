@@ -1,21 +1,3 @@
-module Type : sig
-  include module type of struct
-      include Types.Ast_Type
-  end
-
-  val to_string : t -> string
-
-  module Data : sig
-    include module type of struct
-        include Types.Ast_Type_Data
-    end
-
-    val to_string : ?name:string -> t -> string
-  end
-
-  module Definition = Types.Ast_Type_Definition
-end
-
 module Stmt : sig
   include module type of struct
       include Types.Ast_Stmt
@@ -63,10 +45,9 @@ module Func : sig
 
   val name : t -> Name.anyfix Name.t
 
-  val params :
-    t -> (Name.anyfix Name.t Spanned.t * Type.t Spanned.t) Spanned.t list
+  val params : t -> params
 
-  val ret_ty : t -> Type.t Spanned.t option
+  val ret_ty : t -> Type.any Type.t Spanned.t option
 
   val body : t -> Expr.Block.t Spanned.t
 end

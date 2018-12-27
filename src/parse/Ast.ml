@@ -8,43 +8,6 @@ let infix_to_string = function
   | Types.Ast_Expr.Infix_assign -> "<-"
   | Types.Ast_Expr.Infix_name name -> infix_name_string name
 
-module Type = struct
-  include Types.Ast_Type
-
-  let rec to_string = function
-    | Named id -> (id :> string)
-    | Reference {is_mut; pointee= ty, _} ->
-        let ptr = if is_mut then "&mut " else "&" in
-        ptr ^ to_string ty
-    | Function {params; ret_ty} ->
-        let f (x, _) = to_string x in
-        let ret_ty =
-          match ret_ty with Some x -> ") -> " ^ f x | None -> ")"
-        in
-        let params = String.concat ~sep:", " (List.map params ~f) in
-        String.concat ["func("; params; ret_ty]
-
-  module Data = struct
-    include Types.Ast_Type_Data
-
-    let to_string ?name data =
-      let members_to_string members =
-        let f ((name, ty), _) =
-          ignore (name : Nfc_string.t) ;
-          String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
-        in
-        String.concat (List.map members ~f)
-      in
-      let (Data {kind; members}) = data in
-      let kind = match kind with Record -> "record" | Variant -> "variant" in
-      let name = match name with Some n -> " " ^ n | None -> "" in
-      let members = members_to_string members in
-      String.concat [kind; name; " {"; members; "\n  }"]
-  end
-
-  module Definition = Types.Ast_Type_Definition
-end
-
 module Implementation_stmt_expr = struct
   let qualified_to_string (Types.Ast_Expr.Qualified {path; name= name, _}) =
     let f ((id : Nfc_string.t), _) = (id :> string) in
@@ -120,13 +83,17 @@ module Implementation_stmt_expr = struct
     | Call ((e, _), args) ->
         let args = arg_list args in
         String.concat [expr_to_string ~indent e; "("; args; ")"]
-    | Reference {is_mut; place= place, _} ->
-        let name = if is_mut then "&mut " else "&" in
+    | Place {mutability= mut, _; expr= expr, _} ->
+        String.concat
+          [ Type.mutability_to_string mut
+          ; " "
+          ; expr_to_string expr ~parens:true ~indent:(indent + 1) ]
+    | Reference (place, _) ->
         let place = expr_to_string place ~parens:true ~indent:(indent + 1) in
-        String.concat [name; place]
-    | Dereference (value, _) ->
-        let place = expr_to_string value ~parens:true ~indent:(indent + 1) in
-        String.concat [open_paren parens; "*"; place; close_paren parens]
+        String.concat [open_paren parens; "&"; place; close_paren parens]
+    | Dereference (expr, _) ->
+        let expr = expr_to_string expr ~parens:true ~indent:(indent + 1) in
+        String.concat [open_paren parens; "*"; expr; close_paren parens]
     | Record_literal {ty= ty, _; members} ->
         let members =
           let f ((name, (expr, _)), _) =
@@ -165,8 +132,7 @@ module Implementation_stmt_expr = struct
     let open Types.Ast_Stmt in
     match self with
     | Expression (e, _) -> expr_to_string ~indent e
-    | Let {name; is_mut; ty; expr} ->
-        let name, _ = name in
+    | Let {name= name, _; is_mut; ty; expr} ->
         let ty =
           match ty with Some (ty, _) -> ": " ^ Type.to_string ty | None -> ""
         in

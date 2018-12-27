@@ -9,7 +9,7 @@ module Context : sig
 
   val empty : t
 
-  val make : Cafec_Parse.Ast.Type.Definition.t Spanned.t list -> t result
+  val make : Cafec_Parse.Type.Definition.t Spanned.t list -> t result
 end
 
 module Structural : sig
@@ -20,10 +20,11 @@ module Structural : sig
   module Kind = Types.Type_Structural_Kind
 end
 
-val structural : t -> ctxt:Context.t -> Structural.t
+val structural : value t -> ctxt:Context.t -> Structural.t
 
-val equal : t -> t -> bool
+val equal : _ t -> _ t -> bool
 
-val to_string : t -> ctxt:Context.t -> string
+val to_string : _ t -> ctxt:Context.t -> string
 
-val of_untyped : Cafec_Parse.Ast.Type.t Spanned.t -> ctxt:Context.t -> t result
+val of_untyped :
+  'a Cafec_Parse.Type.t Spanned.t -> ctxt:Context.t -> 'a t result

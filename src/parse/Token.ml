@@ -74,6 +74,7 @@ let to_string = function
   | Keyword_variant -> "keyword `variant`"
   | Keyword_alias -> "keyword `alias`"
   | Keyword_let -> "keyword `let`"
+  | Keyword_ref -> "keyword `ref`"
   | Keyword_mut -> "keyword `mut`"
   | Keyword_builtin -> "keyword `__builtin`"
   | Keyword_underscore -> "keyword `_`"

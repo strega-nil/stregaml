@@ -179,6 +179,7 @@ let lex_ident lex =
         | "record" -> return Token.Keyword_record
         | "alias" -> return Token.Keyword_alias
         | "let" -> return Token.Keyword_let
+        | "ref" -> return Token.Keyword_ref
         | "mut" -> return Token.Keyword_mut
         | "__builtin" -> return Token.Keyword_builtin
         | "_" -> return Token.Keyword_underscore

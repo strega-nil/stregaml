@@ -70,6 +70,7 @@ and Token : sig
     | Keyword_variant : t
     | Keyword_alias : t
     | Keyword_let : t
+    | Keyword_ref : t
     | Keyword_mut : t
     | Keyword_builtin : t
     | Keyword_underscore : t
@@ -77,31 +78,49 @@ and Token : sig
 end =
   Token
 
-and Ast_Type : sig
-  type t =
-    | Named : Nfc_string.t -> t
-    | Reference : {is_mut: bool; pointee: t Spanned.t} -> t
-    | Function : {params: t Spanned.t list; ret_ty: t Spanned.t option} -> t
-end =
-  Ast_Type
+and Type : sig
+  (* TODO: Raw, Owned *)
 
-and Ast_Type_Data : sig
-  type members = (Nfc_string.t * Ast_Type.t) Spanned.t list
+  type mutability = Immutable : mutability | Mutable : mutability
+
+  type value = Value_type
+
+  type place = Place_type
+
+  type any = Any_type
+
+  type _ t =
+    | Named : Nfc_string.t -> value t
+    | Reference : place t Spanned.t -> value t
+    | Function :
+        { params: any t Spanned.t list
+        ; ret_ty: any t Spanned.t option }
+        -> value t
+    | Place :
+        { mutability: Type.mutability Spanned.t
+        ; ty: value t Spanned.t }
+        -> place t
+    | Any : _ t -> any t
+end =
+  Type
+
+and Type_Data : sig
+  type members = (Nfc_string.t * Type.value Type.t) Spanned.t list
 
   type kind = Record | Variant
 
   type t = Data : {kind: kind; members: members} -> t
 end =
-  Ast_Type_Data
+  Type_Data
 
-and Ast_Type_Definition : sig
+and Type_Definition : sig
   type kind =
-    | Alias : Ast_Type.t -> kind
-    | User_defined : {data: Ast_Type_Data.t} -> kind
+    | Alias : Type.value Type.t -> kind
+    | User_defined : {data: Type_Data.t} -> kind
 
   type t = Definition : {name: Nfc_string.t Spanned.t; kind: kind} -> t
 end =
-  Ast_Type_Definition
+  Type_Definition
 
 and Ast_Expr_Block : sig
   type t =
@@ -146,10 +165,11 @@ and Ast_Expr : sig
     | Call : t Spanned.t * t Spanned.t list -> t
     | Prefix_operator : Name.prefix Name.t Spanned.t * t Spanned.t -> t
     | Infix_list : t Spanned.t * (infix Spanned.t * t Spanned.t) list -> t
-    | Reference : {is_mut: bool; place: Ast_Expr.t Spanned.t} -> t
+    | Place : {mutability: Type.mutability Spanned.t; expr: t Spanned.t} -> t
+    | Reference : Ast_Expr.t Spanned.t -> t
     | Dereference : Ast_Expr.t Spanned.t -> t
     | Record_literal :
-        { ty: Ast_Type.t Spanned.t
+        { ty: Type.value Type.t Spanned.t
         ; members: (Name.nonfix Name.t * t Spanned.t) Spanned.t list }
         -> t
     | Record_access : t Spanned.t * Name.nonfix Name.t -> t
@@ -162,20 +182,21 @@ and Ast_Stmt : sig
     | Let :
         { name: Name.anyfix Name.t Spanned.t
         ; is_mut: bool
-        ; ty: Ast_Type.t Spanned.t option
+        ; ty: Type.any Type.t Spanned.t option
         ; expr: Ast_Expr.t Spanned.t }
         -> t
 end =
   Ast_Stmt
 
 and Ast_Func : sig
+  type params =
+    (Name.anyfix Name.t Spanned.t * Type.any Type.t Spanned.t) Spanned.t list
+
   type t =
     | Func :
         { name: _ Name.t
-        ; params:
-            (Name.anyfix Name.t Spanned.t * Ast_Type.t Spanned.t) Spanned.t
-            list
-        ; ret_ty: Ast_Type.t Spanned.t option
+        ; params: params
+        ; ret_ty: Type.any Type.t Spanned.t option
         ; body: Ast_Expr_Block.t Spanned.t }
         -> t
 end =
@@ -213,7 +234,7 @@ and Ast : sig
         { funcs: Ast_Func.t Spanned.t list
         ; infix_decls: Ast_Infix_declaration.t Spanned.t list
         ; infix_groups: Ast_Infix_group.t Spanned.t list
-        ; types: Ast_Type_Definition.t Spanned.t list }
+        ; types: Type_Definition.t Spanned.t list }
         -> t
 end =
   Ast

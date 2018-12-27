@@ -1,28 +1,6 @@
 Laid out in order of when I want to do them
 
 * rework lvalues!
-* effects
-  - syntax:
-    ```cafe
-    effect Yield {
-      func yield(Int32);
-    }
-    effect IoYield = Yield | Io;
-
-    func generate() Yield { ... }
-    func get_int() Io -> Int32 { ... }
-    func input_stream() Io | Yield { ... }
-
-    func print_all(f: func() Yield) {
-      handle (f()) {
-        Yield::yield(x) => {
-          print(x);
-          continue;
-        }
-        return => {}
-      }
-    }
-    ```
 * MIR
   - actually lay out types
     - check for recursive types
@@ -30,6 +8,7 @@ Laid out in order of when I want to do them
   - LLVM backend
 * externals
 * linearity
+* strings
 * polymorphism!
   - syntax: `type Array[T: type, N: UInt]`
   - ```cafe
@@ -55,6 +34,7 @@ Laid out in order of when I want to do them
       ...
     }
     ```
+* algebraic effects?
 
 * names for stuff
   * tamper - build

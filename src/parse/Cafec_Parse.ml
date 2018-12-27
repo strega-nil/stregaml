@@ -1,6 +1,7 @@
 open! Types.Pervasives
-module Error = Error
 module Ast = Ast
+module Error = Error
+module Type = Type
 
 type t =
   | Parser : {lexer: Lexer.t; mutable peek: Token.t Spanned.t option} -> t
@@ -74,7 +75,7 @@ module Item = struct
     | Func of Ast.Func.t
     | Infix_group of Ast.Infix_group.t
     | Infix_declaration of Ast.Infix_declaration.t
-    | Type_definition of Ast.Type.Definition.t
+    | Type_definition of Type.Definition.t
 end
 
 let is_postfix_token = function
@@ -242,15 +243,22 @@ let rec maybe_parse_expression_no_infix (parser : t) : Ast.Expr.t option result
       let sp = Spanned.Span.union sp sp' in
       let%bind expr = get_postfix (Ast.Expr.If_else {cond; thn; els}, sp) in
       return (Some expr)
+  | Token.Keyword_ref, sp ->
+      eat_token parser ;
+      let%bind () = with_span sp in
+      let mutability = (Type.Immutable, sp) in
+      let%bind expr = spanned_bind (parse_expression_no_infix parser) in
+      return (Some (Ast.Expr.Place {mutability; expr}))
+  | Token.Keyword_mut, sp ->
+      eat_token parser ;
+      let%bind () = with_span sp in
+      let mutability = (Type.Mutable, sp) in
+      let%bind expr = spanned_bind (parse_expression_no_infix parser) in
+      return (Some (Ast.Expr.Place {mutability; expr}))
   | Token.Operator op, _ when Nfc_string.equal op Ctxt_keyword.reference ->
       eat_token parser ;
-      let%bind is_mut =
-        match%bind maybe_get_specific parser Token.Keyword_mut with
-        | Some () -> return true
-        | None -> return false
-      in
       let%bind place = spanned_bind (parse_expression_no_infix parser) in
-      return (Some (Ast.Expr.Reference {is_mut; place}))
+      return (Some (Ast.Expr.Reference place))
   | Token.Operator _, sp | Token.Identifier_operator _, sp ->
       let%bind op = get_prefix_operator parser in
       let%bind expr = spanned_bind (parse_expression_no_infix parser) in
@@ -374,7 +382,7 @@ and parse_record_literal (parser : t)
   let%bind () = get_specific parser Token.Close_brace in
   let ty =
     match path with
-    | [(ty, _)], sp -> (Ast.Type.Named ty, sp)
+    | [(ty, _)], sp -> (Type.Named ty, sp)
     | _ -> failwith "no paths in types yet"
   in
   return (Ast.Expr.Record_literal {ty; members})
@@ -438,30 +446,23 @@ and parse_postfix (parser : t) ((initial, sp) : Ast.Expr.t Spanned.t) :
       return (Ast.Expr.Record_access ((initial, sp), name))
   | _ -> failwith "function called incorrectly"
 
-and parse_return_type (parser : t) : Ast.Type.t Spanned.t option result =
+and parse_return_type (parser : t) : Type.any Type.t Spanned.t option result =
   match%bind maybe_get_specific parser Token.Arrow with
   | Some () ->
       let%bind ret_ty = spanned_bind (parse_type parser) in
       return (Some ret_ty)
   | None -> return None
 
-and parse_type (parser : t) : Ast.Type.t result =
+and parse_value_type (parser : t) : Type.value Type.t result =
   let%bind tok = peek_token parser in
   match tok with
-  | Token.Operator op when Nfc_string.equal op Ctxt_keyword.reference -> (
+  | Token.Operator op when Nfc_string.equal op Ctxt_keyword.reference ->
       eat_token parser ;
-      let%bind tok = peek_token parser in
-      match tok with
-      | Token.Keyword_mut ->
-          eat_token parser ;
-          let%bind pointee = spanned_bind (parse_type parser) in
-          return (Ast.Type.Reference {is_mut= true; pointee})
-      | _ ->
-          let%bind pointee = spanned_bind (parse_type parser) in
-          return (Ast.Type.Reference {is_mut= false; pointee}) )
+      let%bind place = spanned_bind (parse_place_type parser) in
+      return (Type.Reference place)
   | Token.Identifier _ ->
       let%bind id = get_identifier parser in
-      return (Ast.Type.Named id)
+      return (Type.Named id)
   | Token.Keyword_func ->
       eat_token parser ;
       let%bind () = get_specific parser Token.Open_paren in
@@ -471,16 +472,20 @@ and parse_type (parser : t) : Ast.Type.t result =
       in
       let%bind () = get_specific parser Token.Close_paren in
       let%bind ret_ty = parse_return_type parser in
-      return (Ast.Type.Function {params; ret_ty})
+      return (Type.Function {params; ret_ty})
   | tok -> unexpected tok Error.Expected.Type
 
-and parse_data_members (parser : t) : Ast.Type.Data.members result =
+and parse_place_type (parser : t) : Type.place Type.t result = failwith ""
+
+and parse_type (parser : t) : Type.any Type.t result = failwith ""
+
+and parse_data_members (parser : t) : Type.Data.members result =
   let%bind () = get_specific parser Token.Open_brace in
   let%bind members =
     let f parser =
       let%bind name = get_identifier parser in
       let%bind () = get_specific parser Token.Colon in
-      let%bind ty = parse_type parser in
+      let%bind ty = parse_value_type parser in
       return (name, ty)
     in
     parse_list parser ~f ~sep:Token.Semicolon ~close:Token.Close_brace
@@ -490,26 +495,24 @@ and parse_data_members (parser : t) : Ast.Type.Data.members result =
   return members
 
 (* for simple types of the form <kind> type X { ... } *)
-and parse_simple_type ~(kind : Ast.Type.Data.kind) (parser : t) :
-    Ast.Type.Definition.t result =
+and parse_simple_type ~(kind : Type.Data.kind) (parser : t) :
+    Type.Definition.t result =
   let%bind () = get_specific parser Token.Keyword_type in
   let%bind name = spanned_bind (get_identifier parser) in
   let%bind members = parse_data_members parser in
-  let data = Ast.Type.Data.Data {kind; members} in
-  let kind = Ast.Type.Definition.User_defined {data} in
-  return (Ast.Type.Definition.Definition {kind; name})
+  let data = Type.Data.Data {kind; members} in
+  let kind = Type.Definition.User_defined {data} in
+  return (Type.Definition.Definition {kind; name})
 
 and maybe_parse_type_annotation (parser : t) :
-    Ast.Type.t Spanned.t option result =
+    Type.any Type.t Spanned.t option result =
   match%bind maybe_get_specific parser Token.Colon with
   | Some () ->
       let%bind ty = spanned_bind (parse_type parser) in
       return (Some ty)
   | None -> return None
 
-and parse_parameter_list (parser : t) :
-    (Name.anyfix Name.t Spanned.t * Ast.Type.t Spanned.t) Spanned.t list result
-    =
+and parse_parameter_list (parser : t) : Ast.Func.params result =
   let f parser =
     let%bind name = spanned_bind (get_name parser) in
     let%bind () = get_specific parser Token.Colon in
@@ -656,34 +659,34 @@ let parse_item (parser : t) : Item.t option result =
           let%bind infix_decl = parse_infix_declaration parser in
           return (Some (Item.Infix_declaration infix_decl)) )
   | Token.Keyword_record ->
-      let%bind def = parse_simple_type ~kind:Ast.Type.Data.Record parser in
+      let%bind def = parse_simple_type ~kind:Type.Data.Record parser in
       return (Some (Item.Type_definition def))
   | Token.Keyword_variant ->
-      let%bind def = parse_simple_type ~kind:Ast.Type.Data.Variant parser in
+      let%bind def = parse_simple_type ~kind:Type.Data.Variant parser in
       return (Some (Item.Type_definition def))
   | Token.Keyword_type ->
       let%bind name = spanned_bind (get_identifier parser) in
       let%bind kind =
         match%bind maybe_get_specific parser Ctxt_keyword.equal_tok with
         | Some () ->
-            let%bind ty = parse_type parser in
+            let%bind ty = parse_value_type parser in
             let%bind () = get_specific parser Token.Semicolon in
-            return (Ast.Type.Definition.Alias ty)
+            return (Type.Definition.Alias ty)
         | None ->
             let%bind () = get_specific parser Token.Open_brace in
             let%bind kind =
               match%bind next_token parser with
-              | Token.Keyword_record -> return Ast.Type.Data.Record
-              | Token.Keyword_variant -> return Ast.Type.Data.Variant
+              | Token.Keyword_record -> return Type.Data.Record
+              | Token.Keyword_variant -> return Type.Data.Variant
               | tok -> unexpected tok Error.Expected.Data
             in
             let%bind () = get_specific parser Token.Keyword_data in
             let%bind members = parse_data_members parser in
             let%bind () = get_specific parser Token.Close_brace in
-            let data = Ast.Type.Data.Data {kind; members} in
-            return (Ast.Type.Definition.User_defined {data})
+            let data = Type.Data.Data {kind; members} in
+            return (Type.Definition.User_defined {data})
       in
-      let def = Ast.Type.Definition.Definition {name; kind} in
+      let def = Type.Definition.Definition {name; kind} in
       return (Some (Item.Type_definition def))
   | Token.Eof -> return None
   | tok -> unexpected tok Error.Expected.Item_declarator
