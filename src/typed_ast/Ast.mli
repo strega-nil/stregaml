@@ -7,23 +7,13 @@ module Binding : sig
 
   val name : t -> Name.anyfix Name.t Spanned.t
 
-  val mutability : t -> Type.mutability
+  val is_mut : t -> bool
 
-  val ty : t -> Type.t
+  val ty : t -> Type.any Type.t
 end
 
 module Expr : sig
   module Builtin = Types.Ast_Expr_Builtin
-
-  module Type : sig
-    include module type of struct
-        include Types.Ast_Expr_Type
-    end
-
-    val category : t -> category
-
-    val ty : t -> Type.t
-  end
 
   module Local : sig
     include module type of struct
@@ -42,26 +32,26 @@ module Expr : sig
 
     val stmts : t -> Types.Ast_Stmt.t Spanned.t Array.t
 
-    val base_type : t -> Types.Type.t
+    val base_type : t -> Type.value Type.t
 
-    val base_type_sp : t Spanned.t -> Types.Type.t
+    val base_type_sp : t Spanned.t -> Type.value Type.t
 
-    val full_type : t -> Type.t
+    val full_type : t -> Type.any Type.t
 
-    val full_type_sp : t Spanned.t -> Type.t
+    val full_type_sp : t Spanned.t -> Type.any Type.t
   end
 
   include module type of struct
       include Types.Ast_Expr
   end
 
-  val base_type : t -> Types.Type.t
+  val base_type : t -> Type.value Type.t
 
-  val base_type_sp : t Spanned.t -> Types.Type.t
+  val base_type_sp : t Spanned.t -> Type.value Type.t
 
-  val full_type : t -> Type.t
+  val full_type : t -> Type.any Type.t
 
-  val full_type_sp : t Spanned.t -> Type.t
+  val full_type_sp : t Spanned.t -> Type.any Type.t
 
   val unit_value : t
 end

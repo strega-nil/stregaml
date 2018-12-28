@@ -15,11 +15,11 @@ module Context = struct
   type t =
     | Context :
         { user_types: user_type Array.t
-        ; names: (Nfc_string.t Spanned.t * Types.Type.t) Array.t }
+        ; names: (Nfc_string.t Spanned.t * Types.Type.value Types.Type.t) Array.t }
         -> t
 
   let make lst =
-    let module PType = Parse.Ast.Type in
+    let module PType = Parse.Type in
     let defs, defs_len, aliases, aliases_len =
       let module Def = PType.Definition in
       let rec helper defs defs_len aliases aliases_len = function
@@ -32,7 +32,7 @@ module Context = struct
       in
       helper [] 0 [] 0 lst
     in
-    let rec get_ast_type pty =
+    let rec get_ast_type : type cat. cat PType.t -> cat Type.t = fun pty ->
       (* returns -1 if not found *)
       let rec find_index name index = function
         | [] -> -1
@@ -60,10 +60,9 @@ module Context = struct
               | "Int32" -> return (Builtin Int32)
               | _ -> return_err (Error.Type_not_found name) ) )
         | n -> return (User_defined n) )
-      | PType.Reference {is_mut; pointee= p, _} ->
-          let mutability = if is_mut then Mutable else Immutable in
+      | PType.Reference (p, _) ->
           let%bind pointee = get_ast_type p in
-          return (Builtin (Reference {mutability; pointee}))
+          return (Builtin (Reference pointee))
       | PType.Function {params; ret_ty} ->
           let f (x, _) = get_ast_type x in
           let%bind params = Return.Array.of_list_map ~f params in
@@ -153,7 +152,8 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
       let%bind ret_ty = Option.value_map ~f ~default ret_ty in
       return (Builtin (Function {params; ret_ty}))
 
-let rec equal l r =
+let rec equal: type a b. a t -> b t -> bool =
+ fun l r ->
   match (l, r) with
   | Builtin Unit, Builtin Unit -> true
   | Builtin Bool, Builtin Bool -> true
@@ -165,6 +165,9 @@ let rec equal l r =
   | Builtin (Function f1), Builtin (Function f2) ->
       equal f1.ret_ty f2.ret_ty && Array.equal f1.params f2.params ~equal
   | User_defined u1, User_defined u2 -> u1 = u2
+  | Any a1, Any a2 -> equal a1 a2
+  | Any a1, a2 -> equal a1 a2
+  | a1, Any a2 -> equal a1 a2
   | _ -> false
 
 let structural ty ~(ctxt : Context.t) =
@@ -172,7 +175,12 @@ let structural ty ~(ctxt : Context.t) =
   | Builtin b -> Structural.Builtin b
   | User_defined idx -> Context.user_type_data (Context.user_types ctxt).(idx)
 
-let rec to_string ty ~(ctxt : Context.t) =
+let erase (type cat) (ty: cat t) : any t =
+  match ty with
+  | Any _ -> ty
+  | x -> Any x
+
+let rec to_string : type cat. cat ty -> ctxt:Context.t) =
   match ty with
   | Builtin Unit -> "Unit"
   | Builtin Bool -> "Bool"

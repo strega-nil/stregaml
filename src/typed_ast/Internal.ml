@@ -10,7 +10,7 @@ module Function_declaration = struct
     | Declaration :
         { name: Name.anyfix Name.t
         ; params: Binding.t Array.t
-        ; ret_ty: Type.t }
+        ; ret_ty: Type.any Type.t }
         -> t
 
   let name (Declaration {name; _}) = name
@@ -82,12 +82,12 @@ include Context
 
 type 'a result = ('a, Error.t) Spanned.Result.t
 
-let name_not_found_in : type f a. Type.t -> f Name.t -> a result =
+let name_not_found_in : type f a. Type.value Type.t -> f Name.t -> a result =
  fun ty name -> return_err (Error.Name_not_found_in_type (ty, Name.erase name))
 
 let get_members :
        ?kind:Type.Structural.Kind.t
-    -> Type.t
+    -> Type.value Type.t
     -> ctxt:t
     -> Type.Structural.members option =
  fun ?kind ty ~ctxt ->
@@ -104,7 +104,7 @@ let get_members :
   | _ -> None
 
 let find_field :
-    _ Name.t -> members:Type.Structural.members -> (int * Type.t) option =
+    _ Name.t -> members:Type.Structural.members -> (int * Type.value Type.t) option =
  fun name ~members ->
   match Name.nonfix name with
   | Some (Name.Name {string; kind= Name.Identifier; fixity= Name.Nonfix}) ->
@@ -187,10 +187,6 @@ let find_local name (lst : Binding.t list) : Local.t option =
   in
   List.find_mapi ~f lst
 
-let value_type ty =
-  let module T = Ast.Expr.Type in
-  T.Type {category= T.Value; ty}
-
 let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
   let module U = Untyped_ast in
   let module T = Ast in
@@ -214,6 +210,7 @@ let rec typeck_block (locals : Binding.t list) (ctxt : t) unt_blk =
             | None -> return expr_ty
             | Some ty ->
                 let%bind ty = Type.of_untyped ty ~ctxt:(type_context ctxt) in
+                let ty = Type.value_type ty in
                 if Type.equal expr_ty ty then return ty
                 else
                   let name, _ = name in

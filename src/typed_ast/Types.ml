@@ -148,7 +148,7 @@ and Ast_Expr : sig
     | Integer_literal : int -> variant
     | Match :
         { cond: t Spanned.t
-        ; arms: (Type.t * Ast_Expr_Block.t Spanned.t) Array.t }
+        ; arms: (Type.any Type.t * Ast_Expr_Block.t Spanned.t) Array.t }
         -> variant
     | If_else :
         { cond: t Spanned.t
@@ -161,13 +161,13 @@ and Ast_Expr : sig
     | Block : Ast_Expr_Block.t Spanned.t -> variant
     | Reference : {mutability: Type.mutability; place: t Spanned.t} -> variant
     | Dereference : t Spanned.t -> variant
-    | Record_literal : {ty: Type.t Spanned.t; members: t Array.t} -> variant
+    | Record_literal : {ty: Type.value Type.t Spanned.t; members: t Array.t} -> variant
     | Record_access : t Spanned.t * int -> variant
     | Global_function : int -> variant
-    | Constructor : Type.t * int -> variant
+    | Constructor : Type.value Type.t * int -> variant
     | Local : Ast_Expr_Local.t -> variant
 
-  and t = Expr : {variant: variant; ty: Ast_Expr_Type.t} -> t
+  and t = Expr : {variant: variant; ty: Type.any Type.t} -> t
 end =
   Ast_Expr
 

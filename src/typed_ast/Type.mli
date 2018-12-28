@@ -26,5 +26,7 @@ val equal : _ t -> _ t -> bool
 
 val to_string : _ t -> ctxt:Context.t -> string
 
+val erase : _ t -> any t
+
 val of_untyped :
   'a Cafec_Parse.Type.t Spanned.t -> ctxt:Context.t -> 'a t result
