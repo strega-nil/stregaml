@@ -1,5 +1,11 @@
 include Types.Type
 
+let mutability_equal lhs rhs =
+  match lhs, rhs with
+  | Immutable, Immutable -> true
+  | Mutable, Mutable -> true
+  | _ -> false
+
 let mutability_to_string = function Immutable -> "ref" | Mutable -> "mut"
 
 let rec to_string : type cat. cat t -> string = function

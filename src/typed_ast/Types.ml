@@ -91,6 +91,7 @@ and Type : sig
   and _ t =
     | Builtin : builtin -> value t
     | User_defined : int -> value t
+    | Place : {mutability: mutability; ty: value t} -> place t
     | Any : _ t -> any t
 end =
   Type

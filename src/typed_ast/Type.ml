@@ -152,6 +152,14 @@ let rec of_untyped (unt_ty : Parse.Ast.Type.t Spanned.t) ~(ctxt : Context.t) :
       let%bind ret_ty = Option.value_map ~f ~default ret_ty in
       return (Builtin (Function {params; ret_ty}))
 
+let mutability_equal = Cafec_Parse.Type.mutability_equal
+
+let mutability_compatible lhs rhs =
+  match lhs, rhs with
+  | Mutable, _ -> true
+  | Immutable, Immutable -> true
+  | Immutable, Mutable -> false
+
 let rec equal: type a b. a t -> b t -> bool =
  fun l r ->
   match (l, r) with
@@ -165,10 +173,25 @@ let rec equal: type a b. a t -> b t -> bool =
   | Builtin (Function f1), Builtin (Function f2) ->
       equal f1.ret_ty f2.ret_ty && Array.equal f1.params f2.params ~equal
   | User_defined u1, User_defined u2 -> u1 = u2
+  | Place {mutability= m1; ty= ty1}, Place {mutability= m2; ty= ty2} ->
+      mutability_equal m1 m2 && equal ty1 ty2
   | Any a1, Any a2 -> equal a1 a2
   | Any a1, a2 -> equal a1 a2
   | a1, Any a2 -> equal a1 a2
   | _ -> false
+
+let rec compatible : type a b. a t -> b t -> bool =
+ fun ty_from ty_to ->
+  match ty_from ty_to with
+  | Place {mutability= m1; ty= ty1}, Place {mutability= m2; ty= ty2} ->
+    ...
+  | Place {ty= ty1; _}, ty2 -> equal ty1 ty2
+  | ty1, Place {ty= ty2; mutability= Immutable} -> equal ty1 ty2
+  | _, Place {mutability= Mutable; _} -> false
+  | Any a1, Any a2 -> compatible a1 a2
+  | Any a1, a2 -> compatible a1 a2
+  | a1, Any a2 -> compatible a1 a2
+  | ty1, ty2 -> equal ty1 ty2
 
 let structural ty ~(ctxt : Context.t) =
   match ty with

@@ -22,7 +22,13 @@ end
 
 val structural : value t -> ctxt:Context.t -> Structural.t
 
+val mutability_equal : mutability -> mutability -> bool
+
+val mutability_compatible : mutability -> mutability -> bool
+
 val equal : _ t -> _ t -> bool
+
+val compatible : _ t -> _ t -> bool
 
 val to_string : _ t -> ctxt:Context.t -> string
 
