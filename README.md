@@ -36,6 +36,8 @@ Actually Building
 ===
 
 You should be able to (after installing dependencies), run `dune build`.
+If you want to reformat the code base after making edits, run
+`dune build @fmt --auto-promote`.
 
 Testing
 ===

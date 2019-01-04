@@ -1,0 +1,59 @@
+given
+  type Lhs;
+  type Rhs = Lhs
+structure type Equality {
+  func (infix =)(x: ref Lhs, y: ref Rhs) -> bool;
+  public func (infix !=)(x: ref Lhs, y: ref Rhs) -> bool {
+    \not (x = y)
+  }
+};
+
+given
+  type Lhs;
+  type Rhs;
+  structure E: Equality[type Lhs = Lhs; type Rhs = Rhs];
+func (infix =)(lhs: ref Lhs, rhs: ref Rhs) -> bool {
+  lhs E::= rhs
+}
+#{
+  the definition of (infix !=) as public implies
+  a definition like this in this scope
+}
+
+given
+  type T
+type Vec2 {
+  record data {
+    x: T;
+    y: T;
+  }
+
+  #{
+    note: this lives in Vec2, but doesn't necessarily need to live here
+    it just has to exist in the same module/package/w/e
+  }
+  given {
+    type T2;
+    structure Equality[type Lhs = T; type Rhs = T2]
+  }
+  default structure Equality :
+    Equality[type Lhs = Vec2[T]; type Rhs = Vec2[T2]]
+  {
+    func (infix =)(lhs: ref Lhs, rhs: ref Rhs) -> bool {
+      lhs.x = rhs.x and lhs.y = rhs.y
+    }
+  }
+
+  given
+    structure Equality[type Lhs = T];
+    structure Addition[type Lhs = T];
+    structure Multiplication[type Lhs = T];
+  structure Length_Equivalence: Equality[type Lhs = Vec2[T]] {
+    func (infix =)(lhs: ref T, rhs: ref T) -> bool {
+      let (prefix ||) = func(v: ref T) {
+        v.x * v.x + v.y * v.y
+      };
+      ||lhs = ||rhs
+    }
+  }
+}
