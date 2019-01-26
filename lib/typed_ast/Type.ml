@@ -240,7 +240,18 @@ let structural ty ~(ctxt : Context.t) =
   | Builtin b -> Structural.Builtin b
   | User_defined idx -> Context.user_type_data (Context.user_types ctxt).(idx)
 
-let local_type _ty ~is_mut = ignore is_mut ; failwith ""
+let rec local_type : type cat. cat t -> is_mut:bool -> Category.place t =
+ fun ty ~is_mut ->
+  let local_value_type : Category.value t -> Category.place t =
+   fun ty ->
+    let mutability = if is_mut then Category.Mutable else Category.Immutable in
+    Place {mutability; ty}
+  in
+  match ty with
+  | Any ty -> local_type ty ~is_mut
+  | (Place _) as ty -> ty
+  | (Builtin _) as ty -> local_value_type ty
+  | (User_defined _) as ty -> local_value_type ty
 
 let rec to_type_and_category : type a. a t -> Category.value t * a Category.t =
   function

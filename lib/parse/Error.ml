@@ -8,6 +8,8 @@ module Expected = struct
     | Identifier -> "an identifier"
     | Name -> "a name (either an identifier, or a paren-surrounded operator)"
     | Variable_decl -> "a variable declaration"
+    | Value_type -> "a value type"
+    | Place -> "`ref` or `mut`"
     | Type -> "the start of a type"
     | Data -> "either `record` or `variant`"
     | Associativity -> "either `start, `end`, or `none`"

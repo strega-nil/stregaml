@@ -6,6 +6,8 @@ module rec Error_Expected : sig
     | Operator : t
     | Name : t
     | Variable_decl : t
+    | Value_type : t
+    | Place : t
     | Type : t
     | Data : t
     | Associativity : t
