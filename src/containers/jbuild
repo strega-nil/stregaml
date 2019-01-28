@@ -1,7 +1,0 @@
-(jbuild_version 1)
-
-(library
-  ((name Cafec_Containers)
-  (libraries (base ppx_let uunf uutf))
-  (preprocess (pps (ppx_let)))
-  (flags (:standard -w +a-4@8 -open Base))))

@@ -1,5 +1,5 @@
-opam-version: "1.2"
-name: "cafe"
+opam-version: "2.0"
+name: "cafec"
 version: "0.0.1"
 maintainer: "Nicole Mazzuca <npmazzuca@gmail.com>"
 authors: [
@@ -8,13 +8,17 @@ authors: [
 license: "BSD"
 tags: [ ]
 build: [
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["dune" "build" "-p" name "-j" jobs]
 ]
 depends: [
-  "jbuilder" {build}
-  "oUnit" {test}
-  "ollvm"
-  "base"
-  "ppx_let"
+  "dune" {build & >= "1.6.2"}
+  "oUnit" {test & >= "2.0.8"}
+  "base" {>= "0.11~"}
+  "ppx_let" {>= "0.11~"}
+  "stdio" {>= "0.11~"}
+  "uutf" {>= "1.0.1"}
+  "uunf" {>= "11.0.0"}
+  "uucp" {>= "11.0.0"}
+  "cmdliner" {>= "1.0.3"}
 ]
-available: [ ocaml-version >= "4.03" ]
+available: [ ocaml-version >= "4.07" ]

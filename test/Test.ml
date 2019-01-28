@@ -9,8 +9,9 @@ exception Function_not_found of string
 (* note: should add more info eventually to these *)
 let () =
   Caml.Printexc.register_printer (function
-    | Parser_error _ -> Some "Parser error"
-    | Type_error _ -> Some "Type error"
+    | Parser_error e -> Some ("Parser error: " ^ Cafec.Parse.Error.to_string e)
+    | Type_error (e, ctxt) ->
+        Some ("Type error: " ^ Cafec.Typed_ast.Error.to_string e ~ctxt)
     | Function_not_found s -> Some ("Function not found: " ^ s)
     | _ -> None )
 

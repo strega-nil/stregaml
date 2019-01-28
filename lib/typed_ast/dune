@@ -1,0 +1,5 @@
+(library
+  (name Cafec_Typed_ast)
+  (libraries base ppx_let Cafec_Containers Cafec_Parse)
+  (preprocess (pps ppx_let))
+  (flags :standard -w +a-4-41@8 -open Base -open Cafec_Containers))
