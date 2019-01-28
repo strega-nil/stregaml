@@ -5,6 +5,8 @@ include Types.Type
 module Category = struct
   include Types.Type_Category
 
+  let mutability_to_string = function Mutable -> "mut" | Immutable -> "ref"
+
   let mutability_equal = Parse.Type.mutability_equal
 
   let mutability_compatible m1 m2 =
@@ -113,7 +115,7 @@ module Context = struct
             | None -> return (Any (Builtin Unit))
           in
           return (Builtin (Function {params; ret_ty}))
-      | _ -> failwith ""
+      | _ -> failwith "get_ast_type"
     in
     let%bind names =
       let names_len = defs_len + aliases_len in
@@ -199,7 +201,10 @@ let rec of_untyped : type cat.
       let%bind params = Return.Array.of_list_map ~f params in
       let%bind ret_ty = Option.value_map ~f ~default ret_ty in
       return (Builtin (Function {params; ret_ty}))
-  | U.Place _ -> failwith ""
+  | U.Place {mutability; ty} ->
+      let%bind ty = of_untyped ty ~ctxt in
+      let mutability, _ = mutability in
+      return (Place {mutability; ty})
 
 let rec equal : type a b. a t -> b t -> bool =
  fun l r ->
@@ -249,9 +254,9 @@ let rec local_type : type cat. cat t -> is_mut:bool -> Category.place t =
   in
   match ty with
   | Any ty -> local_type ty ~is_mut
-  | (Place _) as ty -> ty
-  | (Builtin _) as ty -> local_value_type ty
-  | (User_defined _) as ty -> local_value_type ty
+  | Place _ as ty -> ty
+  | Builtin _ as ty -> local_value_type ty
+  | User_defined _ as ty -> local_value_type ty
 
 let rec to_type_and_category : type a. a t -> Category.value t * a Category.t =
   function
@@ -286,5 +291,7 @@ let rec to_string : type cat. cat t -> ctxt:Context.t -> string =
   | User_defined idx ->
       let (name, _), _ = (Context.names ctxt).(idx) in
       (name :> string)
-  | Place _ -> failwith ""
+  | Place {mutability; ty} ->
+      String.concat
+        [Category.mutability_to_string mutability; " "; to_string ty ~ctxt]
   | Any ty -> to_string ty ~ctxt

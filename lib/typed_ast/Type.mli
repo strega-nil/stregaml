@@ -19,6 +19,8 @@ end
 module Category : sig
   include module type of struct include Types.Type_Category end
 
+  val mutability_to_string : mutability -> string
+
   val mutability_equal : mutability -> mutability -> bool
 
   val mutability_compatible : mutability -> mutability -> bool

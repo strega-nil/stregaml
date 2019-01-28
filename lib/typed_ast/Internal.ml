@@ -249,7 +249,7 @@ and typeck_call callee args =
     match callee_ty with
     | Type.Builtin (Type.Function {params; ret_ty}) ->
         let correct_types args params =
-          let f (a, p) = Type.compatible (T.base_type_sp a) p in
+          let f (a, p) = Type.compatible (T.full_type_sp a) p in
           if Array.length args <> Array.length params
           then false
           else
@@ -609,7 +609,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         | None -> return_err (Error.Record_access_non_record_type (ty, name))
       in
       return (T.Expr {variant = T.Record_access (expr, idx); ty})
-  | _ -> failwith ""
+  | _ -> failwith "typeck_expression"
 
 let find_infix_group_name ctxt id =
   let f _ name = Nfc_string.equal id name in

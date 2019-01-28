@@ -487,26 +487,28 @@ and parse_value_type (parser : t) : Type.value Type.t result =
   | tok -> unexpected tok Error.Expected.Type
 
 and parse_place_type (parser : t) : Type.place Type.t result =
-  match%bind spanned_bind (peek_token parser) with
+  match%bind spanned_bind (next_token parser) with
   | Token.Keyword_mut, sp ->
       let%bind ty = spanned_bind (parse_value_type parser) in
-      return (Type.Place {mutability= Type.Mutable, sp; ty})
+      return (Type.Place {mutability = (Type.Mutable, sp); ty})
   | Token.Keyword_ref, sp ->
       let%bind ty = spanned_bind (parse_value_type parser) in
-      return (Type.Place {mutability= Type.Immutable, sp; ty})
+      return (Type.Place {mutability = (Type.Immutable, sp); ty})
   | tok, _ -> unexpected tok Error.Expected.Place
 
 and parse_type (parser : t) : Type.any Type.t result =
   let%bind tok = peek_token parser in
-  if is_place_token tok then
+  if is_place_token tok
+  then
     let%bind place_ty = parse_place_type parser in
     return (Type.Any place_ty)
   else
     match parse_value_type parser with
-    | Result.Ok o, sp -> Result.Ok (Type.Any o), sp
-    | Result.Error (Error.Unexpected_token (Error.Expected.Value_type, tok)), sp ->
-        Result.Error (Error.Unexpected_token (Error.Expected.Type, tok)), sp
-    | Result.Error e, sp -> Result.Error e, sp
+    | Result.Ok o, sp -> (Result.Ok (Type.Any o), sp)
+    | ( Result.Error (Error.Unexpected_token (Error.Expected.Value_type, tok))
+      , sp ) ->
+        (Result.Error (Error.Unexpected_token (Error.Expected.Type, tok)), sp)
+    | Result.Error e, sp -> (Result.Error e, sp)
 
 and parse_data_members (parser : t) : Type.Data.members result =
   let%bind () = get_specific parser Token.Open_brace in
