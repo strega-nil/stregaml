@@ -2,6 +2,7 @@ include Types.Token
 
 module Keyword = struct
   include Types.Token_Keyword
+  module Contextual = Types.Token_Keyword_Contextual
 
   let equal lhs rhs =
     match (lhs, rhs) with

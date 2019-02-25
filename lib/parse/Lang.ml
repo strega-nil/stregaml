@@ -8,6 +8,10 @@ let number_base s ~lang =
   let module Lang = (val lang : Language) in
   Lang.number_base s
 
+let contextual_keyword_of_string s ~lang =
+  let module Lang = (val lang : Language) in
+  Lang.contextual_keyword_of_string s
+
 let keyword_of_string s ~lang =
   let module Lang = (val lang : Language) in
   Lang.keyword_of_string s

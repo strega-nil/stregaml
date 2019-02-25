@@ -86,6 +86,16 @@ and Token_Keyword : sig
 end =
   Token_Keyword
 
+and Token_Keyword_Contextual : sig
+  type t =
+    | Associativity : t
+    | Precedence : t
+    | Start : t
+    | End : t
+    | None : t
+end =
+  Token_Keyword_Contextual
+
 and Type : sig
   (* TODO: Raw, Owned *)
 
@@ -275,6 +285,9 @@ module type Language = sig
   val numbers_are_big_endian : bool
 
   val number_base : Nfc_string.t -> int option
+
+  val contextual_keyword_of_string :
+    Nfc_string.t -> Token_Keyword_Contextual.t option
 
   val keyword_of_string : Nfc_string.t -> Token_Keyword.t option
 

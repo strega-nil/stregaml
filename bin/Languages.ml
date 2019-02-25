@@ -12,6 +12,16 @@ module type Interface_Language = sig
 
   val base_2 : Nfc_string.t list
 
+  val ckw_Associativity : Nfc_string.t
+
+  val ckw_Precedence : Nfc_string.t
+
+  val ckw_Start : Nfc_string.t
+
+  val ckw_End : Nfc_string.t
+
+  val ckw_None : Nfc_string.t
+
   val kw_True : Nfc_string.t
 
   val kw_False : Nfc_string.t
@@ -64,6 +74,19 @@ module Make_Language (L : Interface_Language) : Language = struct
     then Some 8
     else if check_base L.base_2
     then Some 2
+    else None
+
+  let contextual_keyword_of_string s =
+    if Nfc_string.equal s L.ckw_Associativity
+    then Some Keyword.Contextual.Associativity
+    else if Nfc_string.equal s L.ckw_Precedence
+    then Some Keyword.Contextual.Precedence
+    else if Nfc_string.equal s L.ckw_Start
+    then Some Keyword.Contextual.Start
+    else if Nfc_string.equal s L.ckw_End
+    then Some Keyword.Contextual.End
+    else if Nfc_string.equal s L.ckw_None
+    then Some Keyword.Contextual.None
     else None
 
   let keyword_of_string s =
@@ -139,6 +162,16 @@ module English = Make_Language (struct
 
   let base_2 = [Nfc_string.of_string "b"; Nfc_string.of_string "B"]
 
+  let ckw_Associativity = Nfc_string.of_string "associativity"
+
+  let ckw_Precedence = Nfc_string.of_string "precedence"
+
+  let ckw_Start = Nfc_string.of_string "start"
+
+  let ckw_End = Nfc_string.of_string "end"
+
+  let ckw_None = Nfc_string.of_string "none"
+
   let kw_True = Nfc_string.of_string "true"
 
   let kw_False = Nfc_string.of_string "false"
@@ -186,6 +219,16 @@ module Yiddish = Make_Language (struct
   let base_8 = [Nfc_string.of_string "א"; Nfc_string.of_string "אַ"]
 
   let base_2 = [Nfc_string.of_string "ב"]
+
+  let ckw_Associativity = Nfc_string.of_string "קאָמפּאַניר"
+
+  let ckw_Precedence = Nfc_string.of_string "בכורה"
+
+  let ckw_Start = Nfc_string.of_string "סטאַרט"
+
+  let ckw_End = Nfc_string.of_string "ענד"
+
+  let ckw_None = Nfc_string.of_string "קײן"
 
   let kw_True = Nfc_string.of_string "אמת"
 

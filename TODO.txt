@@ -2,7 +2,6 @@ Laid out in order of when I want to do them
 
 * finish other-language support
   - number literals
-  - context sensitive keywords
 * @ annotations
   - entrypoint
 * MIR
@@ -10,6 +9,7 @@ Laid out in order of when I want to do them
     - check for recursive types
   - write an interpreter for MIR
   - LLVM backend
+* localized error messages
 * externals
 * linearity
 * strings

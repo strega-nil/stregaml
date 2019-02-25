@@ -14,6 +14,8 @@ type t =
       ; mutable peek : Token.t Spanned.t option }
       -> t
 
+let lang (Parser {lexer; _}) = Lexer.lang lexer
+
 let peek_token (Parser r) =
   match r.peek with
   | Some (pk, sp) -> (Ok pk, sp)
@@ -35,8 +37,8 @@ let eat_token parser =
   | Ok _, _ -> ()
   | Error _, _ -> assert false
 
-(* context sensitive keywords *)
-module Ctxt_keyword = struct
+(* context sensitive operator keywords *)
+module Ctxt_operator = struct
   let equal = Nfc_string.of_string_unsafe "="
 
   let less = Nfc_string.of_string_unsafe "<"
@@ -58,25 +60,6 @@ module Ctxt_keyword = struct
   let reference_tok = Token.Operator reference
 
   let dereference_tok = Token.Operator dereference
-  *)
-
-  let assoc_start = Nfc_string.of_string_unsafe "start"
-
-  let assoc_end = Nfc_string.of_string_unsafe "end"
-
-  let assoc_none = Nfc_string.of_string_unsafe "none"
-
-  let precedence = Nfc_string.of_string_unsafe "precedence"
-
-  let associativity = Nfc_string.of_string_unsafe "associativity"
-
-  (*
-  let assoc_start_tok = Token.Identifier assoc_start
-  let assoc_end_tok = Token.Identifier assoc_end
-  let assoc_none_tok = Token.Identifier assoc_none
-
-  let precedence_tok = Token.Identifier precedence
-  let associativity_tok = Token.Identifier associativity
   *)
 end
 
@@ -288,7 +271,7 @@ let rec maybe_parse_expression_no_infix (parser : t) :
       in
       return (Some (Ast.Expr.Place {mutability; expr}))
   | Token.Operator op, _
-    when Nfc_string.equal op Ctxt_keyword.reference ->
+    when Nfc_string.equal op Ctxt_operator.reference ->
       eat_token parser ;
       let%bind place =
         spanned_bind (parse_expression_no_infix parser)
@@ -299,7 +282,7 @@ let rec maybe_parse_expression_no_infix (parser : t) :
       let%bind expr =
         spanned_bind (parse_expression_no_infix parser)
       in
-      if Nfc_string.equal (Name.string op) Ctxt_keyword.dereference
+      if Nfc_string.equal (Name.string op) Ctxt_operator.dereference
       then return (Some (Ast.Expr.Dereference expr))
       else return (Some (Ast.Expr.Prefix_operator ((op, sp), expr)))
   | Token.Keyword Keyword.Builtin, sp ->
@@ -421,7 +404,7 @@ and parse_record_literal (parser : t)
         (Name.Name
            {string; kind = Name.Identifier; fixity = Name.Nonfix})
     in
-    let%bind () = get_specific parser Ctxt_keyword.equal_tok in
+    let%bind () = get_specific parser Ctxt_operator.equal_tok in
     let%bind expr = spanned_bind (parse_expression parser) in
     return (name, expr)
   in
@@ -509,7 +492,7 @@ and parse_return_type (parser : t) :
 and parse_value_type (parser : t) : Type.value Type.t result =
   let%bind tok = peek_token parser in
   match tok with
-  | Token.Operator op when Nfc_string.equal op Ctxt_keyword.reference
+  | Token.Operator op when Nfc_string.equal op Ctxt_operator.reference
     ->
       eat_token parser ;
       let%bind place = spanned_bind (parse_place_type parser) in
@@ -630,7 +613,7 @@ and parse_block_no_open (parser : t) : Ast.Expr.Block.t result =
         let%bind name, name_sp = spanned_bind (get_name parser) in
         let name = (name, name_sp) in
         let%bind ty = maybe_parse_type_annotation parser in
-        let%bind () = get_specific parser Ctxt_keyword.equal_tok in
+        let%bind () = get_specific parser Ctxt_operator.equal_tok in
         let%bind expr = spanned_bind (parse_expression parser) in
         let%bind (), semi_sp =
           spanned_bind (get_specific parser Token.Semicolon)
@@ -672,43 +655,50 @@ let parse_infix_group (parser : t) : Ast.Infix_group.t result =
           match associativity with None -> I.Assoc_none | Some a -> a
         in
         return (I.Infix_group {name; associativity; precedence})
-    | Token.Identifier id
-      when Nfc_string.equal id Ctxt_keyword.precedence ->
-        let%bind relation =
-          match%bind next_token parser with
-          | Token.Operator id
-            when Nfc_string.equal id Ctxt_keyword.less ->
-              let%bind other = spanned_bind (get_identifier parser) in
-              return (I.Less other)
-          | Token.Operator id
-            when Nfc_string.equal id Ctxt_keyword.greater ->
-              failwith "greater precedence not yet supported"
-          | tok -> unexpected tok Error.Expected.Precedence
-        in
-        let%bind () = get_specific parser Token.Semicolon in
-        helper name associativity (relation :: precedence)
-    | Token.Identifier id
-      when Nfc_string.equal id Ctxt_keyword.associativity ->
-        let%bind () = get_specific parser Ctxt_keyword.equal_tok in
-        let%bind associativity' =
-          match%bind next_token parser with
-          | Token.Identifier id
-            when Nfc_string.equal id Ctxt_keyword.assoc_start ->
-              return I.Assoc_start
-          | Token.Identifier id
-            when Nfc_string.equal id Ctxt_keyword.assoc_end ->
-              return I.Assoc_end
-          | Token.Identifier id
-            when Nfc_string.equal id Ctxt_keyword.assoc_none ->
-              return I.Assoc_none
-          | tok -> unexpected tok Error.Expected.Associativity
-        in
-        let%bind () = get_specific parser Token.Semicolon in
-        if Option.is_none associativity
-        then helper name (Some associativity') precedence
-        else
-          let name, _ = name in
-          return_err (Error.Associativity_defined_twice name)
+    | Token.Identifier id as tok -> (
+      match
+        Lang.contextual_keyword_of_string ~lang:(lang parser) id
+      with
+      | Some Token.Keyword.Contextual.Precedence ->
+          let%bind relation =
+            match%bind next_token parser with
+            | Token.Operator id
+              when Nfc_string.equal id Ctxt_operator.less ->
+                let%bind other =
+                  spanned_bind (get_identifier parser)
+                in
+                return (I.Less other)
+            | Token.Operator id
+              when Nfc_string.equal id Ctxt_operator.greater ->
+                failwith "greater precedence not yet supported"
+            | tok -> unexpected tok Error.Expected.Precedence
+          in
+          let%bind () = get_specific parser Token.Semicolon in
+          helper name associativity (relation :: precedence)
+      | Some Token.Keyword.Contextual.Associativity ->
+          let%bind () = get_specific parser Ctxt_operator.equal_tok in
+          let%bind associativity' =
+            let%bind tok, id =
+              match%bind next_token parser with
+              | Token.Identifier id as tok -> return (tok, id)
+              | tok -> unexpected tok Error.Expected.Associativity
+            in
+            match
+              Lang.contextual_keyword_of_string ~lang:(lang parser) id
+            with
+            | Some Token.Keyword.Contextual.Start ->
+                return I.Assoc_start
+            | Some Token.Keyword.Contextual.End -> return I.Assoc_end
+            | Some Token.Keyword.Contextual.None -> return I.Assoc_none
+            | _ -> unexpected tok Error.Expected.Associativity
+          in
+          let%bind () = get_specific parser Token.Semicolon in
+          if Option.is_none associativity
+          then helper name (Some associativity') precedence
+          else
+            let name, _ = name in
+            return_err (Error.Associativity_defined_twice name)
+      | _ -> unexpected tok Error.Expected.Infix_group_member )
     | tok -> unexpected tok Error.Expected.Infix_group_member
   in
   let%bind name = spanned_bind (get_identifier parser) in
@@ -759,7 +749,7 @@ let parse_item (parser : t) : Item.t option result =
       let%bind name = spanned_bind (get_identifier parser) in
       let%bind kind =
         match%bind
-          maybe_get_specific parser Ctxt_keyword.equal_tok
+          maybe_get_specific parser Ctxt_operator.equal_tok
         with
         | Some () ->
             let%bind ty = parse_value_type parser in
