@@ -23,14 +23,17 @@ type unordered_error =
 let compare f lhs rhs =
   Mutable.compare f (Impl.to_mutable lhs) (Impl.to_mutable rhs)
 
-let equal (type a) (lhs : a t) (rhs : a t) ~(equal : a -> a -> bool) : bool =
+let equal (type a) (lhs : a t) (rhs : a t) ~(equal : a -> a -> bool) :
+    bool =
   Mutable.equal ~equal (Impl.to_mutable lhs) (Impl.to_mutable rhs)
 
 (* Container *)
-let mem (type a) (arr : a t) (el : a) ~(equal : a -> a -> bool) : bool =
+let mem (type a) (arr : a t) (el : a) ~(equal : a -> a -> bool) : bool
+    =
   Mutable.mem (Impl.to_mutable arr) el ~equal
 
-let length (type a) (arr : a t) : int = Mutable.length (Impl.to_mutable arr)
+let length (type a) (arr : a t) : int =
+  Mutable.length (Impl.to_mutable arr)
 
 let is_empty (type a) (arr : a t) : bool =
   Mutable.is_empty (Impl.to_mutable arr)
@@ -46,8 +49,8 @@ let fold_result (type a b e) (arr : a t) ~(init : b)
   Mutable.fold_result (Impl.to_mutable arr) ~init ~f
 
 let fold_until (type a b f) (arr : a t) ~(init : b)
-    ~(f : b -> a -> (b, f) Container.Continue_or_stop.t) ~(finish : b -> f) : f
-    =
+    ~(f : b -> a -> (b, f) Container.Continue_or_stop.t)
+    ~(finish : b -> f) : f =
   Mutable.fold_until (Impl.to_mutable arr) ~init ~f ~finish
 
 let exists (type a) (arr : a t) ~(f : a -> bool) : bool =
@@ -59,8 +62,9 @@ let for_all (type a) (arr : a t) ~(f : a -> bool) : bool =
 let count (type a) (arr : a t) ~(f : a -> bool) : int =
   Mutable.count (Impl.to_mutable arr) ~f
 
-let sum (type a sum) (ag : (module Commutative_group.S with type t = sum))
-    (arr : a t) ~(f : a -> sum) : sum =
+let sum (type a sum)
+    (ag : (module Commutative_group.S with type t = sum)) (arr : a t)
+    ~(f : a -> sum) : sum =
   Mutable.sum ag (Impl.to_mutable arr) ~f
 
 let find (type a) (arr : a t) ~(f : a -> bool) : a option =
@@ -75,10 +79,12 @@ let to_list (type a) (arr : a t) : a list =
 let to_array (type a) (arr : a t) : a array =
   Mutable.copy (Impl.to_mutable arr)
 
-let min_elt (type a) (arr : a t) ~(compare : a -> a -> int) : a option =
+let min_elt (type a) (arr : a t) ~(compare : a -> a -> int) : a option
+    =
   Mutable.min_elt (Impl.to_mutable arr) ~compare
 
-let max_elt (type a) (arr : a t) ~(compare : a -> a -> int) : a option =
+let max_elt (type a) (arr : a t) ~(compare : a -> a -> int) : a option
+    =
   Mutable.max_elt (Impl.to_mutable arr) ~compare
 
 (* array specific functions *)
@@ -93,7 +99,8 @@ let empty () = Impl.of_mutable [||]
 
 let singleton (type a) (el : a) : a t = Impl.of_mutable [|el|]
 
-let doubleton (type a) (el1 : a) (el2 : a) : a t = Impl.of_mutable [|el1; el2|]
+let doubleton (type a) (el1 : a) (el2 : a) : a t =
+  Impl.of_mutable [|el1; el2|]
 
 let create ~len el = Impl.of_mutable (Mutable.create ~len el)
 
@@ -116,12 +123,13 @@ let of_sequence (type a) ~(len : int) (seq : a Sequence.t) : a t =
       then Impl.of_mutable ret
       else
         let error =
-          Printf.sprintf "length of `seq` (%d) != `len` (%d)" !length_init len
+          Printf.sprintf "length of `seq` (%d) != `len` (%d)"
+            !length_init len
         in
         raise (Invalid_argument error)
 
-let of_sequence_unordered (type a) ~(len : int) (seq : (int * a) Sequence.t) :
-    (a t, unordered_error) Result.t =
+let of_sequence_unordered (type a) ~(len : int)
+    (seq : (int * a) Sequence.t) : (a t, unordered_error) Result.t =
   let rec helper ret ret_some seq =
     match Sequence.next seq with
     | Some ((idx, el), seq) ->
@@ -154,7 +162,8 @@ let to_sequence (type a) (arr : a t) : a Sequence.t =
   Mutable.to_sequence_mutable (Impl.to_mutable arr)
 
 let append fst snd =
-  Impl.of_mutable (Mutable.append (Impl.to_mutable fst) (Impl.to_mutable snd))
+  Impl.of_mutable
+    (Mutable.append (Impl.to_mutable fst) (Impl.to_mutable snd))
 
 let concat (type a) (lst : a t list) : a t =
   let mut : a Mutable.t list = Caml.Obj.magic lst in
@@ -180,16 +189,20 @@ let map (type a b) (arr : a t) ~(f : a -> b) =
 let mapi (type a b) (arr : a t) ~(f : int -> a -> b) : b t =
   Impl.of_mutable (Mutable.mapi (Impl.to_mutable arr) ~f)
 
-let foldi (type a b) (arr : a t) ~(init : b) ~(f : int -> b -> a -> b) : b =
+let foldi (type a b) (arr : a t) ~(init : b) ~(f : int -> b -> a -> b)
+    : b =
   Mutable.foldi (Impl.to_mutable arr) ~init ~f
 
-let fold_right (type a b) (arr : a t) ~(f : a -> b -> b) ~(init : b) : b =
+let fold_right (type a b) (arr : a t) ~(f : a -> b -> b) ~(init : b) :
+    b =
   Mutable.fold_right (Impl.to_mutable arr) ~f ~init
 
-let findi (type a) (arr : a t) ~(f : int -> a -> bool) : (int * a) option =
+let findi (type a) (arr : a t) ~(f : int -> a -> bool) :
+    (int * a) option =
   Mutable.findi (Impl.to_mutable arr) ~f
 
-let find_from (type a) (arr : a t) (idx : int) ~(f : a -> bool) : a option =
+let find_from (type a) (arr : a t) (idx : int) ~(f : a -> bool) :
+    a option =
   let rec check_after_idx idx =
     if idx = length arr
     then None
@@ -199,8 +212,8 @@ let find_from (type a) (arr : a t) (idx : int) ~(f : a -> bool) : a option =
   in
   check_after_idx idx
 
-let findi_from (type a) (arr : a t) (idx : int) ~(f : int -> a -> bool) :
-    (int * a) option =
+let findi_from (type a) (arr : a t) (idx : int) ~(f : int -> a -> bool)
+    : (int * a) option =
   let rec check_after_idx idx =
     if idx = length arr
     then None
@@ -236,7 +249,8 @@ let find_nonconsecutive_duplicates (type a) (arr : a t)
   check_for_dups 0
 
 let findi_nonconsecutive_duplicates (type a) (arr : a t)
-    ~(equal : int * a -> int * a -> bool) : ((int * a) * (int * a)) option =
+    ~(equal : int * a -> int * a -> bool) :
+    ((int * a) * (int * a)) option =
   let rec check_for_dups idx =
     if idx = length arr
     then None

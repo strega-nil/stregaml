@@ -37,7 +37,11 @@ type kind =
   | Operator : kind
 
 type _ t =
-  | Name : {string : Nfc_string.t; fixity : 'f fixity; kind : kind} -> 'f t
+  | Name :
+      { string : Nfc_string.t
+      ; fixity : 'f fixity
+      ; kind : kind }
+      -> 'f t
 
 val erase : _ t -> anyfix t
 

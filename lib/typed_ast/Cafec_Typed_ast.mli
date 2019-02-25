@@ -13,7 +13,8 @@ type type_def = Internal.type_def = {tname: string; kind: type_kind}
 
 type t
 
-val make : Cafec_Parse.Ast.t -> (t, Error.t * Type.Context.t) Spanned.Result.t
+val make :
+  Cafec_Parse.Ast.t -> (t, Error.t * Type.Context.t) Spanned.Result.t
 
 (*
 val number_of_types : t -> int
@@ -24,4 +25,6 @@ val type_seq : t -> type_def spanned seq
 val number_of_functions : t -> int
 
 val function_seq :
-  t -> (Function_declaration.t Spanned.t * Expr.Block.t Spanned.t) Sequence.t
+     t
+  -> (Function_declaration.t Spanned.t * Expr.Block.t Spanned.t)
+     Sequence.t

@@ -4,7 +4,9 @@ module Stmt = Ast.Stmt
 module Type = Ast.Type
 
 type t =
-  | Interpreter : {funcs : (Name.anyfix Name.t * Expr.Block.t) Array.t} -> t
+  | Interpreter :
+      { funcs : (Name.anyfix Name.t * Expr.Block.t) Array.t }
+      -> t
 
 let funcs (Interpreter {funcs}) = funcs
 
@@ -17,7 +19,8 @@ module Value = struct
 
   let rec clone imm =
     match imm with
-    | Unit | Bool _ | Integer _ | Function _ | Reference _ | Constructor _ ->
+    | Unit | Bool _ | Integer _ | Function _ | Reference _
+     |Constructor _ ->
         imm
     | Variant (idx, v) -> Variant (idx, ref (clone !v))
     | Record r ->
@@ -78,7 +81,8 @@ end
 module Object = struct
   type t = Object : {is_mut : bool; value : Value.t ref} -> t
 
-  let place (Object {is_mut; value}) = Expr_result.Place.Place {is_mut; value}
+  let place (Object {is_mut; value}) =
+    Expr_result.Place.Place {is_mut; value}
 
   let obj ~is_mut value =
     let value = ref value in
@@ -95,11 +99,13 @@ let make ast =
         seq := rest ;
         (name, expr)
   in
-  Interpreter {funcs = Array.init (Ast.number_of_functions ast) ~f:helper}
+  Interpreter
+    {funcs = Array.init (Ast.number_of_functions ast) ~f:helper}
 
 let get_function ctxt ~name =
   match
-    Array.findi (funcs ctxt) ~f:(fun _ (name', _) -> Name.equal name name')
+    Array.findi (funcs ctxt) ~f:(fun _ (name', _) ->
+        Name.equal name name' )
   with
   | None -> None
   | Some (n, _) -> Some (Value.function_index_of_int n)
@@ -190,8 +196,10 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
       | _ -> assert false )
     | Expr.Block (b, _) -> eval_block ctxt locals b
     | Expr.Global_function i ->
-        Expr_result.Value (Value.Function (Value.function_index_of_int i))
-    | Expr.Constructor (_, idx) -> Expr_result.Value (Value.Constructor idx)
+        Expr_result.Value
+          (Value.Function (Value.function_index_of_int i))
+    | Expr.Constructor (_, idx) ->
+        Expr_result.Value (Value.Constructor idx)
     | Expr.Reference (place, _) ->
         let is_mut =
           let module C = Type.Category in

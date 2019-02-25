@@ -6,14 +6,18 @@ let mutability_equal lhs rhs =
   | Mutable, Mutable -> true
   | _ -> false
 
-let mutability_to_string = function Immutable -> "ref" | Mutable -> "mut"
+let mutability_to_string = function
+  | Immutable -> "ref"
+  | Mutable -> "mut"
 
 let rec to_string : type cat. cat t -> string = function
   | Named id -> (id :> string)
   | Reference (pointee, _) -> "&" ^ to_string pointee
   | Function {params; ret_ty} ->
       let f (x, _) = to_string x in
-      let ret_ty = match ret_ty with Some x -> ") -> " ^ f x | None -> ")" in
+      let ret_ty =
+        match ret_ty with Some x -> ") -> " ^ f x | None -> ")"
+      in
       let params = String.concat ~sep:", " (List.map params ~f) in
       String.concat ["func("; params; ret_ty]
   | Place {mutability = mut, _; ty = ty, _} ->
@@ -27,12 +31,15 @@ module Data = struct
     let members_to_string members =
       let f ((name, ty), _) =
         ignore (name : Nfc_string.t) ;
-        String.concat ["\n    "; (name :> string); ": "; to_string ty; ";"]
+        String.concat
+          ["\n    "; (name :> string); ": "; to_string ty; ";"]
       in
       String.concat (List.map members ~f)
     in
     let (Data {kind; members}) = data in
-    let kind = match kind with Record -> "record" | Variant -> "variant" in
+    let kind =
+      match kind with Record -> "record" | Variant -> "variant"
+    in
     let name = match name with Some n -> " " ^ n | None -> "" in
     let members = members_to_string members in
     String.concat [kind; name; " {"; members; "\n  }"]

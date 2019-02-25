@@ -5,7 +5,9 @@ include Types.Type
 module Category = struct
   include Types.Type_Category
 
-  let mutability_to_string = function Mutable -> "mut" | Immutable -> "ref"
+  let mutability_to_string = function
+    | Mutable -> "mut"
+    | Immutable -> "ref"
 
   let mutability_equal = Parse.Type.mutability_equal
 
@@ -26,7 +28,9 @@ module Category = struct
     | a1, Any a2 -> equal a1 a2
     | _ -> false
 
-  let erase : type a. a t -> any t = function Any a -> Any a | cat -> Any cat
+  let erase : type a. a t -> any t = function
+    | Any a -> Any a
+    | cat -> Any cat
 
   let rec compatible : type a b. a t -> b t -> bool =
    fun c1 c2 ->
@@ -57,7 +61,8 @@ module Context = struct
     | Context :
         { user_types : user_type Array.t
         ; names :
-            (Nfc_string.t Spanned.t * Category.value Types.Type.t) Array.t }
+            (Nfc_string.t Spanned.t * Category.value Types.Type.t)
+            Array.t }
         -> t
 
   let make lst =
@@ -66,20 +71,24 @@ module Context = struct
       let module Def = PType.Definition in
       let rec helper defs defs_len aliases aliases_len = function
         | (Def.Definition {name; kind = Def.Alias ty}, _) :: rest ->
-            helper defs defs_len ((name, ty) :: aliases) (aliases_len + 1) rest
-        | (Def.Definition {name; kind = Def.User_defined {data}}, _) :: rest ->
-            helper ((name, data) :: defs) (defs_len + 1) aliases aliases_len
-              rest
+            helper defs defs_len ((name, ty) :: aliases)
+              (aliases_len + 1) rest
+        | (Def.Definition {name; kind = Def.User_defined {data}}, _)
+          :: rest ->
+            helper ((name, data) :: defs) (defs_len + 1) aliases
+              aliases_len rest
         | [] -> (defs, defs_len, aliases, aliases_len)
       in
       helper [] 0 [] 0 lst
     in
-    let rec get_ast_type : type cat. cat PType.t -> cat Types.Type.t result =
+    let rec get_ast_type : type cat.
+        cat PType.t -> cat Types.Type.t result =
      fun pty ->
       (* returns -1 if not found *)
       let rec find_index name index = function
         | [] -> -1
-        | ((name', _), _) :: _ when Nfc_string.equal name name' -> index
+        | ((name', _), _) :: _ when Nfc_string.equal name name' ->
+            index
         | _ :: rest -> find_index name (index + 1) rest
       in
       let rec find_alias name = function
@@ -133,7 +142,9 @@ module Context = struct
     in
     let%bind () =
       (* check for duplicates *)
-      let equal ((name, _), _) ((name', _), _) = Nfc_string.equal name name' in
+      let equal ((name, _), _) ((name', _), _) =
+        Nfc_string.equal name name'
+      in
       match Array.find_nonconsecutive_duplicates names ~equal with
       | Some (((name, _), _), _) ->
           return_err (Error.Type_defined_multiple_times name)
@@ -162,7 +173,8 @@ module Context = struct
     in
     return (Context {user_types; names})
 
-  let empty = Context {user_types = Array.empty (); names = Array.empty ()}
+  let empty =
+    Context {user_types = Array.empty (); names = Array.empty ()}
 
   let user_types (Context r) = r.user_types
 
@@ -214,9 +226,11 @@ let rec equal : type a b. a t -> b t -> bool =
   | Builtin Int32, Builtin Int32 -> true
   | Builtin (Reference l), Builtin (Reference r) -> equal l r
   | Builtin (Function f1), Builtin (Function f2) ->
-      equal f1.ret_ty f2.ret_ty && Array.equal f1.params f2.params ~equal
+      equal f1.ret_ty f2.ret_ty
+      && Array.equal f1.params f2.params ~equal
   | User_defined u1, User_defined u2 -> u1 = u2
-  | Place {mutability = m1; ty = ty1}, Place {mutability = m2; ty = ty2} ->
+  | Place {mutability = m1; ty = ty1}, Place {mutability = m2; ty = ty2}
+    ->
       Category.mutability_equal m1 m2 && equal ty1 ty2
   | Any a1, Any a2 -> equal a1 a2
   | Any a1, a2 -> equal a1 a2
@@ -243,13 +257,17 @@ let compatible : type a b. a t -> b t -> bool =
 let structural ty ~(ctxt : Context.t) =
   match ty with
   | Builtin b -> Structural.Builtin b
-  | User_defined idx -> Context.user_type_data (Context.user_types ctxt).(idx)
+  | User_defined idx ->
+      Context.user_type_data (Context.user_types ctxt).(idx)
 
-let rec local_type : type cat. cat t -> is_mut:bool -> Category.place t =
+let rec local_type : type cat. cat t -> is_mut:bool -> Category.place t
+    =
  fun ty ~is_mut ->
   let local_value_type : Category.value t -> Category.place t =
    fun ty ->
-    let mutability = if is_mut then Category.Mutable else Category.Immutable in
+    let mutability =
+      if is_mut then Category.Mutable else Category.Immutable
+    in
     Place {mutability; ty}
   in
   match ty with
@@ -258,8 +276,8 @@ let rec local_type : type cat. cat t -> is_mut:bool -> Category.place t =
   | Builtin _ as ty -> local_value_type ty
   | User_defined _ as ty -> local_value_type ty
 
-let rec to_type_and_category : type a. a t -> Category.value t * a Category.t =
-  function
+let rec to_type_and_category : type a.
+    a t -> Category.value t * a Category.t = function
   | Builtin _ as ty -> (ty, Category.Value)
   | User_defined _ as ty -> (ty, Category.Value)
   | Place {mutability; ty} -> (ty, Category.Place mutability)
@@ -267,7 +285,8 @@ let rec to_type_and_category : type a. a t -> Category.value t * a Category.t =
       let ty, cat = to_type_and_category ty in
       (ty, (Category.erase cat : a Category.t))
 
-let rec of_type_and_category : type a. Category.value t * a Category.t -> a t =
+let rec of_type_and_category : type a.
+    Category.value t * a Category.t -> a t =
  fun (ty, cat) ->
   match cat with
   | Category.Value -> ty
@@ -293,5 +312,7 @@ let rec to_string : type cat. cat t -> ctxt:Context.t -> string =
       (name :> string)
   | Place {mutability; ty} ->
       String.concat
-        [Category.mutability_to_string mutability; " "; to_string ty ~ctxt]
+        [ Category.mutability_to_string mutability
+        ; " "
+        ; to_string ty ~ctxt ]
   | Any ty -> to_string ty ~ctxt

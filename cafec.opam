@@ -1,9 +1,9 @@
 opam-version: "2.0"
 name: "cafec"
 version: "0.0.1"
-maintainer: "Nicole Mazzuca <npmazzuca@gmail.com>"
+maintainer: "Nicole Mazzuca <mazzucan@outlook.com>"
 authors: [
-  "Nicole Mazzuca <npmazzuca@gmail.com>"
+  "Nicole Mazzuca <mazzucan@outlook.com>"
 ]
 license: "BSD"
 tags: [ ]
