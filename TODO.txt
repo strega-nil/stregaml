@@ -1,6 +1,10 @@
 Laid out in order of when I want to do them
 
-* rework lvalues!
+* finish other-language support
+  - number literals
+  - context sensitive keywords
+* @ annotations
+  - entrypoint
 * MIR
   - actually lay out types
     - check for recursive types
