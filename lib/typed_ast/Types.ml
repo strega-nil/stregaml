@@ -9,7 +9,9 @@ module rec Error : sig
     | Type_defined_multiple_times : Nfc_string.t -> t
     | Infix_group_not_found : Nfc_string.t -> t
     | Infix_group_defined_multiple_times : Nfc_string.t -> t
-    | Infix_group_recursive_precedence : Nfc_string.t * Nfc_string.t -> t
+    | Infix_group_recursive_precedence :
+        Nfc_string.t * Nfc_string.t
+        -> t
     | Incorrect_let_type :
         { name : _ Name.t
         ; let_ty : Type_Category.any Type.t
@@ -191,7 +193,8 @@ and Ast_Expr : sig
     | Match :
         { cond : t Spanned.t
         ; arms :
-            (Type_Category.any Type.t * Ast_Expr_Block.t Spanned.t) Array.t }
+            (Type_Category.any Type.t * Ast_Expr_Block.t Spanned.t)
+            Array.t }
         -> variant
     | If_else :
         { cond : t Spanned.t
@@ -213,7 +216,8 @@ and Ast_Expr : sig
     | Constructor : Type_Category.value Type.t * int -> variant
     | Local : Ast_Expr_Local.t -> variant
 
-  and t = Expr : {variant : variant; ty : Type_Category.any Type.t} -> t
+  and t =
+    | Expr : {variant : variant; ty : Type_Category.any Type.t} -> t
 end =
   Ast_Expr
 

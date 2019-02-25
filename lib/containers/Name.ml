@@ -36,7 +36,11 @@ type kind =
   | Operator : kind
 
 type _ t =
-  | Name : {string : Nfc_string.t; fixity : 'f fixity; kind : kind} -> 'f t
+  | Name :
+      { string : Nfc_string.t
+      ; fixity : 'f fixity
+      ; kind : kind }
+      -> 'f t
 
 let erase (type f) (Name {string; fixity; kind} : f t) : anyfix t =
   Name {string; kind; fixity = Fixity.erase fixity}
@@ -56,13 +60,18 @@ let kind (Name {kind; _}) = kind
 let rec to_ident_string : type f. f t -> string =
  fun (Name {string; fixity; kind}) ->
   match (fixity, kind) with
-  | Anyfix fixity, kind -> to_ident_string (Name {string; fixity; kind})
+  | Anyfix fixity, kind ->
+      to_ident_string (Name {string; fixity; kind})
   | Nonfix, Identifier -> (string :> string)
   | Nonfix, Operator -> String.concat ["("; (string :> string); ")"]
-  | Infix, Identifier -> String.concat ["(infix \\"; (string :> string); ")"]
-  | Infix, Operator -> String.concat ["(infix "; (string :> string); ")"]
-  | Prefix, Identifier -> String.concat ["(prefix \\"; (string :> string); ")"]
-  | Prefix, Operator -> String.concat ["(prefix "; (string :> string); ")"]
+  | Infix, Identifier ->
+      String.concat ["(infix \\"; (string :> string); ")"]
+  | Infix, Operator ->
+      String.concat ["(infix "; (string :> string); ")"]
+  | Prefix, Identifier ->
+      String.concat ["(prefix \\"; (string :> string); ")"]
+  | Prefix, Operator ->
+      String.concat ["(prefix "; (string :> string); ")"]
 
 let rec equal_fixity : type f1 f2. f1 fixity -> f2 fixity -> bool =
  fun lf rf ->

@@ -1,6 +1,5 @@
 (executables
   (names main)
-  (modules main)
   (libraries
     base
     stdio

@@ -22,7 +22,8 @@ module Span = struct
     && end_column t1 = end_column t2
 
   let made_up =
-    Span {start_line = 0; start_column = 0; end_line = 0; end_column = 0}
+    Span
+      {start_line = 0; start_column = 0; end_line = 0; end_column = 0}
 
   let is_made_up sp = equal sp made_up
 
@@ -38,9 +39,10 @@ module Span = struct
         ; end_line = end_line snd
         ; end_column = end_column snd }
 
-  let to_string (Span {start_line; start_column; end_line; end_column}) =
-    Printf.sprintf "(%d, %d) to (%d, %d)" start_line start_column end_line
-      end_column
+  let to_string (Span {start_line; start_column; end_line; end_column})
+      =
+    Printf.sprintf "(%d, %d) to (%d, %d)" start_line start_column
+      end_line end_column
 end
 
 type 'a t = 'a * Span.t
@@ -63,8 +65,8 @@ module Result = struct
         | Ok o -> (
           match f o with
           | Ok o', sp' -> (Ok o', Span.union sp sp')
-          | Error e', sp' -> (Error e', if Span.is_made_up sp' then sp else sp')
-          )
+          | Error e', sp' ->
+              (Error e', if Span.is_made_up sp' then sp else sp') )
 
       let map = `Define_using_bind
 
@@ -140,8 +142,8 @@ module Result = struct
       end
 
       module Array = struct
-        let of_sequence (type a e) ~(len : int) (seq : (a, e) t Sequence.t) :
-            (a Array.t, e) t =
+        let of_sequence (type a e) ~(len : int)
+            (seq : (a, e) t Sequence.t) : (a Array.t, e) t =
           let exception E of e in
           let span = ref Span.made_up in
           let f = function
@@ -169,13 +171,15 @@ module Result = struct
                 span := sp ;
                 raise (E e)
           in
-          match Array.of_sequence_unordered ~len (Sequence.map seq ~f) with
+          match
+            Array.of_sequence_unordered ~len (Sequence.map seq ~f)
+          with
           | Result.Ok arr -> Result.Ok (Result.Ok arr, !span)
           | Result.Error e -> Result.Error e
           | exception E e -> Result.Ok (Result.Error e, !span)
 
-        let of_list_map (type a b e) (lst : a list) ~(f : a -> (b, e) t) :
-            (b Array.t, e) t =
+        let of_list_map (type a b e) (lst : a list)
+            ~(f : a -> (b, e) t) : (b Array.t, e) t =
           of_sequence ~len:(Base.List.length lst)
             (Sequence.map ~f (Sequence.of_list lst))
 

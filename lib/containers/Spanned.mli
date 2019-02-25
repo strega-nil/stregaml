@@ -62,11 +62,15 @@ module Result :
           val map : 'a list -> f:('a -> ('b, 'e) t) -> ('b list, 'e) t
 
           val fold :
-            'a list -> init:'b -> f:('b -> 'a -> ('b, 'e) t) -> ('b, 'e) t
+               'a list
+            -> init:'b
+            -> f:('b -> 'a -> ('b, 'e) t)
+            -> ('b, 'e) t
 
           val iter : 'a list -> f:('a -> (unit, 'e) t) -> (unit, 'e) t
 
-          val iteri : 'a list -> f:(int -> 'a -> (unit, 'e) t) -> (unit, 'e) t
+          val iteri :
+            'a list -> f:(int -> 'a -> (unit, 'e) t) -> (unit, 'e) t
         end
 
         module Array : sig

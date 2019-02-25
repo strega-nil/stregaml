@@ -11,20 +11,6 @@ Laid out in order of when I want to do them
 * strings
 * polymorphism!
   - syntax: `type Array[T: type, N: UInt]`
-  - ```cafe
-    func iter_map[
-      T: type,
-      U: type,
-      E: effect,
-    ](
-      lst: List[T],
-      f: func(T) E -> U,
-    )
-      Yield[Int32] | E
-    {
-      ...
-    }
-    ```
 * real pattern matching
 * implicit polymorphism!
   - ```cafe
@@ -34,7 +20,6 @@ Laid out in order of when I want to do them
       ...
     }
     ```
-* algebraic effects?
 
 * names for stuff
   * tamper - build

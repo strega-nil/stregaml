@@ -1,5 +1,31 @@
 include Types.Token
 
+module Keyword = struct
+  include Types.Token_Keyword
+
+  let equal lhs rhs =
+    match (lhs, rhs) with
+    | False, False -> true
+    | Match, Match -> true
+    | If, If -> true
+    | Else, Else -> true
+    | Infix, Infix -> true
+    | Group, Group -> true
+    | Func, Func -> true
+    | Type, Type -> true
+    | Data, Data -> true
+    | Record, Record -> true
+    | Variant, Variant -> true
+    | Alias, Alias -> true
+    | Let, Let -> true
+    | Mut, Mut -> true
+    | Builtin, Builtin -> true
+    | Underscore, Underscore -> true
+    | _ -> false
+
+  let to_string k ~lang = Lang.keyword_to_string k ~lang
+end
+
 let equal lhs rhs =
   match (lhs, rhs) with
   | Open_paren, Open_paren -> true
@@ -19,27 +45,12 @@ let equal lhs rhs =
   | Double_colon, Double_colon -> true
   | Operator id1, Operator id2 -> Nfc_string.equal id1 id2
   | Identifier id1, Identifier id2 -> Nfc_string.equal id1 id2
-  | Keyword_true, Keyword_true -> true
-  | Keyword_false, Keyword_false -> true
-  | Keyword_match, Keyword_match -> true
-  | Keyword_if, Keyword_if -> true
-  | Keyword_else, Keyword_else -> true
-  | Keyword_infix, Keyword_infix -> true
-  | Keyword_group, Keyword_group -> true
-  | Keyword_func, Keyword_func -> true
-  | Keyword_type, Keyword_type -> true
-  | Keyword_data, Keyword_data -> true
-  | Keyword_record, Keyword_record -> true
-  | Keyword_variant, Keyword_variant -> true
-  | Keyword_alias, Keyword_alias -> true
-  | Keyword_let, Keyword_let -> true
-  | Keyword_mut, Keyword_mut -> true
-  | Keyword_builtin, Keyword_builtin -> true
-  | Keyword_underscore, Keyword_underscore -> true
+  | Keyword k1, Keyword k2 -> Keyword.equal k1 k2
   | Eof, Eof -> true
   | _ -> false
 
-let to_string = function
+let to_string t ~lang =
+  match t with
   | Open_paren -> "open paren `(`"
   | Close_paren -> "close paren `)`"
   | Open_brace -> "open brace `{`"
@@ -58,24 +69,29 @@ let to_string = function
   | Operator ident -> Printf.sprintf "operator: `%s`" (ident :> string)
   | Identifier_operator ident ->
       Printf.sprintf "operator: `\\%s`" (ident :> string)
-  | Identifier ident -> Printf.sprintf "identifier: `%s`" (ident :> string)
-  | Keyword_true -> "keyword `true`"
-  | Keyword_false -> "keyword `false`"
-  | Keyword_match -> "keyword `match`"
-  | Keyword_if -> "keyword `if`"
-  | Keyword_else -> "keyword `else`"
-  | Keyword_infix -> "keyword `infix`"
-  | Keyword_prefix -> "keyword `prefix`"
-  | Keyword_group -> "keyword `group`"
-  | Keyword_func -> "keyword `func`"
-  | Keyword_type -> "keyword `type`"
-  | Keyword_data -> "keyword `data`"
-  | Keyword_record -> "keyword `record`"
-  | Keyword_variant -> "keyword `variant`"
-  | Keyword_alias -> "keyword `alias`"
-  | Keyword_let -> "keyword `let`"
-  | Keyword_ref -> "keyword `ref`"
-  | Keyword_mut -> "keyword `mut`"
-  | Keyword_builtin -> "keyword `__builtin`"
-  | Keyword_underscore -> "keyword `_`"
+  | Identifier ident ->
+      let lst =
+        let ident = (ident :> string) in
+        let rec helper idx =
+          if idx < String.length ident then
+            Int.to_string (Char.to_int ident.[idx]) :: (helper (idx + 1))
+          else []
+        in
+        helper 0
+      in
+      let lst2 =
+        let kw = Lang.keyword_to_string ~lang Keyword.Type in
+        let rec helper idx =
+          if idx < String.length kw then
+            Int.to_string (Char.to_int kw.[idx]) :: (helper (idx + 1))
+          else []
+        in
+        helper 0
+      in
+      Printf.sprintf "identifier: `%s`\n  (%s)\n  (%s)"
+        (ident :> string)
+        (String.concat ~sep:", " lst)
+        (String.concat ~sep:", " lst2)
+  | Keyword kw ->
+      Printf.sprintf "keyword `%s`" (Keyword.to_string kw ~lang)
   | Eof -> "end of file"

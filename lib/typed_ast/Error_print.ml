@@ -13,13 +13,15 @@ let to_string err ~ctxt =
       Printf.sprintf "Name `%s` not found in type `%s`"
         (Name.to_ident_string name)
         (Type.to_string ty ~ctxt)
-  | Type_not_found ty -> Printf.sprintf "Type not found: %s" (ty :> string)
+  | Type_not_found ty ->
+      Printf.sprintf "Type not found: %s" (ty :> string)
   | Type_defined_multiple_times name ->
       Printf.sprintf "Type declared multiple times: %s" (name :> string)
   | Infix_group_not_found name ->
       Printf.sprintf "Infix group not found: %s" (name :> string)
   | Infix_group_defined_multiple_times name ->
-      Printf.sprintf "Infix group declared multiple times: %s" (name :> string)
+      Printf.sprintf "Infix group declared multiple times: %s"
+        (name :> string)
   | Infix_group_recursive_precedence (fst, snd) ->
       Printf.sprintf
         {|Infix groups declared with recursive precedence
@@ -46,18 +48,21 @@ place is of type: `%s`|}
   | Assignment_to_immutable_place ->
       "Attempted to assign to an immutable place"
   | Reference_taken_to_value ty ->
-      Printf.sprintf "Attempted to take a reference to a value of type `%s`"
+      Printf.sprintf
+        "Attempted to take a reference to a value of type `%s`"
         (Type.to_string ty ~ctxt)
   | Mutable_reference_taken_to_immutable_place ->
       "Attempted to take a mutable reference to a mutable place"
   | Dereference_of_non_reference ty ->
-      "Attempted to dereference non-reference type: " ^ Type.to_string ty ~ctxt
+      "Attempted to dereference non-reference type: "
+      ^ Type.to_string ty ~ctxt
   | Record_literal_non_record_type ty ->
       Printf.sprintf
         "Attempted to create a record literal of non-record type `%s`"
         (Type.to_string ty ~ctxt)
   | Record_literal_duplicate_members member ->
-      Printf.sprintf "Record literal - member `%s` initialized multiple times"
+      Printf.sprintf
+        "Record literal - member `%s` initialized multiple times"
         (member :> string)
   | Record_literal_incorrect_type {field; field_ty; member_ty} ->
       Printf.sprintf
@@ -72,7 +77,8 @@ place is of type: `%s`|}
         (Name.to_ident_string member)
         (Type.to_string ty ~ctxt)
   | Record_literal_missing_field (ty, member) ->
-      Printf.sprintf "Record literal - member `%s` of type `%s` missing"
+      Printf.sprintf
+        "Record literal - member `%s` of type `%s` missing"
         (member :> string)
         (Type.to_string ty ~ctxt)
   | Record_access_non_record_type (ty, member) ->
@@ -118,7 +124,8 @@ place is of type: `%s`|}
         {|`if-else` expression has branches of differing types:
   1st branch: `%s`
   2nd branch: `%s`|}
-        (Type.to_string t1 ~ctxt) (Type.to_string t2 ~ctxt)
+        (Type.to_string t1 ~ctxt)
+        (Type.to_string t2 ~ctxt)
   | Builtin_mismatched_arity {name; expected; found} ->
       Printf.sprintf "Builtin `%s` expects %d arguments; found %d"
         (name :> string)
@@ -137,7 +144,8 @@ place is of type: `%s`|}
         | E.Infix_assign -> "<-"
         | E.Infix_name (Name.Name {string; kind = Name.Operator; _}) ->
             (string :> string)
-        | E.Infix_name (Name.Name {string; kind = Name.Identifier; _}) ->
+        | E.Infix_name (Name.Name {string; kind = Name.Identifier; _})
+          ->
             "\\" ^ (string :> string)
       in
       Printf.sprintf
@@ -166,7 +174,8 @@ place is of type: `%s`|}
   | Defined_type_multiple_times name ->
       Printf.sprintf "Defined type `%s` multiple times" (name :> string)
   | Defined_infix_declaration_multiple_times name ->
-      Printf.sprintf "Defined infix declaration for `%s` multiple times"
+      Printf.sprintf
+        "Defined infix declaration for `%s` multiple times"
         (Name.to_ident_string name)
   | Return_type_mismatch {expected; found} ->
       Printf.sprintf

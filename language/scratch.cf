@@ -5,11 +5,9 @@ record type Cons {
   next: List;
 }
 
-type List {
-  variant data {
-    Nil: Unit;
-    Cons: Cons;
-  }
+variant type List {
+  Nil: Unit;
+  Cons: Cons;
 }
 
 infix group Cons {

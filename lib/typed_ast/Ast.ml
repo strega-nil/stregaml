@@ -51,5 +51,6 @@ module Expr = struct
   end
 
   let unit_value =
-    Expr {variant = Unit_literal; ty = Type.Any (Type.Builtin Type.Unit)}
+    Expr
+      {variant = Unit_literal; ty = Type.Any (Type.Builtin Type.Unit)}
 end

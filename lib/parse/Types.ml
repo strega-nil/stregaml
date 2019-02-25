@@ -54,31 +54,37 @@ and Token : sig
     | Thicc_arrow : t
     | Colon : t
     | Double_colon : t
+    | Keyword : Token_Keyword.t -> t
     | Operator : Nfc_string.t -> t
     | Identifier_operator : Nfc_string.t -> t
     | Identifier : Nfc_string.t -> t
-    | Keyword_true : t
-    | Keyword_false : t
-    | Keyword_match : t
-    | Keyword_if : t
-    | Keyword_else : t
-    | Keyword_infix : t
-    | Keyword_prefix : t
-    | Keyword_group : t
-    | Keyword_func : t
-    | Keyword_type : t
-    | Keyword_data : t
-    | Keyword_record : t
-    | Keyword_variant : t
-    | Keyword_alias : t
-    | Keyword_let : t
-    | Keyword_ref : t
-    | Keyword_mut : t
-    | Keyword_builtin : t
-    | Keyword_underscore : t
     | Eof : t
 end =
   Token
+
+and Token_Keyword : sig
+  type t =
+    | True : t
+    | False : t
+    | Match : t
+    | If : t
+    | Else : t
+    | Infix : t
+    | Prefix : t
+    | Group : t
+    | Func : t
+    | Type : t
+    | Data : t
+    | Record : t
+    | Variant : t
+    | Alias : t
+    | Let : t
+    | Ref : t
+    | Mut : t
+    | Builtin : t
+    | Underscore : t
+end =
+  Token_Keyword
 
 and Type : sig
   (* TODO: Raw, Owned *)
@@ -124,7 +130,8 @@ and Type_Definition : sig
     | Alias : Type.value Type.t -> kind
     | User_defined : {data : Type_Data.t} -> kind
 
-  type t = Definition : {name : Nfc_string.t Spanned.t; kind : kind} -> t
+  type t =
+    | Definition : {name : Nfc_string.t Spanned.t; kind : kind} -> t
 end =
   Type_Definition
 
@@ -160,7 +167,8 @@ and Ast_Expr : sig
     | Integer_literal : int -> t
     | Match :
         { cond : t Spanned.t
-        ; arms : (pattern Spanned.t * Ast_Expr_Block.t Spanned.t) list }
+        ; arms : (pattern Spanned.t * Ast_Expr_Block.t Spanned.t) list
+        }
         -> t
     | If_else :
         { cond : t Spanned.t
@@ -172,13 +180,19 @@ and Ast_Expr : sig
     | Builtin : Nfc_string.t Spanned.t * t Spanned.t list -> t
     | Call : t Spanned.t * t Spanned.t list -> t
     | Prefix_operator : Name.prefix Name.t Spanned.t * t Spanned.t -> t
-    | Infix_list : t Spanned.t * (infix Spanned.t * t Spanned.t) list -> t
-    | Place : {mutability : Type.mutability Spanned.t; expr : t Spanned.t} -> t
+    | Infix_list :
+        t Spanned.t * (infix Spanned.t * t Spanned.t) list
+        -> t
+    | Place :
+        { mutability : Type.mutability Spanned.t
+        ; expr : t Spanned.t }
+        -> t
     | Reference : Ast_Expr.t Spanned.t -> t
     | Dereference : Ast_Expr.t Spanned.t -> t
     | Record_literal :
         { ty : Type.value Type.t Spanned.t
-        ; members : (Name.nonfix Name.t * t Spanned.t) Spanned.t list }
+        ; members : (Name.nonfix Name.t * t Spanned.t) Spanned.t list
+        }
         -> t
     | Record_access : t Spanned.t * Name.nonfix Name.t -> t
 end =
@@ -198,7 +212,9 @@ end =
 
 and Ast_Func : sig
   type params =
-    (Name.anyfix Name.t Spanned.t * Type.any Type.t Spanned.t) Spanned.t list
+    (Name.anyfix Name.t Spanned.t * Type.any Type.t Spanned.t)
+    Spanned.t
+    list
 
   type t =
     | Func :
@@ -253,4 +269,14 @@ module Pervasives = struct
   type error = Error.t
 
   type 'a result = ('a, error) Spanned.Result.t
+end
+
+module type Language = sig
+  val numbers_are_big_endian : bool
+
+  val number_base : Nfc_string.t -> int option
+
+  val keyword_of_string : Nfc_string.t -> Token_Keyword.t option
+
+  val keyword_to_string : Token_Keyword.t -> string
 end

@@ -11,7 +11,8 @@ type args =
   | Args :
       { filename : string
       ; print_parse_ast : bool
-      ; style : compile_style }
+      ; style : compile_style
+      ; lang : (module Parse.Language) }
       -> args
 
 let args_filename (Args {filename; _}) = filename
@@ -20,16 +21,27 @@ let args_print_parse_ast (Args {print_parse_ast; _}) = print_parse_ast
 
 let args_style (Args {style; _}) = style
 
+let args_lang (Args {lang; _}) = lang
+
 let parse_command_line () : (args, string) Result.t =
   let print_parse_ast = ref false in
   let typeck_only = ref false in
   let interpret = ref false in
   let error = ref None in
   let filename = ref None in
+  let lang = ref None in
   let get_filename name =
     match !filename with
     | Some _ -> error := Some "filename specified multiple times"
     | None -> filename := Some name
+  in
+  let get_lang name =
+    match !lang with
+    | Some _ -> error := Some "language specified multiple times"
+    | None -> (
+      match Languages.get_lang name with
+      | Ok l -> lang := Some l
+      | Error e -> error := Some e )
   in
   let cmd_options =
     let open Caml.Arg in
@@ -41,32 +53,48 @@ let parse_command_line () : (args, string) Result.t =
       , "interpret, instead of using the LLVM backend" )
     ; ( "--typecheck-only"
       , Set typeck_only
-      , "only typecheck, don't interpret or compile" ) ]
+      , "only typecheck, don't interpret or compile" )
+    ; ( "--language"
+      , String get_lang
+      , "set the (human) language to use for the specified file" ) ]
   in
   Caml.Arg.parse cmd_options get_filename "cafec [filename]" ;
   match !error with
   | Some err -> Error err
   | None -> (
-    match !filename with
-    | Some filename ->
-        if !typeck_only && !interpret
-        then Error "both --typecheck-only and --interpret specified"
-        else
-          let style =
-            if !typeck_only
-            then Typecheck
-            else if !interpret
-            then Interpret
-            else Compile
-          in
-          Ok (Args {filename; print_parse_ast = !print_parse_ast; style})
-    | None -> Error "no filename specified" )
+      let lang =
+        match !lang with
+        | Some lang -> lang
+        | None -> (module Languages.English : Parse.Language)
+      in
+      match !filename with
+      | Some filename ->
+          if !typeck_only && !interpret
+          then Error "both --typecheck-only and --interpret specified"
+          else
+            let style =
+              if !typeck_only
+              then Typecheck
+              else if !interpret
+              then Interpret
+              else Compile
+            in
+            Ok
+              (Args
+                 { filename
+                 ; print_parse_ast = !print_parse_ast
+                 ; style
+                 ; lang })
+      | None -> Error "no filename specified" )
 
 let get_parse_ast args =
-  match In.with_file (args_filename args) ~f:Parse.parse with
+  let lang = args_lang args in
+  match In.with_file (args_filename args) ~f:(Parse.parse ~lang) with
   | Error e, sp ->
       Out.eprintf "Parse error: %s\n"
-        (Spanned.to_string ~f:Parse.Error.to_string (e, sp)) ;
+        (Spanned.to_string
+           ~f:(Parse.Error.to_string ~lang)
+           (e, sp)) ;
       Caml.exit 1
   | Ok parse_ast, _ ->
       if args_print_parse_ast args
@@ -110,8 +138,8 @@ let () =
     match parse_command_line () with
     | Ok args -> args
     | Error e ->
-        Out.fprintf Out.stderr "error while parsing command line arguments: %s"
-          e ;
+        Out.fprintf Out.stderr
+          "error while parsing command line arguments: %s" e ;
         Caml.exit 1
   in
   main args

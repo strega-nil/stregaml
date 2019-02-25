@@ -63,7 +63,8 @@ val findi : 'a t -> f:(int -> 'a -> bool) -> (int * 'a) option
 
 val find_from : 'a t -> int -> f:('a -> bool) -> 'a option
 
-val findi_from : 'a t -> int -> f:(int -> 'a -> bool) -> (int * 'a) option
+val findi_from :
+  'a t -> int -> f:(int -> 'a -> bool) -> (int * 'a) option
 
 val mem_from : 'a t -> 'a -> int -> equal:('a -> 'a -> bool) -> bool
 

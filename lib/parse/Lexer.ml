@@ -1,18 +1,26 @@
 open! Types.Pervasives
 
+module type Language = Types.Language
+
 exception Bug_lexer of string
 
-type t = Lexer : {decoder : Uutf.decoder; mutable peek : Uchar.t option} -> t
+type t =
+  | Lexer :
+      { decoder : Uutf.decoder
+      ; mutable peek : Uchar.t option
+      ; lang : (module Language) }
+      -> t
 
 let decoder (Lexer r) = r.decoder
+let lang (Lexer r) = r.lang
 
-let make ch =
+let make ch ~lang =
   let decoder =
     Uutf.decoder
       ~nln:(`NLF (Uchar.of_char '\n'))
       ~encoding:`UTF_8 (`Channel ch)
   in
-  Lexer {decoder; peek = None}
+  Lexer {decoder; peek = None; lang}
 
 (* the actual lexer functions *)
 let ( =~ ) uch ch = Uchar.equal uch (Uchar.of_char ch)
@@ -29,7 +37,9 @@ let is_whitespace = Uucp.White.is_white_space
   non-english keywords and non-english error messages.
 *)
 let is_number_start ch =
-  match Uchar.to_char ch with None -> false | Some ch -> Char.is_digit ch
+  match Uchar.to_char ch with
+  | None -> false
+  | Some ch -> Char.is_digit ch
 
 let is_number_continue ch base =
   match base with
@@ -55,7 +65,8 @@ let is_number_continue ch base =
 *)
 let is_ident_start ch = ch =~ '_' || Uucp.Id.is_xid_start ch
 
-let is_ident_continue_no_prime ch = ch =~ '-' || Uucp.Id.is_xid_continue ch
+let is_ident_continue_no_prime ch =
+  ch =~ '-' || Uucp.Id.is_xid_continue ch
 
 let is_ident_continue ch = ch =~ '\'' || is_ident_continue_no_prime ch
 
@@ -86,7 +97,9 @@ let is_ident_continue ch = ch =~ '\'' || is_ident_continue_no_prime ch
 *)
 let is_operator_start ch =
   let is_valid_ascii ch =
-    let ch = Option.value ~default:(Char.unsafe_of_int 0) (Uchar.to_char ch) in
+    let ch =
+      Option.value ~default:(Char.unsafe_of_int 0) (Uchar.to_char ch)
+    in
     match ch with
     | ':' -> true
     | '%' -> true
@@ -100,14 +113,16 @@ let is_operator_start ch =
     | '^' -> true
     | '!' -> true
     | '@' -> true
-    | '=' -> true (* these three are included for optimization purposes *)
+    | '=' ->
+        true (* these three are included for optimization purposes *)
     | '<' -> true
     | '>' -> true
     | _ -> false
   in
   if is_valid_ascii ch
   then true
-  else match Uucp.Gc.general_category ch with `Sm -> true | _ -> false
+  else
+    match Uucp.Gc.general_category ch with `Sm -> true | _ -> false
 
 let is_operator_continue ch = ch =~ '\'' || is_operator_start ch
 
@@ -132,7 +147,8 @@ let peek_ch (Lexer r as lex) : Uchar.t option result =
         r.peek <- uch ;
         (Ok uch, current_span lex)
     | `End -> (Ok None, Spanned.Span.made_up)
-    | `Malformed s -> (Error (Error.Malformed_input s), current_span lex) )
+    | `Malformed s ->
+        (Error (Error.Malformed_input s), current_span lex) )
 
 let next_ch (Lexer r as lex) =
   match peek_ch lex with
@@ -145,7 +161,8 @@ let eat_ch (Lexer lex) =
   match lex.peek with
   | Some _ -> lex.peek <- None
   | None ->
-      failwith "internal error: lexer eat_ch without knowing the character"
+      failwith
+        "internal error: lexer eat_ch without knowing the character"
 
 let rec eat_whitespace lex =
   let%bind ch = peek_ch lex in
@@ -167,30 +184,9 @@ let lex_ident lex =
         helper (ch :: lst)
     | Some _ | None -> (
         let ident = Nfc_string.of_uchar_list (List.rev lst) in
-        match (ident :> string) with
-        | "" -> failwith "internal lexer error"
-        | "true" -> return Token.Keyword_true
-        | "false" -> return Token.Keyword_false
-        | "match" -> return Token.Keyword_match
-        | "if" -> return Token.Keyword_if
-        | "else" -> return Token.Keyword_else
-        | "infix" -> return Token.Keyword_infix
-        | "prefix" -> return Token.Keyword_prefix
-        | "group" -> return Token.Keyword_group
-        | "func" -> return Token.Keyword_func
-        | "type" -> return Token.Keyword_type
-        | "data" -> return Token.Keyword_data
-        | "record" -> return Token.Keyword_record
-        | "alias" -> return Token.Keyword_alias
-        | "let" -> return Token.Keyword_let
-        | "ref" -> return Token.Keyword_ref
-        | "mut" -> return Token.Keyword_mut
-        | "__builtin" -> return Token.Keyword_builtin
-        | "_" -> return Token.Keyword_underscore
-        | "variant" -> return Token.Keyword_variant
-        | "opaque" -> return_err (Error.Reserved_token ident)
-        | "public" -> return_err (Error.Reserved_token ident)
-        | _ -> return (Token.Identifier ident) )
+        match Lang.keyword_of_string ~lang:(lang lex) ident with
+        | Some kw -> return (Token.Keyword kw)
+        | None -> return (Token.Identifier ident) )
   in
   helper []
 
@@ -326,9 +322,13 @@ let rec next_token lex =
       | Some ch when is_ident_start ch -> (
           let%bind ident = lex_ident lex in
           match ident with
-          | Token.Identifier id -> return (Token.Identifier_operator id)
-          | tok -> return_err (Error.Identifier_operator_is_keyword tok) )
-      | ch -> return_err (Error.Identifier_operator_start_without_ident ch) )
+          | Token.Identifier id ->
+              return (Token.Identifier_operator id)
+          | tok ->
+              return_err (Error.Identifier_operator_is_keyword tok) )
+      | ch ->
+          return_err (Error.Identifier_operator_start_without_ident ch)
+      )
   | Some ch when is_ident_start ch -> lex_ident lex
   | Some ch when is_operator_start ch -> lex_operator lex
   | Some ch when is_number_start ch -> lex_number lex

@@ -2,14 +2,16 @@ open OUnit2
 
 exception Parser_error of Cafec.Parse.Error.t
 
-exception Type_error of (Cafec.Typed_ast.Error.t * Cafec.Typed_ast.Type.context)
+exception
+  Type_error of (Cafec.Typed_ast.Error.t * Cafec.Typed_ast.Type.context)
 
 exception Function_not_found of string
 
 (* note: should add more info eventually to these *)
 let () =
   Caml.Printexc.register_printer (function
-    | Parser_error e -> Some ("Parser error: " ^ Cafec.Parse.Error.to_string e)
+    | Parser_error e ->
+        Some ("Parser error: " ^ Cafec.Parse.Error.to_string e)
     | Type_error (e, ctxt) ->
         Some ("Type error: " ^ Cafec.Typed_ast.Error.to_string e ~ctxt)
     | Function_not_found s -> Some ("Function not found: " ^ s)
@@ -56,7 +58,9 @@ func main(): vec2 =
       | _ -> assert_failure "should have thrown invalid argument" )
     ; ( "higher order function, struct"
       >:: fun _ ->
-      let expected = Value.Struct [|Value.Integer 4028; Value.Integer 18|] in
+      let expected =
+        Value.Struct [|Value.Integer 4028; Value.Integer 18|]
+      in
       assert (Value.equal (call program "main" []) expected) ) ]
   in
   run_test_tt_main ("Tests" >::: tests)
