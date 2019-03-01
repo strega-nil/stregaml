@@ -33,9 +33,9 @@ let ( >=~ ) uch ch = Uchar.compare uch (Uchar.of_char ch) >= 0
 let is_whitespace = Uucp.White.is_white_space
 
 (*
-  note: this will eventually support unicode numerals,
-  but that will be added when we add
-  non-english keywords and non-english error messages.
+  we are going to wait for someone who knows what a
+  person who uses non-western numerals to have Opinions
+  about what to do for non-western numbers.
 *)
 let is_number_start ch =
   match Uchar.to_char ch with
@@ -172,9 +172,9 @@ let rec eat_whitespace lex =
   | Some _ | None -> return ()
 
 (* note:
-  these three functions _do not_ do special checking on the first character
-  to call these functions without guaranteeing that the first character is valid
-  is an _error_
+  these three functions _do not_ do special checking on the first
+  character to call these functions without guaranteeing that the
+  first character is valid is an _error_
 *)
 let lex_ident lex =
   let rec helper lst =
@@ -203,13 +203,13 @@ let lex_number lex =
     then
       let%bind ch = peek_ch lex in
       match Option.bind ~f:Uchar.to_char ch with
-      | Some 'x' ->
+      | Some 'x' | Some 'X' ->
           eat_ch lex ;
           return (16, [])
-      | Some 'o' ->
+      | Some 'o' | Some 'O' ->
           eat_ch lex ;
           return (8, [])
-      | Some 'b' ->
+      | Some 'b' | Some 'B' ->
           eat_ch lex ;
           return (2, [])
       | Some _ | None -> return (10, [fst])

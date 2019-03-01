@@ -282,12 +282,11 @@ module Pervasives = struct
 end
 
 module type Language = sig
-  val numbers_are_big_endian : bool
-
-  val number_base : Nfc_string.t -> int option
-
   val contextual_keyword_of_string :
     Nfc_string.t -> Token_Keyword_Contextual.t option
+
+  val contextual_keyword_to_string :
+     Token_Keyword_Contextual.t -> Nfc_string.t
 
   val keyword_of_string : Nfc_string.t -> Token_Keyword.t option
 

@@ -4,14 +4,6 @@ module Keyword = Parse.Token.Keyword
 module type Language = Parse.Language
 
 module type Interface_Language = sig
-  val numbers_are_big_endian : bool
-
-  val base_16 : Nfc_string.t list
-
-  val base_8 : Nfc_string.t list
-
-  val base_2 : Nfc_string.t list
-
   val ckw_Associativity : Nfc_string.t
 
   val ckw_Precedence : Nfc_string.t
@@ -62,20 +54,6 @@ module type Interface_Language = sig
 end
 
 module Make_Language (L : Interface_Language) : Language = struct
-  let numbers_are_big_endian = L.numbers_are_big_endian
-
-  let number_base (s : Nfc_string.t) =
-    let check_base lst =
-      List.exists lst ~f:(fun s' -> Nfc_string.equal s s')
-    in
-    if check_base L.base_16
-    then Some 16
-    else if check_base L.base_8
-    then Some 8
-    else if check_base L.base_2
-    then Some 2
-    else None
-
   let contextual_keyword_of_string s =
     if Nfc_string.equal s L.ckw_Associativity
     then Some Keyword.Contextual.Associativity
@@ -88,6 +66,14 @@ module Make_Language (L : Interface_Language) : Language = struct
     else if Nfc_string.equal s L.ckw_None
     then Some Keyword.Contextual.None
     else None
+
+  let contextual_keyword_to_string c =
+    match c with
+    | Keyword.Contextual.Associativity -> L.ckw_Associativity
+    | Keyword.Contextual.Precedence -> L.ckw_Precedence
+    | Keyword.Contextual.Start -> L.ckw_Start
+    | Keyword.Contextual.End -> L.ckw_End
+    | Keyword.Contextual.None -> L.ckw_None
 
   let keyword_of_string s =
     if Nfc_string.equal s L.kw_True
@@ -154,14 +140,6 @@ module Make_Language (L : Interface_Language) : Language = struct
 end
 
 module English = Make_Language (struct
-  let numbers_are_big_endian = true
-
-  let base_16 = [Nfc_string.of_string "x"; Nfc_string.of_string "X"]
-
-  let base_8 = [Nfc_string.of_string "o"; Nfc_string.of_string "O"]
-
-  let base_2 = [Nfc_string.of_string "b"; Nfc_string.of_string "B"]
-
   let ckw_Associativity = Nfc_string.of_string "associativity"
 
   let ckw_Precedence = Nfc_string.of_string "precedence"
@@ -212,14 +190,6 @@ module English = Make_Language (struct
 end)
 
 module Yiddish = Make_Language (struct
-  let numbers_are_big_endian = false
-
-  let base_16 = [Nfc_string.of_string "ה"]
-
-  let base_8 = [Nfc_string.of_string "א"; Nfc_string.of_string "אַ"]
-
-  let base_2 = [Nfc_string.of_string "ב"]
-
   let ckw_Associativity = Nfc_string.of_string "קאָמפּאַניר"
 
   let ckw_Precedence = Nfc_string.of_string "בכורה"
@@ -234,7 +204,7 @@ module Yiddish = Make_Language (struct
 
   let kw_False = Nfc_string.of_string "פֿאַלש"
 
-  let kw_Match = Nfc_string.of_string "צוזוכ"
+  let kw_Match = Nfc_string.of_string "צוזוך"
 
   let kw_If = Nfc_string.of_string "אױב"
 
@@ -244,9 +214,9 @@ module Yiddish = Make_Language (struct
 
   let kw_Prefix = Nfc_string.of_string "פּריפֿיקס"
 
-  let kw_Group = Nfc_string.of_string "גרופּ"
+  let kw_Group = Nfc_string.of_string "גרופּע"
 
-  let kw_Func = Nfc_string.of_string "פֿונק"
+  let kw_Func = Nfc_string.of_string "מאַפּע"
 
   let kw_Type = Nfc_string.of_string "סאָרט"
 

@@ -1,10 +1,10 @@
 Some Notes
 ---
 
-* The name of the language: it's spelled "café";  one may also use "cafe" if in
-  a non-unicode context.   The name should be capitalized as if it were an
-  improper noun  (that means, in titles and at the beginnings of sentences).
-  The name of the compiler is `cafec`.
+* The name of the language: it's spelled "café";  one may also use
+  "cafe" if in a non-unicode context. The name should be capitalized
+  as if it were an improper noun  (that means, in titles and at the
+  beginnings of sentences). The name of the compiler is `cafec`.
 
 Code of Conduct
 ---
@@ -18,6 +18,17 @@ Code of Conduct
   sometimes we screw up. This lays out our ideal, but it's okay to screw up in
   good faith! We all fall down, we just have to get back up again.
 * Most of all, be friendly to people.
+
+Contributing
+---
+
+As of now, there's not much you can contribute to! However, one place
+where I'd really like help with non-English languages. If you are a
+speaker of a non-English language, please help! Check out
+`bin/Languages.ml`, and add your language to the
+`languages/scratch-*.cf` list! If you have ideas on how better to
+support non-english languages, especially if you speak a non-European
+language, your help would be much appreciated!
 
 Building
 ---
@@ -45,10 +56,10 @@ Testing
 The tests in `test/` are not yet even close to useful.
 I hope to work on tests once I finish the lvalue overhaul.
 
-The only real examples of café code are in `language/` - `language/scratch.cf`
-is a place for testing new features, and will likely be removed from the
-repository once I finish the lvalue overhaul. In `language/misc`, I have
-some somewhat "real" examples of café.
+The only real examples of café code are in `language/` -
+`language/scratch.cf` is a place for testing new features, and will
+likely be removed from the repository once I finish the lvalue overhaul.
+In `language/misc`, I have some somewhat "real" examples of café.
 Currently, there're advent of code solutions,
 but there might be more at some point.
 

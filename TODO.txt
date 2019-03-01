@@ -1,7 +1,5 @@
 Laid out in order of when I want to do them
 
-* finish other-language support
-  - number literals
 * @ annotations
   - entrypoint
 * MIR
