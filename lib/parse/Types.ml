@@ -32,6 +32,7 @@ and Error : sig
     | Malformed_number_literal : t
     | Associativity_defined_twice : Nfc_string.t -> t
     | Reserved_token : Nfc_string.t -> t
+    | Unrecognized_attribute : Nfc_string.t -> t
     | Unrecognized_character : Uchar.t -> t
     | Unexpected_token : Error_Expected.t * Token.t -> t
 end =
@@ -45,6 +46,7 @@ and Token : sig
     | Close_brace : t
     | Open_square : t
     | Close_square : t
+    | Attribute : t
     | Semicolon : t
     | Dot : t
     | Comma : t
@@ -141,9 +143,18 @@ and Type_Definition : sig
     | User_defined : {data : Type_Data.t} -> kind
 
   type t =
-    | Definition : {name : Nfc_string.t Spanned.t; kind : kind} -> t
+    | Definition :
+        { name : Nfc_string.t Spanned.t
+        ; kind : kind
+        ; attributes : Ast_Attribute.t Spanned.t list }
+        -> t
 end =
   Type_Definition
+
+and Ast_Attribute : sig
+  type t = Entry_function : t
+end =
+  Ast_Attribute
 
 and Ast_Expr_Block : sig
   type t =
@@ -231,7 +242,8 @@ and Ast_Func : sig
         { name : _ Name.t
         ; params : params
         ; ret_ty : Type.any Type.t Spanned.t option
-        ; body : Ast_Expr_Block.t Spanned.t }
+        ; body : Ast_Expr_Block.t Spanned.t
+        ; attributes : Ast_Attribute.t Spanned.t list }
         -> t
 end =
   Ast_Func
@@ -248,7 +260,8 @@ and Ast_Infix_group : sig
     | Infix_group :
         { name : Nfc_string.t Spanned.t
         ; associativity : associativity
-        ; precedence : order list }
+        ; precedence : order list
+        ; attributes : Ast_Attribute.t Spanned.t list }
         -> t
 end =
   Ast_Infix_group
@@ -257,7 +270,8 @@ and Ast_Infix_declaration : sig
   type t =
     | Infix_declaration :
         { name : Name.infix Name.t Spanned.t
-        ; group : Nfc_string.t Spanned.t }
+        ; group : Nfc_string.t Spanned.t
+        ; attributes : Ast_Attribute.t Spanned.t list }
         -> t
 end =
   Ast_Infix_declaration
@@ -286,7 +300,7 @@ module type Language = sig
     Nfc_string.t -> Token_Keyword_Contextual.t option
 
   val contextual_keyword_to_string :
-     Token_Keyword_Contextual.t -> Nfc_string.t
+    Token_Keyword_Contextual.t -> Nfc_string.t
 
   val keyword_of_string : Nfc_string.t -> Token_Keyword.t option
 

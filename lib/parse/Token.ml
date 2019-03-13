@@ -58,6 +58,7 @@ let to_string t ~lang =
   | Close_brace -> "close brace `}`"
   | Open_square -> "open square `[`"
   | Close_square -> "close square `]`"
+  | Attribute -> "attribute `@`"
   | Semicolon -> "semicolon `;`"
   | Dot -> "dot `.`"
   | Comma -> "comma `,`"

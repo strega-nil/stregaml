@@ -1,3 +1,9 @@
+module Attribute : sig
+  include module type of struct include Types.Ast_Attribute end
+
+  val to_string : t -> string
+end
+
 module Stmt : sig
   include module type of struct include Types.Ast_Stmt end
 
@@ -42,6 +48,8 @@ module Func : sig
   val ret_ty : t -> Type.any Type.t Spanned.t option
 
   val body : t -> Expr.Block.t Spanned.t
+
+  val attributes : t -> Attribute.t Spanned.t list
 end
 
 module Infix_group : sig

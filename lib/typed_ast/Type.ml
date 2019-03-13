@@ -70,14 +70,16 @@ module Context = struct
     let defs, defs_len, aliases, aliases_len =
       let module Def = PType.Definition in
       let rec helper defs defs_len aliases aliases_len = function
-        | (Def.Definition {name; kind = Def.Alias ty}, _) :: rest ->
-            helper defs defs_len ((name, ty) :: aliases)
-              (aliases_len + 1) rest
-        | (Def.Definition {name; kind = Def.User_defined {data}}, _)
-          :: rest ->
-            helper ((name, data) :: defs) (defs_len + 1) aliases
-              aliases_len rest
         | [] -> (defs, defs_len, aliases, aliases_len)
+        | (Def.Definition {name; kind; attributes}, _) :: rest -> (
+            assert (List.is_empty attributes) ;
+            match kind with
+            | Def.Alias ty ->
+                helper defs defs_len ((name, ty) :: aliases)
+                  (aliases_len + 1) rest
+            | Def.User_defined {data} ->
+                helper ((name, data) :: defs) (defs_len + 1) aliases
+                  aliases_len rest )
       in
       helper [] 0 [] 0 lst
     in

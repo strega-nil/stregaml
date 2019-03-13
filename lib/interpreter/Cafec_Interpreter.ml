@@ -5,10 +5,13 @@ module Type = Ast.Type
 
 type t =
   | Interpreter :
-      { funcs : (Name.anyfix Name.t * Expr.Block.t) Array.t }
+      { entrypoint : Types.Function_index.t option
+      ; funcs : (Name.anyfix Name.t * Expr.Block.t) Array.t }
       -> t
 
-let funcs (Interpreter {funcs}) = funcs
+let funcs (Interpreter {funcs; _}) = funcs
+
+let entrypoint (Interpreter {entrypoint; _}) = entrypoint
 
 module Value = struct
   include Types.Value
@@ -99,8 +102,14 @@ let make ast =
         seq := rest ;
         (name, expr)
   in
+  let entrypoint =
+    match Ast.entrypoint ast with
+    | Some idx -> Some (Types.Function_index.of_int idx)
+    | None -> None
+  in
   Interpreter
-    {funcs = Array.init (Ast.number_of_functions ast) ~f:helper}
+    { entrypoint
+    ; funcs = Array.init (Ast.number_of_functions ast) ~f:helper }
 
 let get_function ctxt ~name =
   match

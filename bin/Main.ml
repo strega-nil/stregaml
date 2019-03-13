@@ -110,17 +110,13 @@ let get_typed_ast args =
 
 let interpret ty_ast _args =
   let ctxt = Interpreter.make ty_ast in
-  let string = Nfc_string.of_string_unsafe "main" in
-  let name =
-    Name.Name {string; kind = Name.Identifier; fixity = Name.Nonfix}
-  in
-  match Interpreter.get_function ctxt ~name with
+  match Interpreter.entrypoint ctxt with
   | Some f ->
       let v = Interpreter.call ctxt f [] in
-      Out.output_string Out.stdout "main returned: " ;
+      Out.output_string Out.stdout "entrypoint returned: " ;
       Out.output_string Out.stdout (Interpreter.Value.to_string v ctxt) ;
       Out.newline Out.stdout
-  | None -> Out.output_string Out.stderr "no main was found\n"
+  | None -> Out.output_string Out.stderr "no entrypoint was found\n"
 
 (*let compile ty_ast _args = Llvm.output_object_file ~file:"foo.o" ty_ast*)
 

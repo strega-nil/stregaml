@@ -191,3 +191,10 @@ place is of type: `%s`|}
   found: `(%s)`|}
         (type_list (Array.to_sequence expected))
         (type_list (Array.to_sequence found))
+  | Multiple_entrypoints {first; second} ->
+      Printf.sprintf
+        {|Multiple entrypoints found:
+  first: `%s`
+  second: `%s`|}
+        (Name.to_ident_string first)
+        (Name.to_ident_string second)

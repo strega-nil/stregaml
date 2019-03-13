@@ -13,6 +13,8 @@ let make unt_ast = Internal.make unt_ast
 let number_of_functions ast =
   Array.length (Internal.function_context ast)
 
+let entrypoint = Internal.entrypoint
+
 let function_seq ast =
   Sequence.zip
     (Array.to_sequence (Internal.function_context ast))

@@ -22,6 +22,8 @@ val number_of_types : t -> int
 val type_seq : t -> type_def spanned seq
 *)
 
+val entrypoint : t -> int option
+
 val number_of_functions : t -> int
 
 val function_seq :

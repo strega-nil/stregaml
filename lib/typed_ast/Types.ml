@@ -94,6 +94,7 @@ module rec Error : sig
         { expected : Type_Category.any Type.t Array.t
         ; found : Type_Category.any Type.t Array.t }
         -> t
+    | Multiple_entrypoints : {first : _ Name.t; second : _ Name.t} -> t
 end =
   Error
 

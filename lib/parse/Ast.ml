@@ -9,6 +9,19 @@ let infix_to_string = function
   | Types.Ast_Expr.Infix_assign -> "<-"
   | Types.Ast_Expr.Infix_name name -> infix_name_string name
 
+module Attribute = struct
+  include Types.Ast_Attribute
+
+  let to_string = function Entry_function -> "entrypoint"
+
+  let spanned_list_to_string attributes =
+    let atts =
+      String.concat ~sep:", "
+        (List.map ~f:(function att, _ -> to_string att) attributes)
+    in
+    "@[" ^ atts ^ "]\n"
+end
+
 module Implementation_stmt_expr = struct
   let qualified_to_string
       (Types.Ast_Expr.Qualified {path; name = name, _}) =
@@ -214,6 +227,8 @@ module Func = struct
 
   let body (Func r) = r.body
 
+  let attributes (Func r) = r.attributes
+
   let to_string self =
     let parameters =
       let f (((name, _), (ty, _)), _) =
@@ -228,7 +243,8 @@ module Func = struct
       | None -> ""
     in
     String.concat
-      [ "func "
+      [ Attribute.spanned_list_to_string (attributes self)
+      ; "func "
       ; Name.to_ident_string (name self)
       ; "("
       ; parameters
@@ -244,7 +260,8 @@ module Infix_group = struct
   include Types.Ast_Infix_group
 
   let to_string
-      (Infix_group {name = name, _; associativity; precedence}) =
+      (Infix_group
+        {name = name, _; associativity; precedence; attributes}) =
     let associativity =
       match associativity with
       | Assoc_start -> "start"
@@ -255,10 +272,11 @@ module Infix_group = struct
       let f (Less (id, _)) = "precedence < " ^ (id :> string) in
       String.concat ~sep:"\n  " (List.map precedence ~f)
     in
-    Printf.sprintf {|infix group %s {
+    Printf.sprintf {|%sinfix group %s {
   associativity = %s;
   %s
 }|}
+      (Attribute.spanned_list_to_string attributes)
       (name :> string)
       associativity precedence
 end
@@ -266,10 +284,16 @@ end
 module Infix_declaration = struct
   include Types.Ast_Infix_declaration
 
-  let to_string (Infix_declaration {name = name, _; group = group, _})
-      =
+  let to_string
+      (Infix_declaration
+        {name = name, _; group = group, _; attributes}) =
     String.concat
-      ["infix ("; infix_name_string name; "): "; (group :> string); ";"]
+      [ Attribute.spanned_list_to_string attributes
+      ; "infix ("
+      ; infix_name_string name
+      ; "): "
+      ; (group :> string)
+      ; ";" ]
 end
 
 include Types.Ast
@@ -294,14 +318,23 @@ let with_type (Ast r) type_ = Ast {r with types = type_ :: r.types}
 
 let to_string self =
   let types =
-    let f (Type.Definition.Definition {name = name, _; kind}, _) =
+    let f
+        ( Type.Definition.Definition {name = name, _; kind; attributes}
+        , _ ) =
+      let attributes = Attribute.spanned_list_to_string attributes in
       match kind with
       | Type.Definition.Alias data ->
           String.concat
-            ["type "; (name :> string); " = "; Type.to_string data; ";"]
+            [ attributes
+            ; "type "
+            ; (name :> string)
+            ; " = "
+            ; Type.to_string data
+            ; ";" ]
       | Type.Definition.User_defined {data} ->
           String.concat
-            [ "type "
+            [ attributes
+            ; "type "
             ; (name :> string)
             ; " {\n"
             ; "  "

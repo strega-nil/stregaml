@@ -55,6 +55,8 @@ let to_string e ~lang =
         (name :> string)
   | Reserved_token tok ->
       Printf.sprintf "reserved token: `%s`" (tok :> string)
+  | Unrecognized_attribute s ->
+      Printf.sprintf "unrecognized attribute: `%s`" (s :> string)
   | Unrecognized_character ch ->
       Printf.sprintf "unrecognized character: `%s` (%d)"
         (Nfc_string.uchar_to_string ch)

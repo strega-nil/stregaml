@@ -555,14 +555,14 @@ and parse_data_members (parser : t) : Type.Data.members result =
   return members
 
 (* for simple types of the form <kind> type X { ... } *)
-and parse_simple_type ~(kind : Type.Data.kind) (parser : t) :
-    Type.Definition.t result =
+and parse_simple_type ~(kind : Type.Data.kind) ~attributes (parser : t)
+    : Type.Definition.t result =
   let%bind () = get_specific parser (Token.Keyword Keyword.Type) in
   let%bind name = spanned_bind (get_identifier parser) in
   let%bind members = parse_data_members parser in
   let data = Type.Data.Data {kind; members} in
   let kind = Type.Definition.User_defined {data} in
-  return (Type.Definition.Definition {kind; name})
+  return (Type.Definition.Definition {kind; name; attributes})
 
 and maybe_parse_type_annotation (parser : t) :
     Type.any Type.t Spanned.t option result =
@@ -646,7 +646,24 @@ and parse_block (parser : t) : Ast.Expr.Block.t result =
   let%bind () = get_specific parser Token.Open_brace in
   parse_block_no_open parser
 
-let parse_infix_group (parser : t) : Ast.Infix_group.t result =
+let parse_attributes (parser : t) :
+    Ast.Attribute.t Spanned.t list result =
+  match%bind peek_token parser with
+  | Token.Attribute ->
+      eat_token parser ;
+      let%bind () = get_specific parser Token.Open_square in
+      let%bind (), sp =
+        let%bind name, sp = spanned_bind (get_identifier parser) in
+        if Nfc_string.equal name (Nfc_string.of_string "entrypoint")
+        then return ((), sp)
+        else return_err (Error.Unrecognized_attribute name)
+      in
+      let%bind () = get_specific parser Token.Close_square in
+      return [(Ast.Attribute.Entry_function, sp)]
+  | _ -> return []
+
+let parse_infix_group ~attributes (parser : t) :
+    Ast.Infix_group.t result =
   let module I = Ast.Infix_group in
   let rec helper name associativity precedence =
     match%bind next_token parser with
@@ -654,7 +671,8 @@ let parse_infix_group (parser : t) : Ast.Infix_group.t result =
         let associativity =
           match associativity with None -> I.Assoc_none | Some a -> a
         in
-        return (I.Infix_group {name; associativity; precedence})
+        return
+          (I.Infix_group {name; associativity; precedence; attributes})
     | Token.Identifier id as tok -> (
       match
         Lang.contextual_keyword_of_string ~lang:(lang parser) id
@@ -705,7 +723,7 @@ let parse_infix_group (parser : t) : Ast.Infix_group.t result =
   let%bind () = get_specific parser Token.Open_brace in
   helper name None []
 
-let parse_infix_declaration (parser : t) :
+let parse_infix_declaration ~attributes (parser : t) :
     Ast.Infix_declaration.t result =
   let%bind () = get_specific parser Token.Open_paren in
   let%bind name = spanned_bind (get_infix_operator parser) in
@@ -713,36 +731,44 @@ let parse_infix_declaration (parser : t) :
   let%bind () = get_specific parser Token.Colon in
   let%bind group = spanned_bind (get_identifier parser) in
   let%bind () = get_specific parser Token.Semicolon in
-  return (Ast.Infix_declaration.Infix_declaration {name; group})
+  return
+    (Ast.Infix_declaration.Infix_declaration {name; group; attributes})
 
-let parse_func (parser : t) : Ast.Func.t result =
+let parse_func ~attributes (parser : t) : Ast.Func.t result =
   let%bind name = get_name parser in
   let%bind params = parse_parameter_list parser in
   let%bind ret_ty = parse_return_type parser in
   let%bind body = spanned_bind (parse_block parser) in
-  return (Ast.Func.Func {name; params; ret_ty; body})
+  return (Ast.Func.Func {name; params; ret_ty; body; attributes})
 
 let parse_item (parser : t) : Item.t option result =
+  let%bind attributes = parse_attributes parser in
   match%bind next_token parser with
   | Token.Keyword Keyword.Func ->
-      let%bind func = parse_func parser in
+      let%bind func = parse_func ~attributes parser in
       return (Some (Item.Func func))
   | Token.Keyword Keyword.Infix -> (
       match%bind
         maybe_get_specific parser (Token.Keyword Keyword.Group)
       with
       | Some () ->
-          let%bind infix_group = parse_infix_group parser in
+          let%bind infix_group =
+            parse_infix_group ~attributes parser
+          in
           return (Some (Item.Infix_group infix_group))
       | None ->
-          let%bind infix_decl = parse_infix_declaration parser in
+          let%bind infix_decl =
+            parse_infix_declaration ~attributes parser
+          in
           return (Some (Item.Infix_declaration infix_decl)) )
   | Token.Keyword Keyword.Record ->
-      let%bind def = parse_simple_type ~kind:Type.Data.Record parser in
+      let%bind def =
+        parse_simple_type ~kind:Type.Data.Record ~attributes parser
+      in
       return (Some (Item.Type_definition def))
   | Token.Keyword Keyword.Variant ->
       let%bind def =
-        parse_simple_type ~kind:Type.Data.Variant parser
+        parse_simple_type ~kind:Type.Data.Variant ~attributes parser
       in
       return (Some (Item.Type_definition def))
   | Token.Keyword Keyword.Type ->
@@ -772,7 +798,7 @@ let parse_item (parser : t) : Item.t option result =
             let data = Type.Data.Data {kind; members} in
             return (Type.Definition.User_defined {data})
       in
-      let def = Type.Definition.Definition {name; kind} in
+      let def = Type.Definition.Definition {name; kind; attributes} in
       return (Some (Item.Type_definition def))
   | Token.Eof -> return None
   | tok -> unexpected tok Error.Expected.Item_declarator

@@ -1,7 +1,5 @@
 Laid out in order of when I want to do them
 
-* @ annotations
-  - entrypoint
 * MIR
   - actually lay out types
     - check for recursive types

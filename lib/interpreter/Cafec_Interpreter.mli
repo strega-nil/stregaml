@@ -14,6 +14,8 @@ module Value :
 
 val make : Cafec_Typed_ast.t -> t
 
+val entrypoint : t -> Value.function_index option
+
 val get_function : t -> name:_ Name.t -> Value.function_index option
 
 val call : t -> Value.function_index -> Value.t list -> Value.t

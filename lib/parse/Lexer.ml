@@ -53,6 +53,8 @@ let is_number_continue ch base =
       || (ch >=~ 'A' && ch <=~ 'F')
   | base -> raise (Bug_lexer ("Invalid base: " ^ Int.to_string base))
 
+let is_number_separator ch = ch =~ '-'
+
 (*
   <identifier-start> :=
     | <character _>
@@ -215,14 +217,14 @@ let lex_number lex =
       | Some _ | None -> return (10, [fst])
     else return (10, [fst])
   in
-  let rec helper lst quote_allowed =
+  let rec helper lst separator_allowed =
     let%bind ch = peek_ch lex in
     match ch with
     | Some ch when is_number_continue ch base ->
         eat_ch lex ;
         helper (ch :: lst) true
-    | Some ch when ch =~ '\'' ->
-        if quote_allowed
+    | Some ch when is_number_separator ch ->
+        if separator_allowed
         then ( eat_ch lex ; helper lst false )
         else return_err Error.Malformed_number_literal
     | Some _ | None ->
@@ -260,6 +262,7 @@ let lex_operator lex =
         let ident = Nfc_string.of_uchar_list (List.rev lst) in
         match (ident :> string) with
         | "" -> failwith "internal lexer error"
+        | "@" -> return Token.Attribute
         | ":" -> return Token.Colon
         | "<-" -> return Token.Assign
         | "->" -> return Token.Arrow

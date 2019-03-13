@@ -1,6 +1,7 @@
 open! Types.Pervasives
 module Span = Spanned.Span
 module Untyped_ast = Cafec_Parse.Ast
+module Attribute = Untyped_ast.Attribute
 module Expr = Ast.Expr
 module Local = Ast.Expr.Local
 module Binding = Ast.Binding
@@ -10,7 +11,8 @@ module Function_declaration = struct
     | Declaration :
         { name : Name.anyfix Name.t
         ; params : Binding.t Array.t
-        ; ret_ty : Type.Category.any Type.t }
+        ; ret_ty : Type.Category.any Type.t
+        ; attributes : Attribute.t Spanned.t list }
         -> t
 
   let name (Declaration {name; _}) = name
@@ -18,6 +20,8 @@ module Function_declaration = struct
   let params (Declaration {params; _}) = params
 
   let ret_ty (Declaration {ret_ty; _}) = ret_ty
+
+  let attributes (Declaration r) = r.attributes
 end
 
 module Infix_group = struct
@@ -46,6 +50,7 @@ module Context = struct
         ; infix_group_names : Nfc_string.t Array.t
         ; infix_groups : Infix_group.t Array.t
         ; infix_decls : (Name.infix Name.t * int) Array.t
+        ; entrypoint : int option
         ; function_context : Function_declaration.t Spanned.t Array.t
         ; function_definitions : Expr.Block.t Spanned.t Array.t }
         -> t
@@ -61,6 +66,8 @@ module Context = struct
   let function_context (Context r) = r.function_context
 
   let function_definitions (Context r) = r.function_definitions
+
+  let entrypoint (Context r) = r.entrypoint
 
   let with_type_context (Context r) type_context =
     Context {r with type_context}
@@ -79,6 +86,9 @@ module Context = struct
 
   let with_function_definitions (Context r) function_definitions =
     Context {r with function_definitions}
+
+  let with_entrypoint (Context r) entrypoint =
+    Context {r with entrypoint}
 end
 
 include Context
@@ -687,14 +697,17 @@ let type_infix_group_name (_ : t)
     (group : Untyped_ast.Infix_group.t Spanned.t) : Nfc_string.t result
     =
   let module U = Untyped_ast.Infix_group in
-  let U.Infix_group {name = name, _; _}, _ = group in
+  let%bind (U.Infix_group {name = name, _; _}) = spanned_lift group in
   return name
 
 let type_infix_group (ctxt : t)
     (group : Untyped_ast.Infix_group.t Spanned.t) :
     Infix_group.t result =
   let module U = Untyped_ast.Infix_group in
-  let U.Infix_group {associativity; precedence; _}, _ = group in
+  let%bind (U.Infix_group {associativity; precedence; attributes; _}) =
+    spanned_lift group
+  in
+  assert (List.is_empty attributes) ;
   let f (U.Less (id, _)) =
     match find_infix_group_name ctxt id with
     | Some idx -> return (Infix_group.Less idx)
@@ -707,9 +720,11 @@ let type_infix_decl (ctxt : t)
     (unt_infix_decl : Untyped_ast.Infix_declaration.t Spanned.t) :
     (Name.infix Name.t * int) result =
   let module U = Untyped_ast.Infix_declaration in
-  let%bind (U.Infix_declaration {name = name, _; group = group, _}) =
+  let%bind (U.Infix_declaration
+             {name = name, _; group = group, _; attributes}) =
     spanned_lift unt_infix_decl
   in
+  assert (List.is_empty attributes) ;
   match find_infix_group_name ctxt group with
   | None -> return_err (Error.Infix_group_not_found group)
   | Some idx -> return (name, idx)
@@ -720,7 +735,7 @@ let type_function_declaration (ctxt : t)
   let module F = Untyped_ast.Func in
   let module D = Function_declaration in
   let unt_func, _ = unt_func in
-  let (F.Func {name; params; ret_ty; _}) = unt_func in
+  let (F.Func {name; params; ret_ty; attributes; _}) = unt_func in
   let name = Name.erase name in
   let%bind params, parm_sp =
     let f ((name, ty), _) =
@@ -736,7 +751,7 @@ let type_function_declaration (ctxt : t)
     | Some ret_ty -> Type.of_untyped ~ctxt:(type_context ctxt) ret_ty
     | None -> return (Type.erase (Type.Builtin Type.Unit))
   in
-  return (D.Declaration {name; params; ret_ty}, parm_sp)
+  return (D.Declaration {name; params; ret_ty; attributes}, parm_sp)
 
 let type_function_definition (ctxt : t) (idx : int)
     (unt_func : Untyped_ast.Func.t Spanned.t) :
@@ -801,6 +816,7 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
         ; infix_group_names = Array.empty ()
         ; infix_groups = Array.empty ()
         ; infix_decls = Array.empty ()
+        ; entrypoint = None
         ; function_context = Array.empty ()
         ; function_definitions = Array.empty () }
     in
@@ -863,6 +879,31 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
       in
       let%bind () = check_for_errors function_context ~equal ~err in
       return (with_function_context ctxt function_context)
+    in
+    let%bind ctxt =
+      let module D = Function_declaration in
+      let rec helper ?found_at arr i =
+        if i < Array.length arr
+        then
+          let func, _ = arr.(i) in
+          let atts = D.attributes func in
+          match atts with
+          | [] -> helper ?found_at arr (i + 1)
+          | [(Attribute.Entry_function, _)] -> (
+            match found_at with
+            | Some first ->
+                let first =
+                  let f, _ = arr.(first) in
+                  D.name f
+                in
+                let second = D.name func in
+                return_err (Error.Multiple_entrypoints {first; second})
+            | None -> helper ~found_at:i arr (i + 1) )
+          | _ -> failwith "unexpected attributes"
+        else return found_at
+      in
+      let%bind entrypoint = helper (function_context ctxt) 0 in
+      return (with_entrypoint ctxt entrypoint)
     in
     let%bind function_definitions =
       Sequence.of_list (U.funcs unt_ast)
