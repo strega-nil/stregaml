@@ -15,3 +15,11 @@ let keyword_of_string s ~lang =
 let keyword_to_string kw ~lang =
   let module Lang = (val lang : Language) in
   Lang.keyword_to_string kw
+
+let attribute_of_string s ~lang =
+  let module Lang = (val lang : Language) in
+  Lang.attribute_of_string s
+
+let attribute_to_string kw ~lang =
+  let module Lang = (val lang : Language) in
+  Lang.attribute_to_string kw

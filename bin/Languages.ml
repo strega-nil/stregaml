@@ -1,245 +1,225 @@
 open Cafec
+module Attribute = Parse.Token.Attribute
 module Keyword = Parse.Token.Keyword
 
 module type Language = Parse.Language
 
+type contextual_keywords =
+  | Contextual_keywords :
+      { associativity : Nfc_string.t
+      ; precedence : Nfc_string.t
+      ; start : Nfc_string.t
+      ; end_ : Nfc_string.t
+      ; none : Nfc_string.t }
+      -> contextual_keywords
+
+type keywords =
+  | Keywords :
+      { true_ : Nfc_string.t
+      ; false_ : Nfc_string.t
+      ; match_ : Nfc_string.t
+      ; if_ : Nfc_string.t
+      ; else_ : Nfc_string.t
+      ; infix : Nfc_string.t
+      ; prefix : Nfc_string.t
+      ; group : Nfc_string.t
+      ; func : Nfc_string.t
+      ; type_ : Nfc_string.t
+      ; data : Nfc_string.t
+      ; record : Nfc_string.t
+      ; alias : Nfc_string.t
+      ; let_ : Nfc_string.t
+      ; ref : Nfc_string.t
+      ; mut : Nfc_string.t
+      ; builtin : Nfc_string.t
+      ; underscore : Nfc_string.t
+      ; variant : Nfc_string.t }
+      -> keywords
+
+type attributes =
+  | Attributes : {entrypoint : Nfc_string.t} -> attributes
+
 module type Interface_Language = sig
-  val ckw_Associativity : Nfc_string.t
+  val contextual_keywords : contextual_keywords
 
-  val ckw_Precedence : Nfc_string.t
+  val keywords : keywords
 
-  val ckw_Start : Nfc_string.t
-
-  val ckw_End : Nfc_string.t
-
-  val ckw_None : Nfc_string.t
-
-  val kw_True : Nfc_string.t
-
-  val kw_False : Nfc_string.t
-
-  val kw_Match : Nfc_string.t
-
-  val kw_If : Nfc_string.t
-
-  val kw_Else : Nfc_string.t
-
-  val kw_Infix : Nfc_string.t
-
-  val kw_Prefix : Nfc_string.t
-
-  val kw_Group : Nfc_string.t
-
-  val kw_Func : Nfc_string.t
-
-  val kw_Type : Nfc_string.t
-
-  val kw_Data : Nfc_string.t
-
-  val kw_Record : Nfc_string.t
-
-  val kw_Alias : Nfc_string.t
-
-  val kw_Let : Nfc_string.t
-
-  val kw_Ref : Nfc_string.t
-
-  val kw_Mut : Nfc_string.t
-
-  val kw_Builtin : Nfc_string.t
-
-  val kw_Underscore : Nfc_string.t
-
-  val kw_Variant : Nfc_string.t
+  val attributes : attributes
 end
 
 module Make_Language (L : Interface_Language) : Language = struct
   let contextual_keyword_of_string s =
-    if Nfc_string.equal s L.ckw_Associativity
+    let (Contextual_keywords r) = L.contextual_keywords in
+    if Nfc_string.equal s r.associativity
     then Some Keyword.Contextual.Associativity
-    else if Nfc_string.equal s L.ckw_Precedence
+    else if Nfc_string.equal s r.precedence
     then Some Keyword.Contextual.Precedence
-    else if Nfc_string.equal s L.ckw_Start
+    else if Nfc_string.equal s r.start
     then Some Keyword.Contextual.Start
-    else if Nfc_string.equal s L.ckw_End
+    else if Nfc_string.equal s r.end_
     then Some Keyword.Contextual.End
-    else if Nfc_string.equal s L.ckw_None
+    else if Nfc_string.equal s r.none
     then Some Keyword.Contextual.None
     else None
 
   let contextual_keyword_to_string c =
-    match c with
-    | Keyword.Contextual.Associativity -> L.ckw_Associativity
-    | Keyword.Contextual.Precedence -> L.ckw_Precedence
-    | Keyword.Contextual.Start -> L.ckw_Start
-    | Keyword.Contextual.End -> L.ckw_End
-    | Keyword.Contextual.None -> L.ckw_None
+    let (Contextual_keywords r) = L.contextual_keywords in
+    let s =
+      match c with
+      | Keyword.Contextual.Associativity -> r.associativity
+      | Keyword.Contextual.Precedence -> r.precedence
+      | Keyword.Contextual.Start -> r.start
+      | Keyword.Contextual.End -> r.end_
+      | Keyword.Contextual.None -> r.none
+    in
+    (s :> string)
 
   let keyword_of_string s =
-    if Nfc_string.equal s L.kw_True
+    let (Keywords r) = L.keywords in
+    if Nfc_string.equal s r.true_
     then Some Keyword.True
-    else if Nfc_string.equal s L.kw_False
+    else if Nfc_string.equal s r.false_
     then Some Keyword.False
-    else if Nfc_string.equal s L.kw_Match
+    else if Nfc_string.equal s r.match_
     then Some Keyword.Match
-    else if Nfc_string.equal s L.kw_If
+    else if Nfc_string.equal s r.if_
     then Some Keyword.If
-    else if Nfc_string.equal s L.kw_Else
+    else if Nfc_string.equal s r.else_
     then Some Keyword.Else
-    else if Nfc_string.equal s L.kw_Infix
+    else if Nfc_string.equal s r.infix
     then Some Keyword.Infix
-    else if Nfc_string.equal s L.kw_Prefix
+    else if Nfc_string.equal s r.prefix
     then Some Keyword.Prefix
-    else if Nfc_string.equal s L.kw_Group
+    else if Nfc_string.equal s r.group
     then Some Keyword.Group
-    else if Nfc_string.equal s L.kw_Func
+    else if Nfc_string.equal s r.func
     then Some Keyword.Func
-    else if Nfc_string.equal s L.kw_Type
+    else if Nfc_string.equal s r.type_
     then Some Keyword.Type
-    else if Nfc_string.equal s L.kw_Data
+    else if Nfc_string.equal s r.data
     then Some Keyword.Data
-    else if Nfc_string.equal s L.kw_Record
+    else if Nfc_string.equal s r.record
     then Some Keyword.Record
-    else if Nfc_string.equal s L.kw_Alias
+    else if Nfc_string.equal s r.alias
     then Some Keyword.Alias
-    else if Nfc_string.equal s L.kw_Let
+    else if Nfc_string.equal s r.let_
     then Some Keyword.Let
-    else if Nfc_string.equal s L.kw_Ref
+    else if Nfc_string.equal s r.ref
     then Some Keyword.Ref
-    else if Nfc_string.equal s L.kw_Mut
+    else if Nfc_string.equal s r.mut
     then Some Keyword.Mut
-    else if Nfc_string.equal s L.kw_Builtin
+    else if Nfc_string.equal s r.builtin
     then Some Keyword.Builtin
-    else if Nfc_string.equal s L.kw_Underscore
+    else if Nfc_string.equal s r.underscore
     then Some Keyword.Underscore
-    else if Nfc_string.equal s L.kw_Variant
+    else if Nfc_string.equal s r.variant
     then Some Keyword.Variant
     else None
 
   let keyword_to_string k =
+    let (Keywords r) = L.keywords in
     match k with
-    | Keyword.True -> (L.kw_True :> string)
-    | Keyword.False -> (L.kw_False :> string)
-    | Keyword.Match -> (L.kw_Match :> string)
-    | Keyword.If -> (L.kw_If :> string)
-    | Keyword.Else -> (L.kw_Else :> string)
-    | Keyword.Infix -> (L.kw_Infix :> string)
-    | Keyword.Prefix -> (L.kw_Prefix :> string)
-    | Keyword.Group -> (L.kw_Group :> string)
-    | Keyword.Func -> (L.kw_Func :> string)
-    | Keyword.Type -> (L.kw_Type :> string)
-    | Keyword.Data -> (L.kw_Data :> string)
-    | Keyword.Record -> (L.kw_Record :> string)
-    | Keyword.Alias -> (L.kw_Alias :> string)
-    | Keyword.Let -> (L.kw_Let :> string)
-    | Keyword.Ref -> (L.kw_Ref :> string)
-    | Keyword.Mut -> (L.kw_Mut :> string)
-    | Keyword.Builtin -> (L.kw_Builtin :> string)
-    | Keyword.Underscore -> (L.kw_Underscore :> string)
-    | Keyword.Variant -> (L.kw_Variant :> string)
+    | Keyword.True -> (r.true_ :> string)
+    | Keyword.False -> (r.false_ :> string)
+    | Keyword.Match -> (r.match_ :> string)
+    | Keyword.If -> (r.if_ :> string)
+    | Keyword.Else -> (r.else_ :> string)
+    | Keyword.Infix -> (r.infix :> string)
+    | Keyword.Prefix -> (r.prefix :> string)
+    | Keyword.Group -> (r.group :> string)
+    | Keyword.Func -> (r.func :> string)
+    | Keyword.Type -> (r.type_ :> string)
+    | Keyword.Data -> (r.data :> string)
+    | Keyword.Record -> (r.record :> string)
+    | Keyword.Alias -> (r.alias :> string)
+    | Keyword.Let -> (r.let_ :> string)
+    | Keyword.Ref -> (r.ref :> string)
+    | Keyword.Mut -> (r.mut :> string)
+    | Keyword.Builtin -> (r.builtin :> string)
+    | Keyword.Underscore -> (r.underscore :> string)
+    | Keyword.Variant -> (r.variant :> string)
+
+  let attribute_of_string s =
+    let (Attributes r) = L.attributes in
+    if Nfc_string.equal s r.entrypoint
+    then Some Attribute.Entrypoint
+    else None
+
+  let attribute_to_string att =
+    let (Attributes r) = L.attributes in
+    match att with Attribute.Entrypoint -> (r.entrypoint :> string)
 end
 
 module English = Make_Language (struct
-  let ckw_Associativity = Nfc_string.of_string "associativity"
+  let contextual_keywords =
+    Contextual_keywords
+      { associativity = Nfc_string.of_string "associativity"
+      ; precedence = Nfc_string.of_string "precedence"
+      ; start = Nfc_string.of_string "start"
+      ; end_ = Nfc_string.of_string "end"
+      ; none = Nfc_string.of_string "none" }
 
-  let ckw_Precedence = Nfc_string.of_string "precedence"
+  let keywords =
+    Keywords
+      { true_ = Nfc_string.of_string "true"
+      ; false_ = Nfc_string.of_string "false"
+      ; match_ = Nfc_string.of_string "match"
+      ; if_ = Nfc_string.of_string "if"
+      ; else_ = Nfc_string.of_string "else"
+      ; infix = Nfc_string.of_string "infix"
+      ; prefix = Nfc_string.of_string "prefix"
+      ; group = Nfc_string.of_string "group"
+      ; func = Nfc_string.of_string "func"
+      ; type_ = Nfc_string.of_string "type"
+      ; data = Nfc_string.of_string "data"
+      ; record = Nfc_string.of_string "record"
+      ; alias = Nfc_string.of_string "alias"
+      ; let_ = Nfc_string.of_string "let"
+      ; ref = Nfc_string.of_string "ref"
+      ; mut = Nfc_string.of_string "mut"
+      ; builtin = Nfc_string.of_string "__builtin"
+      ; underscore = Nfc_string.of_string "_"
+      ; variant = Nfc_string.of_string "variant" }
 
-  let ckw_Start = Nfc_string.of_string "start"
-
-  let ckw_End = Nfc_string.of_string "end"
-
-  let ckw_None = Nfc_string.of_string "none"
-
-  let kw_True = Nfc_string.of_string "true"
-
-  let kw_False = Nfc_string.of_string "false"
-
-  let kw_Match = Nfc_string.of_string "match"
-
-  let kw_If = Nfc_string.of_string "if"
-
-  let kw_Else = Nfc_string.of_string "else"
-
-  let kw_Infix = Nfc_string.of_string "infix"
-
-  let kw_Prefix = Nfc_string.of_string "prefix"
-
-  let kw_Group = Nfc_string.of_string "group"
-
-  let kw_Func = Nfc_string.of_string "func"
-
-  let kw_Type = Nfc_string.of_string "type"
-
-  let kw_Data = Nfc_string.of_string "data"
-
-  let kw_Record = Nfc_string.of_string "record"
-
-  let kw_Alias = Nfc_string.of_string "alias"
-
-  let kw_Let = Nfc_string.of_string "let"
-
-  let kw_Ref = Nfc_string.of_string "ref"
-
-  let kw_Mut = Nfc_string.of_string "mut"
-
-  let kw_Builtin = Nfc_string.of_string "__builtin"
-
-  let kw_Underscore = Nfc_string.of_string "_"
-
-  let kw_Variant = Nfc_string.of_string "variant"
+  let attributes =
+    Attributes {entrypoint = Nfc_string.of_string "entrypoint"}
 end)
 
 module Yiddish = Make_Language (struct
-  let ckw_Associativity = Nfc_string.of_string "קאָמפּאַניר"
+  let contextual_keywords =
+    Contextual_keywords
+      { associativity = Nfc_string.of_string "קאָמפּאַניר"
+      ; precedence = Nfc_string.of_string "בכורה"
+      ; start = Nfc_string.of_string "סטאַרט"
+      ; end_ = Nfc_string.of_string "ענד"
+      ; none = Nfc_string.of_string "קײן" }
 
-  let ckw_Precedence = Nfc_string.of_string "בכורה"
+  let keywords =
+    Keywords
+      { true_ = Nfc_string.of_string "אמת"
+      ; false_ = Nfc_string.of_string "פֿאַלש"
+      ; match_ = Nfc_string.of_string "צוזוך"
+      ; if_ = Nfc_string.of_string "אױב"
+      ; else_ = Nfc_string.of_string "אַזיסט"
+      ; infix = Nfc_string.of_string "אינפֿיקס"
+      ; prefix = Nfc_string.of_string "פּריפֿיקס"
+      ; group = Nfc_string.of_string "גרופּע"
+      ; func = Nfc_string.of_string "מאַפּע"
+      ; type_ = Nfc_string.of_string "סאָרט"
+      ; data = Nfc_string.of_string "דאַט"
+      ; (* might also be געגעבענע *)
+        record = Nfc_string.of_string "דיסק"
+      ; variant = Nfc_string.of_string "גירסא"
+      ; (* might also be װאַריאַנט *)
+        alias = Nfc_string.of_string "אַליאַס"
+      ; let_ = Nfc_string.of_string "לאָז"
+      ; ref = Nfc_string.of_string "רעף"
+      ; mut = Nfc_string.of_string "פֿאַר"
+      ; builtin = Nfc_string.of_string "__בילטין"
+      ; underscore = Nfc_string.of_string "_" }
 
-  let ckw_Start = Nfc_string.of_string "סטאַרט"
-
-  let ckw_End = Nfc_string.of_string "ענד"
-
-  let ckw_None = Nfc_string.of_string "קײן"
-
-  let kw_True = Nfc_string.of_string "אמת"
-
-  let kw_False = Nfc_string.of_string "פֿאַלש"
-
-  let kw_Match = Nfc_string.of_string "צוזוך"
-
-  let kw_If = Nfc_string.of_string "אױב"
-
-  let kw_Else = Nfc_string.of_string "אַזיסט"
-
-  let kw_Infix = Nfc_string.of_string "אינפֿיקס"
-
-  let kw_Prefix = Nfc_string.of_string "פּריפֿיקס"
-
-  let kw_Group = Nfc_string.of_string "גרופּע"
-
-  let kw_Func = Nfc_string.of_string "מאַפּע"
-
-  let kw_Type = Nfc_string.of_string "סאָרט"
-
-  let kw_Data = Nfc_string.of_string "דאַט"
-
-  (* might also be געגעבענע *)
-  let kw_Record = Nfc_string.of_string "דיסק"
-
-  let kw_Variant = Nfc_string.of_string "גירסא"
-
-  (* might also be װאַריאַנט *)
-  let kw_Alias = Nfc_string.of_string "אַליאַס"
-
-  let kw_Let = Nfc_string.of_string "לאָז"
-
-  let kw_Ref = Nfc_string.of_string "רעף"
-
-  let kw_Mut = Nfc_string.of_string "פֿאַר"
-
-  let kw_Builtin = Nfc_string.of_string "__בילטין"
-
-  (* unknown what to do for this *)
-  let kw_Underscore = Nfc_string.of_string "_"
+  let attributes =
+    Attributes {entrypoint = Nfc_string.of_string "אײַנגאַנג"}
 end)
 
 let get_lang s =

@@ -1,6 +1,7 @@
 open! Types.Pervasives
 module Ast = Ast
 module Error = Error
+module Lang = Lang
 module Token = Token
 module Type = Type
 
@@ -652,14 +653,15 @@ let parse_attributes (parser : t) :
   | Token.Attribute ->
       eat_token parser ;
       let%bind () = get_specific parser Token.Open_square in
-      let%bind (), sp =
+      let%bind attribute =
         let%bind name, sp = spanned_bind (get_identifier parser) in
-        if Nfc_string.equal name (Nfc_string.of_string "entrypoint")
-        then return ((), sp)
-        else return_err (Error.Unrecognized_attribute name)
+        match Lang.attribute_of_string ~lang:(lang parser) name with
+        | Some Token.Attribute.Entrypoint ->
+            return (Ast.Attribute.Entrypoint, sp)
+        | None -> return_err (Error.Unrecognized_attribute name)
       in
       let%bind () = get_specific parser Token.Close_square in
-      return [(Ast.Attribute.Entry_function, sp)]
+      return [attribute]
   | _ -> return []
 
 let parse_infix_group ~attributes (parser : t) :

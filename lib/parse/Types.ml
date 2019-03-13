@@ -98,6 +98,11 @@ and Token_Keyword_Contextual : sig
 end =
   Token_Keyword_Contextual
 
+and Token_Attribute : sig
+  type t = Entrypoint : t
+end =
+  Token_Attribute
+
 and Type : sig
   (* TODO: Raw, Owned *)
 
@@ -152,7 +157,7 @@ end =
   Type_Definition
 
 and Ast_Attribute : sig
-  type t = Entry_function : t
+  type t = Entrypoint : t
 end =
   Ast_Attribute
 
@@ -300,9 +305,13 @@ module type Language = sig
     Nfc_string.t -> Token_Keyword_Contextual.t option
 
   val contextual_keyword_to_string :
-    Token_Keyword_Contextual.t -> Nfc_string.t
+    Token_Keyword_Contextual.t -> string
 
   val keyword_of_string : Nfc_string.t -> Token_Keyword.t option
 
   val keyword_to_string : Token_Keyword.t -> string
+
+  val attribute_of_string : Nfc_string.t -> Token_Attribute.t option
+
+  val attribute_to_string : Token_Attribute.t -> string
 end

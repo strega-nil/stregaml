@@ -1,3 +1,7 @@
+module Att = Token.Attribute
+module Kw = Token.Keyword
+module Ckw = Token.Keyword.Contextual
+
 let indent_to_string indent = String.make (indent * 2) ' '
 
 let infix_name_string = function
@@ -12,14 +16,21 @@ let infix_to_string = function
 module Attribute = struct
   include Types.Ast_Attribute
 
-  let to_string = function Entry_function -> "entrypoint"
+  let to_string att ~lang =
+    match att with Entrypoint ->
+      Lang.attribute_to_string ~lang Att.Entrypoint
 
-  let spanned_list_to_string attributes =
-    let atts =
-      String.concat ~sep:", "
-        (List.map ~f:(function att, _ -> to_string att) attributes)
-    in
-    "@[" ^ atts ^ "]\n"
+  let spanned_list_to_string attributes ~lang =
+    if List.is_empty attributes
+    then ""
+    else
+      let atts =
+        String.concat ~sep:", "
+          (List.map
+             ~f:(function att, _ -> to_string ~lang att)
+             attributes)
+      in
+      "@[" ^ atts ^ "]\n"
 end
 
 module Implementation_stmt_expr = struct
@@ -30,55 +41,64 @@ module Implementation_stmt_expr = struct
     let name = path @ [Name.to_ident_string name] in
     String.concat ~sep:"::" name
 
-  let rec expr_to_string ?(parens = false) e ~indent =
+  let rec expr_to_string ?(parens = false) e ~indent ~lang =
     let open Types.Ast_Expr in
     let open_paren parens = if parens then "(" else "" in
     let close_paren parens = if parens then ")" else "" in
     let arg_list args =
-      let f (x, _) = expr_to_string x ~indent:(indent + 1) in
+      let f (x, _) = expr_to_string x ~indent:(indent + 1) ~lang in
       String.concat ~sep:", " (List.map args ~f)
     in
     match e with
     | Unit_literal -> "()"
-    | Bool_literal true -> "true"
-    | Bool_literal false -> "false"
+    | Bool_literal true -> Lang.keyword_to_string ~lang Kw.True
+    | Bool_literal false -> Lang.keyword_to_string ~lang Kw.False
     | Integer_literal n -> Int.to_string n
     | Match {cond = cond, _; arms} ->
         let f ((pat, _), (block, _)) =
-          let (Pattern {constructor = const, _; binding = binding, _})
-              =
-            pat
-          in
+          let (Pattern {constructor; binding}) = pat in
+          let const, _ = constructor in
+          let binding, _ = binding in
           String.concat
             [ indent_to_string (indent + 1)
             ; qualified_to_string const
             ; "("
             ; Name.to_ident_string binding
             ; ") => "
-            ; block_to_string ~indent:(indent + 1) block
+            ; block_to_string ~indent:(indent + 1) block ~lang
             ; "\n" ]
         in
         let arms = String.concat (List.map ~f arms) in
         String.concat
-          [ "match ("
-          ; expr_to_string cond ~indent:(indent + 1)
+          [ Lang.keyword_to_string ~lang Kw.Match
+          ; " ("
+          ; expr_to_string cond ~indent:(indent + 1) ~lang
           ; ") {\n"
           ; arms
           ; indent_to_string indent
           ; "}" ]
     | If_else {cond = cond, _; thn = thn, _; els = els, _} ->
         String.concat
-          [ "if ("
-          ; expr_to_string cond ~indent:(indent + 1)
+          [ Lang.keyword_to_string ~lang Kw.If
+          ; " ("
+          ; expr_to_string cond ~indent:(indent + 1) ~lang
           ; ") "
-          ; block_to_string thn ~indent
-          ; " else "
-          ; block_to_string els ~indent ]
+          ; block_to_string thn ~indent ~lang
+          ; " "
+          ; Lang.keyword_to_string ~lang Kw.Else
+          ; " "
+          ; block_to_string els ~indent ~lang ]
     | Name name -> qualified_to_string name
-    | Block (blk, _) -> block_to_string blk ~indent
+    | Block (blk, _) -> block_to_string blk ~indent ~lang
     | Builtin ((name, _), args) ->
         let args = arg_list args in
-        String.concat ["__builtin("; (name :> string); ")("; args; ")"]
+        String.concat
+          [ Lang.keyword_to_string ~lang Kw.Builtin
+          ; "("
+          ; (name :> string)
+          ; ")("
+          ; args
+          ; ")" ]
     | Prefix_operator ((name, _), (expr, _)) ->
         let name =
           match name with
@@ -90,36 +110,37 @@ module Implementation_stmt_expr = struct
         String.concat
           [ open_paren parens
           ; name
-          ; expr_to_string ~indent expr
+          ; expr_to_string ~indent expr ~lang
           ; close_paren parens ]
     | Infix_list ((first, _), rest) ->
         let f ((op, _), (expr, _)) =
           let expr =
-            expr_to_string expr ~parens:true ~indent:(indent + 1)
+            expr_to_string expr ~parens:true ~indent:(indent + 1) ~lang
           in
           String.concat [" "; infix_to_string op; " "; expr]
         in
         let first =
-          expr_to_string first ~parens:true ~indent:(indent + 1)
+          expr_to_string first ~parens:true ~indent:(indent + 1) ~lang
         in
         String.concat (first :: List.map ~f rest)
     | Call ((e, _), args) ->
         let args = arg_list args in
-        String.concat [expr_to_string ~indent e; "("; args; ")"]
+        String.concat [expr_to_string ~indent e ~lang; "("; args; ")"]
     | Place {mutability = mut, _; expr = expr, _} ->
         String.concat
           [ Type.mutability_to_string mut
           ; " "
-          ; expr_to_string expr ~parens:true ~indent:(indent + 1) ]
+          ; expr_to_string expr ~parens:true ~indent:(indent + 1) ~lang
+          ]
     | Reference (place, _) ->
         let place =
-          expr_to_string place ~parens:true ~indent:(indent + 1)
+          expr_to_string place ~parens:true ~indent:(indent + 1) ~lang
         in
         String.concat
           [open_paren parens; "&"; place; close_paren parens]
     | Dereference (expr, _) ->
         let expr =
-          expr_to_string expr ~parens:true ~indent:(indent + 1)
+          expr_to_string expr ~parens:true ~indent:(indent + 1) ~lang
         in
         String.concat [open_paren parens; "*"; expr; close_paren parens]
     | Record_literal {ty = ty, _; members} ->
@@ -128,26 +149,26 @@ module Implementation_stmt_expr = struct
             String.concat
               [ Name.to_ident_string name
               ; " = "
-              ; expr_to_string expr ~indent:(indent + 1) ]
+              ; expr_to_string expr ~indent:(indent + 1) ~lang ]
           in
           String.concat ~sep:"; " (List.map ~f members)
         in
         String.concat [Type.to_string ty; "::{ "; members; " }"]
     | Record_access ((e, _), name) ->
         let record =
-          expr_to_string e ~parens:true ~indent:(indent + 1)
+          expr_to_string e ~parens:true ~indent:(indent + 1) ~lang
         in
         let name = Name.to_ident_string name in
         String.concat
           [open_paren parens; record; "."; name; close_paren parens]
 
   and block_to_string (Types.Ast_Expr_Block.Block {stmts; expr})
-      ~indent =
+      ~indent ~lang =
     let stmts =
       let f (s, _) =
         String.concat
           [ indent_to_string (indent + 1)
-          ; stmt_to_string s ~indent:(indent + 1)
+          ; stmt_to_string s ~indent:(indent + 1) ~lang
           ; ";\n" ]
       in
       String.concat (List.map stmts ~f)
@@ -157,30 +178,35 @@ module Implementation_stmt_expr = struct
       | None -> ""
       | Some (e, _) ->
           indent_to_string (indent + 1)
-          ^ expr_to_string e ~indent:(indent + 1)
+          ^ expr_to_string e ~indent:(indent + 1) ~lang
     in
     String.concat
       ["{\n"; stmts; expr; "\n"; indent_to_string indent; "}"]
 
-  and stmt_to_string self ~indent =
+  and stmt_to_string self ~indent ~lang =
     let open Types.Ast_Stmt in
     match self with
-    | Expression (e, _) -> expr_to_string ~indent e
+    | Expression (e, _) -> expr_to_string ~indent e ~lang
     | Let {name = name, _; is_mut; ty; expr} ->
         let ty =
           match ty with
           | Some (ty, _) -> ": " ^ Type.to_string ty
           | None -> ""
         in
-        let mut = if is_mut then "mut " else "" in
+        let mut =
+          if is_mut
+          then Lang.keyword_to_string ~lang Kw.Mut ^ " "
+          else ""
+        in
         let expr, _ = expr in
         String.concat
-          [ "let "
+          [ Lang.keyword_to_string ~lang Kw.Let
+          ; " "
           ; mut
           ; Name.to_ident_string name
           ; ty
           ; " = "
-          ; expr_to_string expr ~indent ]
+          ; expr_to_string expr ~indent ~lang ]
 end
 
 module Stmt = struct
@@ -229,7 +255,7 @@ module Func = struct
 
   let attributes (Func r) = r.attributes
 
-  let to_string self =
+  let to_string self ~lang =
     let parameters =
       let f (((name, _), (ty, _)), _) =
         String.concat
@@ -243,8 +269,9 @@ module Func = struct
       | None -> ""
     in
     String.concat
-      [ Attribute.spanned_list_to_string (attributes self)
-      ; "func "
+      [ Attribute.spanned_list_to_string ~lang (attributes self)
+      ; Lang.keyword_to_string ~lang Kw.Func
+      ; " "
       ; Name.to_ident_string (name self)
       ; "("
       ; parameters
@@ -252,44 +279,61 @@ module Func = struct
       ; ret_ty
       ; " "
       ; (let body, _ = body self in
-         Expr.Block.to_string ~indent:0 body)
+         Expr.Block.to_string ~indent:0 body ~lang)
       ; "\n" ]
 end
 
 module Infix_group = struct
   include Types.Ast_Infix_group
 
-  let to_string
-      (Infix_group
-        {name = name, _; associativity; precedence; attributes}) =
+  let to_string grp ~lang =
+    let (Infix_group r) = grp in
+    let name, _ = r.name in
     let associativity =
-      match associativity with
-      | Assoc_start -> "start"
-      | Assoc_end -> "end"
-      | Assoc_none -> "none"
+      let ckw =
+        match r.associativity with
+        | Assoc_start -> Ckw.Start
+        | Assoc_end -> Ckw.End
+        | Assoc_none -> Ckw.None
+      in
+      Lang.contextual_keyword_to_string ~lang ckw
     in
     let precedence =
-      let f (Less (id, _)) = "precedence < " ^ (id :> string) in
-      String.concat ~sep:"\n  " (List.map precedence ~f)
+      let f (Less (id, _)) =
+        String.concat
+          [ Lang.contextual_keyword_to_string ~lang Ckw.Precedence
+          ; " < "
+          ; (id :> string) ]
+      in
+      String.concat ~sep:"\n  " (List.map r.precedence ~f)
     in
-    Printf.sprintf {|%sinfix group %s {
-  associativity = %s;
-  %s
-}|}
-      (Attribute.spanned_list_to_string attributes)
-      (name :> string)
-      associativity precedence
+    String.concat
+      [ Attribute.spanned_list_to_string ~lang r.attributes
+      ; Lang.keyword_to_string ~lang Kw.Infix
+      ; " "
+      ; Lang.keyword_to_string ~lang Kw.Group
+      ; " "
+      ; (name :> string)
+      ; " {\n  "
+      ; Lang.contextual_keyword_to_string ~lang Ckw.Associativity
+      ; " = "
+      ; associativity
+      ; ";\n  "
+      ; precedence
+      ; "\n};" ]
 end
 
 module Infix_declaration = struct
   include Types.Ast_Infix_declaration
 
-  let to_string
-      (Infix_declaration
-        {name = name, _; group = group, _; attributes}) =
+  let to_string decl ~lang =
+    let (Infix_declaration r) = decl in
+    let name, _ = r.name in
+    let group, _ = r.group in
     String.concat
-      [ Attribute.spanned_list_to_string attributes
-      ; "infix ("
+      [ Attribute.spanned_list_to_string ~lang r.attributes
+      ; Lang.keyword_to_string ~lang Kw.Infix
+      ; " ("
       ; infix_name_string name
       ; "): "
       ; (group :> string)
@@ -316,17 +360,20 @@ let with_infix_group (Ast r) infix_group =
 
 let with_type (Ast r) type_ = Ast {r with types = type_ :: r.types}
 
-let to_string self =
+let to_string self ~lang =
   let types =
-    let f
-        ( Type.Definition.Definition {name = name, _; kind; attributes}
-        , _ ) =
-      let attributes = Attribute.spanned_list_to_string attributes in
-      match kind with
+    let f (ty, _) =
+      let (Type.Definition.Definition r) = ty in
+      let name, _ = r.name in
+      let attributes =
+        Attribute.spanned_list_to_string ~lang r.attributes
+      in
+      match r.kind with
       | Type.Definition.Alias data ->
           String.concat
             [ attributes
-            ; "type "
+            ; Lang.keyword_to_string ~lang Kw.Type
+            ; " "
             ; (name :> string)
             ; " = "
             ; Type.to_string data
@@ -334,11 +381,14 @@ let to_string self =
       | Type.Definition.User_defined {data} ->
           String.concat
             [ attributes
-            ; "type "
+            ; Lang.keyword_to_string ~lang Kw.Type
+            ; " "
             ; (name :> string)
             ; " {\n"
             ; "  "
-            ; Type.Data.to_string ~name:"data" data
+            ; Type.Data.to_string
+                ~name:(Lang.keyword_to_string ~lang Kw.Data)
+                ~lang data
             ; ";\n}" ]
     in
     if List.is_empty (types self)
@@ -346,7 +396,7 @@ let to_string self =
     else String.concat ~sep:"\n" (List.map ~f (types self)) ^ "\n\n"
   in
   let infix_groups =
-    let f (infix_group, _) = Infix_group.to_string infix_group in
+    let f (infix_group, _) = Infix_group.to_string ~lang infix_group in
     if List.is_empty (infix_groups self)
     then ""
     else
@@ -354,14 +404,16 @@ let to_string self =
       ^ "\n\n"
   in
   let infix_decls =
-    let f (infix_decl, _) = Infix_declaration.to_string infix_decl in
+    let f (infix_decl, _) =
+      Infix_declaration.to_string ~lang infix_decl
+    in
     if List.is_empty (infix_decls self)
     then ""
     else
       String.concat ~sep:"\n" (List.map ~f (infix_decls self)) ^ "\n\n"
   in
   let funcs =
-    let f (func, _) = Func.to_string func in
+    let f (func, _) = Func.to_string ~lang func in
     String.concat ~sep:"\n" (List.map ~f (funcs self))
   in
   String.concat [types; infix_groups; infix_decls; funcs]

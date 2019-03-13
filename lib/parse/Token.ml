@@ -27,6 +27,15 @@ module Keyword = struct
   let to_string k ~lang = Lang.keyword_to_string k ~lang
 end
 
+module Attribute = struct
+  include Types.Token_Attribute
+
+  let equal lhs rhs =
+    match (lhs, rhs) with Entrypoint, Entrypoint -> true
+
+  let to_string a ~lang = Lang.attribute_to_string ~lang a
+end
+
 let equal lhs rhs =
   match (lhs, rhs) with
   | Open_paren, Open_paren -> true

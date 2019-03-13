@@ -27,7 +27,7 @@ let rec to_string : type cat. cat t -> string = function
 module Data = struct
   include Types.Type_Data
 
-  let to_string ?name data =
+  let to_string ?name data ~lang =
     let members_to_string members =
       let f ((name, ty), _) =
         ignore (name : Nfc_string.t) ;
@@ -38,11 +38,14 @@ module Data = struct
     in
     let (Data {kind; members}) = data in
     let kind =
-      match kind with Record -> "record" | Variant -> "variant"
+      match kind with
+      | Record -> Token.Keyword.Record
+      | Variant -> Token.Keyword.Variant
     in
     let name = match name with Some n -> " " ^ n | None -> "" in
     let members = members_to_string members in
-    String.concat [kind; name; " {"; members; "\n  }"]
+    String.concat
+      [Lang.keyword_to_string ~lang kind; name; " {"; members; "\n  }"]
 end
 
 module Definition = Types.Type_Definition

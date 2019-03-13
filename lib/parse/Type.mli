@@ -9,7 +9,8 @@ val to_string : _ t -> string
 module Data : sig
   include module type of struct include Types.Type_Data end
 
-  val to_string : ?name:string -> t -> string
+  val to_string :
+    ?name:string -> t -> lang:(module Types.Language) -> string
 end
 
 module Definition = Types.Type_Definition

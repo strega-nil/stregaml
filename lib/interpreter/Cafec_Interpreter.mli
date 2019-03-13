@@ -8,7 +8,8 @@ module Value :
 
     type ctxt
 
-    val to_string : t -> ctxt -> string
+    val to_string :
+      t -> ctxt -> lang:(module Cafec_Parse.Language) -> string
   end
   with type ctxt := t
 

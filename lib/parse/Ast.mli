@@ -1,13 +1,14 @@
 module Attribute : sig
   include module type of struct include Types.Ast_Attribute end
 
-  val to_string : t -> string
+  val to_string : t -> lang:(module Types.Language) -> string
 end
 
 module Stmt : sig
   include module type of struct include Types.Ast_Stmt end
 
-  val to_string : t -> indent:int -> string
+  val to_string :
+    t -> indent:int -> lang:(module Types.Language) -> string
 end
 
 module Expr : sig
@@ -16,7 +17,8 @@ module Expr : sig
   module Block : sig
     include module type of struct include Types.Ast_Expr_Block end
 
-    val to_string : t -> indent:int -> string
+    val to_string :
+      t -> indent:int -> lang:(module Types.Language) -> string
 
     val stmts : t -> Types.Ast_Stmt.t Spanned.t list
 
@@ -25,7 +27,8 @@ module Expr : sig
     val with_stmt : t -> Types.Ast_Stmt.t Spanned.t -> t
   end
 
-  val to_string : t -> indent:int -> string
+  val to_string :
+    t -> indent:int -> lang:(module Types.Language) -> string
 
   val qualified_path : _ qualified -> Nfc_string.t Spanned.t list
 
@@ -39,7 +42,7 @@ end
 module Func : sig
   include module type of struct include Types.Ast_Func end
 
-  val to_string : t -> string
+  val to_string : t -> lang:(module Types.Language) -> string
 
   val name : t -> Name.anyfix Name.t
 
@@ -55,18 +58,18 @@ end
 module Infix_group : sig
   include module type of struct include Types.Ast_Infix_group end
 
-  val to_string : t -> string
+  val to_string : t -> lang:(module Types.Language) -> string
 end
 
 module Infix_declaration : sig
   include module type of struct include Types.Ast_Infix_declaration end
 
-  val to_string : t -> string
+  val to_string : t -> lang:(module Types.Language) -> string
 end
 
 include module type of struct include Types.Ast end
 
-val to_string : t -> string
+val to_string : t -> lang:(module Types.Language) -> string
 
 val funcs : t -> Func.t Spanned.t list
 

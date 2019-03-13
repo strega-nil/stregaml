@@ -2,6 +2,8 @@ module Ast = Cafec_Typed_ast
 module Expr = Ast.Expr
 module Stmt = Ast.Stmt
 module Type = Ast.Type
+module Lang = Cafec_Parse.Lang
+module Keyword = Cafec_Parse.Token.Keyword
 
 type t =
   | Interpreter :
@@ -30,24 +32,37 @@ module Value = struct
         let f x = ref (clone !x) in
         Record (Array.map ~f r)
 
-  let rec to_string v ctxt =
+  let rec to_string v ctxt ~lang =
     match v with
     | Unit -> "()"
     | Integer n -> Int.to_string n
-    | Bool true -> "true"
-    | Bool false -> "false"
-    | Constructor idx -> "variant::" ^ Int.to_string idx
+    | Bool true -> Lang.keyword_to_string Keyword.True ~lang
+    | Bool false -> Lang.keyword_to_string Keyword.False ~lang
+    | Constructor idx ->
+        Lang.keyword_to_string Keyword.Variant ~lang
+        ^ "::"
+        ^ Int.to_string idx
     | Reference place ->
         let (Types.Expr_result.Place.Place {is_mut; value}) = place in
-        let pointer = if is_mut then "&mut " else "&" in
-        String.concat [pointer; "{"; to_string !value ctxt; "}"]
+        let pointer =
+          if is_mut
+          then "&" ^ Lang.keyword_to_string Keyword.Mut ~lang ^ " "
+          else "&"
+        in
+        String.concat [pointer; "{"; to_string !value ctxt ~lang; "}"]
     | Variant (idx, v) ->
         String.concat
-          ["variant::"; Int.to_string idx; "("; to_string !v ctxt; ")"]
+          [ Lang.keyword_to_string Keyword.Variant ~lang
+          ; "::"
+          ; Int.to_string idx
+          ; "("
+          ; to_string !v ctxt ~lang
+          ; ")" ]
     | Record members ->
         let members =
           let f idx e =
-            String.concat [Int.to_string idx; " = "; to_string !e ctxt]
+            String.concat
+              [Int.to_string idx; " = "; to_string !e ctxt ~lang]
           in
           String.concat_sequence ~sep:"; "
             (Sequence.mapi ~f (Array.to_sequence members))
@@ -55,7 +70,12 @@ module Value = struct
         String.concat ["{ "; members; " }"]
     | Function n ->
         let name, _ = (funcs ctxt).((n :> int)) in
-        Printf.sprintf "<function %s>" (Name.to_ident_string name)
+        String.concat
+          [ "<"
+          ; Lang.keyword_to_string Keyword.Func ~lang
+          ; " "
+          ; Name.to_ident_string name
+          ; ">" ]
 end
 
 module Expr_result = struct

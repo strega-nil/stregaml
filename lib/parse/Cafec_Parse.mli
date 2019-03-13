@@ -1,5 +1,6 @@
 module Ast = Ast
 module Error = Error
+module Lang = Lang
 module Token = Token
 module Type = Type
 open! Types.Pervasives

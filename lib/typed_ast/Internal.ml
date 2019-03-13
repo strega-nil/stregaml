@@ -889,7 +889,7 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
           let atts = D.attributes func in
           match atts with
           | [] -> helper ?found_at arr (i + 1)
-          | [(Attribute.Entry_function, _)] -> (
+          | [(Attribute.Entrypoint, _)] -> (
             match found_at with
             | Some first ->
                 let first =
