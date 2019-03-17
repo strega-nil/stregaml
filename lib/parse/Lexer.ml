@@ -4,10 +4,41 @@ module type Language = Types.Language
 
 exception Bug_lexer of string
 
+(*
+  note: requires 2 characters of lookahead,
+  since we want to support both:
+    123,456
+  and
+    123, 456
+  when lexing a number literal,
+  a separator is treated as either a
+  member or non-member of the literal,
+  based on whether the character _after_
+  the separator is a number-continue.
+
+  In other words:
+    lex(
+      <a : number-start>
+      <b : number-separator>
+      <c : number-continue>
+      ...
+    )
+    = <abc : number>
+  while
+    lex(
+      <a : number-start>
+      <b : number-separator>
+      <c : not number-continue>
+      ...
+    )
+    = <a : number> lex(<b><c>...)
+*)
+type peeked_char = Uchar.t Spanned.t
+
 type t =
   | Lexer :
       { decoder : Uutf.decoder
-      ; mutable peek : Uchar.t option
+      ; mutable peek : (peeked_char * peeked_char option) option
       ; lang : (module Language) }
       -> t
 
@@ -36,6 +67,55 @@ let is_whitespace = Uucp.White.is_white_space
   we are going to wait for someone who knows what a
   person who uses non-western numerals to have Opinions
   about what to do for non-western numbers.
+
+  <number-start> :=
+    <character 0>
+    <character 1>
+    <character 2>
+    <character 3>
+    <character 4>
+    <character 5>
+    <character 6>
+    <character 7>
+    <character 8>
+    <character 9>
+
+  <number-continue 2> :=
+    <character 0>
+    <character 1>
+
+  <number-continue 8> :=
+    <number-continue 2>
+    <character 2>
+    <character 3>
+    <character 4>
+    <character 5>
+    <character 6>
+    <character 7>
+
+  <number-continue 10> :=
+    <number-continue 8>
+    <character 8>
+    <character 9>
+
+  <number-continue 16> :=
+    <number-continue 10>
+    <character A>
+    <character B>
+    <character C>
+    <character D>
+    <character E>
+    <character F>
+    <character a>
+    <character b>
+    <character c>
+    <character d>
+    <character e>
+    <character f>
+
+  <number-separator> :=
+    <character ,>
+    <character .>
 *)
 let is_number_start ch =
   match Uchar.to_char ch with
@@ -52,8 +132,6 @@ let is_number_continue ch base =
       || (ch >=~ 'a' && ch <=~ 'f')
       || (ch >=~ 'A' && ch <=~ 'F')
   | base -> raise (Bug_lexer ("Invalid base: " ^ Int.to_string base))
-
-let is_number_separator ch = ch =~ '-'
 
 (*
   <identifier-start> :=
@@ -139,19 +217,43 @@ let current_span lex =
     ; end_line = line
     ; end_column = col + 1 }
 
+let get_char_from_buffer (Lexer r as lex) : Uchar.t option result =
+  match Uutf.decode r.decoder with
+  | `Await -> assert false
+  | `Uchar uch -> (Ok (Some uch), current_span lex)
+  | `End -> (Ok None, Spanned.Span.made_up)
+  | `Malformed s -> (Error (Error.Malformed_input s), current_span lex)
+
 let peek_ch (Lexer r as lex) : Uchar.t option result =
   match r.peek with
-  | Some uch -> (Ok (Some uch), current_span lex)
+  | Some ((fch, sp), _) -> (Ok (Some fch), sp)
   | None -> (
-    match Uutf.decode r.decoder with
-    | `Await -> assert false
-    | `Uchar uch ->
-        let uch = Some uch in
-        r.peek <- uch ;
-        (Ok uch, current_span lex)
-    | `End -> (Ok None, Spanned.Span.made_up)
-    | `Malformed s ->
-        (Error (Error.Malformed_input s), current_span lex) )
+      match%bind spanned_bind (get_char_from_buffer lex) with
+      | Some fch, sp ->
+          r.peek <- Some ((fch, sp), None) ;
+          (Ok (Some fch), sp)
+      | None, sp -> (Ok None, sp) )
+
+let peek_ch2 (Lexer r as lex) : Uchar.t option result =
+  match r.peek with
+  | Some (_, Some (sch, sp)) -> (Ok (Some sch), sp)
+  | Some ((fch, sp1), None) -> (
+      match%bind spanned_bind (get_char_from_buffer lex) with
+      | Some sch, sp2 ->
+          r.peek <- Some ((fch, sp1), Some (sch, sp2)) ;
+          (Ok (Some sch), sp2)
+      | None, sp2 -> (Ok None, sp2) )
+  | None -> (
+      match%bind spanned_bind (get_char_from_buffer lex) with
+      | None, sp -> (Ok None, sp)
+      | Some fch, sp1 -> (
+          match%bind spanned_bind (get_char_from_buffer lex) with
+          | Some sch, sp2 ->
+              r.peek <- Some ((fch, sp1), Some (sch, sp2)) ;
+              (Ok (Some sch), sp2)
+          | None, sp2 ->
+              r.peek <- Some ((fch, sp1), None) ;
+              (Ok None, sp2) ) )
 
 let next_ch (Lexer r as lex) =
   match peek_ch lex with
@@ -218,12 +320,18 @@ let lex_number lex =
     else return (10, [fst])
   in
   let rec helper lst separator_allowed =
+    let%bind after_ch = peek_ch2 lex in
     let%bind ch = peek_ch lex in
+    let separator ch =
+      match after_ch with
+      | Some after_ch -> ch =~ ',' && is_number_continue after_ch base
+      | None -> false
+    in
     match ch with
     | Some ch when is_number_continue ch base ->
         eat_ch lex ;
         helper (ch :: lst) true
-    | Some ch when is_number_separator ch ->
+    | Some ch when separator ch ->
         if separator_allowed
         then ( eat_ch lex ; helper lst false )
         else return_err Error.Malformed_number_literal

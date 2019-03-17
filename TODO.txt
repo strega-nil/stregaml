@@ -5,12 +5,12 @@ Laid out in order of when I want to do them
     - check for recursive types
   - write an interpreter for MIR
   - LLVM backend
-* localized error messages
 * externals
 * linearity
 * strings
 * polymorphism!
   - syntax: `type Array[T: type, N: UInt]`
+* localized error messages
 * real pattern matching
 * implicit polymorphism!
   - ```cafe
