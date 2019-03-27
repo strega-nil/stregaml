@@ -1,5 +1,5 @@
 Some Notes
----
+===
 
 * The name of the language: it's spelled "café";  one may also use
   "cafe" if in a non-unicode context. The name should be capitalized
@@ -7,7 +7,7 @@ Some Notes
   beginnings of sentences). The name of the compiler is `cafec`.
 
 Code of Conduct
----
+===
 
 * I feel that it's necessary to have a code of conduct. It can be found in
   [code-of-conduct.md][coc].
@@ -20,7 +20,7 @@ Code of Conduct
 * Most of all, be friendly to people.
 
 Contributing
----
+===
 
 As of now, there's not much you can contribute to! However, one place
 where I'd really like help with non-English languages. If you are a
@@ -31,10 +31,10 @@ support non-english languages, especially if you speak a non-European
 language, your help would be much appreciated!
 
 Building
----
+===
 
 Prerequisites
-===
+---
 
 * Jane Street's [base] and [ppx_let]
 * Daniel Bünzli's [uunf], [uutf], and [uucp]
@@ -44,14 +44,14 @@ In order to install dependencies, you should be able to simply run
 `dune external-lib-deps --missing @@default`.
 
 Actually Building
-===
+---
 
 You should be able to (after installing dependencies), run `dune build`.
 If you want to reformat the code base after making edits, run
 `dune build @fmt --auto-promote`.
 
 Testing
-===
+---
 
 The tests in `test/` are not yet even close to useful.
 I hope to work on tests once I finish the lvalue overhaul.

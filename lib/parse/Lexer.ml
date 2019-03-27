@@ -255,25 +255,29 @@ let peek_ch2 (Lexer r as lex) : Uchar.t option result =
               r.peek <- Some ((fch, sp1), None) ;
               (Ok None, sp2) ) )
 
-let next_ch (Lexer r as lex) =
-  match peek_ch lex with
-  | (Result.Ok _, _) as o ->
-      r.peek <- None ;
-      o
-  | (Result.Error _, _) as e -> e
-
-let eat_ch (Lexer lex) =
-  match lex.peek with
-  | Some _ -> lex.peek <- None
+let eat_ch (Lexer r) =
+  match r.peek with
+  | Some (_, Some (sch, sp)) -> r.peek <- Some ((sch, sp), None)
+  | Some (_, None) -> r.peek <- None
   | None ->
       failwith
         "internal error: lexer eat_ch without knowing the character"
 
+let next_ch lex =
+  match peek_ch lex with
+  | (Result.Ok _, _) as o -> eat_ch lex ; o
+  | (Result.Error _, _) as e -> e
+
+(*
+  note : in order to not get whitespace spans included in tokens,
+  this returns a nothing span.
+*)
 let rec eat_whitespace lex =
-  let%bind ch = peek_ch lex in
-  match ch with
-  | Some ch when is_whitespace ch -> eat_ch lex ; eat_whitespace lex
-  | Some _ | None -> return ()
+  match peek_ch lex with
+  | Ok (Some ch), _ when is_whitespace ch ->
+      eat_ch lex ; eat_whitespace lex
+  | Ok _, _ -> return ()
+  | Error e, sp -> (Error e, sp)
 
 (* note:
   these three functions _do not_ do special checking on the first
@@ -380,69 +384,92 @@ let lex_operator lex =
   in
   helper []
 
+let lex_identifier_operator lex =
+  eat_ch lex ;
+  match%bind peek_ch lex with
+  | Some ch when is_ident_start ch -> (
+      let%bind ident = lex_ident lex in
+      match ident with
+      | Token.Identifier id -> return (Token.Identifier_operator id)
+      | tok -> return_err (Error.Identifier_operator_is_keyword tok) )
+  | ch -> return_err (Error.Identifier_operator_start_without_ident ch)
+
 let rec next_token lex =
   let%bind () = eat_whitespace lex in
-  let single_char_tok tok = eat_ch lex ; return tok in
-  let%bind ch = peek_ch lex in
-  match ch with
-  | Some ch when ch =~ '(' -> single_char_tok Token.Open_paren
-  | Some ch when ch =~ ')' -> single_char_tok Token.Close_paren
-  | Some ch when ch =~ '{' -> single_char_tok Token.Open_brace
-  | Some ch when ch =~ '}' -> single_char_tok Token.Close_brace
-  | Some ch when ch =~ '[' -> single_char_tok Token.Open_square
-  | Some ch when ch =~ ']' -> single_char_tok Token.Close_square
-  | Some ch when ch =~ ';' -> single_char_tok Token.Semicolon
-  | Some ch when ch =~ ',' -> single_char_tok Token.Comma
-  | Some ch when ch =~ '.' -> single_char_tok Token.Dot
-  | Some ch when ch =~ '#' -> (
+  let single_char_tok tok sp = eat_ch lex ; (Ok tok, sp) in
+  match peek_ch lex with
+  | Ok None, _ -> return Token.Eof
+  | Error e, sp -> (Error e, sp)
+  | Ok (Some ch), sp ->
+      if ch =~ '('
+      then single_char_tok Token.Open_paren sp
+      else if ch =~ ')'
+      then single_char_tok Token.Close_paren sp
+      else if ch =~ '{'
+      then single_char_tok Token.Open_brace sp
+      else if ch =~ '}'
+      then single_char_tok Token.Close_brace sp
+      else if ch =~ '['
+      then single_char_tok Token.Open_square sp
+      else if ch =~ ']'
+      then single_char_tok Token.Close_square sp
+      else if ch =~ ';'
+      then single_char_tok Token.Semicolon sp
+      else if ch =~ ','
+      then single_char_tok Token.Comma sp
+      else if ch =~ '.'
+      then single_char_tok Token.Dot sp
+      else if ch =~ '#'
+      then lex_comment lex
+      else if ch =~ '\\'
+      then lex_identifier_operator lex
+      else if is_ident_start ch
+      then lex_ident lex
+      else if is_operator_start ch
+      then lex_operator lex
+      else if is_number_start ch
+      then lex_number lex
+      else return_err (Error.Unrecognized_character ch)
+
+and lex_comment lex =
+  eat_ch lex ;
+  let rec block_comment () =
+    let rec eat_the_things () =
+      match next_ch lex with
+      | Ok (Some ch), _ when ch =~ '#' -> (
+        match next_ch lex with
+        | Ok (Some ch), _ when ch =~ '}' -> return ()
+        | Ok (Some ch), _ when ch =~ '{' ->
+            let%bind () = block_comment () in
+            eat_the_things ()
+        | Ok (Some _), _ -> eat_the_things ()
+        | Ok None, _ -> return_err Error.Unclosed_comment
+        | Error e, sp -> (Error e, sp) )
+      | Ok (Some _), _ -> eat_the_things ()
+      | Ok None, _ -> return_err Error.Unclosed_comment
+      | Error e, sp -> (Error e, sp)
+    in
+    eat_the_things ()
+  in
+  let line_comment () =
+    let rec eat_the_things () =
+      let%bind ch = next_ch lex in
+      match ch with
+      | Some ch when ch =~ '\n' || ch =~ '\r' -> return ()
+      | None -> return ()
+      | Some _ -> eat_the_things ()
+    in
+    eat_the_things ()
+  in
+  match peek_ch lex with
+  | Ok (Some ch), _ when ch =~ '{' -> (
       eat_ch lex ;
-      let rec block_comment () =
-        let rec eat_the_things () =
-          let%bind ch = next_ch lex in
-          match ch with
-          | Some ch when ch =~ '}' -> return ()
-          | Some ch when ch =~ '{' ->
-              let%bind () = block_comment () in
-              eat_the_things ()
-          | Some _ -> eat_the_things ()
-          | None -> return_err Error.Unclosed_comment
-        in
-        eat_the_things ()
-      in
-      let line_comment () =
-        let rec eat_the_things () =
-          let%bind ch = next_ch lex in
-          match ch with
-          | Some ch when ch =~ '\n' || ch =~ '\r' -> return ()
-          | None -> return ()
-          | Some _ -> eat_the_things ()
-        in
-        eat_the_things ()
-      in
-      match%bind peek_ch lex with
-      | Some ch when ch =~ '{' ->
-          eat_ch lex ;
-          let%bind () = block_comment () in
-          next_token lex
-      | Some _ ->
-          let%bind () = line_comment () in
-          next_token lex
-      | None -> return Token.Eof )
-  | Some ch when ch =~ '\\' -> (
-      eat_ch lex ;
-      match%bind peek_ch lex with
-      | Some ch when is_ident_start ch -> (
-          let%bind ident = lex_ident lex in
-          match ident with
-          | Token.Identifier id ->
-              return (Token.Identifier_operator id)
-          | tok ->
-              return_err (Error.Identifier_operator_is_keyword tok) )
-      | ch ->
-          return_err (Error.Identifier_operator_start_without_ident ch)
-      )
-  | Some ch when is_ident_start ch -> lex_ident lex
-  | Some ch when is_operator_start ch -> lex_operator lex
-  | Some ch when is_number_start ch -> lex_number lex
-  | Some ch -> return_err (Error.Unrecognized_character ch)
-  | None -> return Token.Eof
+      match block_comment () with
+      | Ok (), _ -> next_token lex
+      | Error e, sp -> (Error e, sp) )
+  | Ok (Some _), _ -> (
+    match line_comment () with
+    | Ok (), _ -> next_token lex
+    | Error e, sp -> (Error e, sp) )
+  | Ok None, _ -> return Token.Eof
+  | Error e, sp -> (Error e, sp)

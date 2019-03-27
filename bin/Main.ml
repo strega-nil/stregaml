@@ -133,13 +133,13 @@ let get_typed_ast args =
   | Ok ty_ast, _ -> ty_ast
 
 let interpret ty_ast args =
-  let ctxt = Interpreter.make ty_ast in
-  match Interpreter.entrypoint ctxt with
+  let ctxt = Ast_interpreter.make ty_ast in
+  match Ast_interpreter.entrypoint ctxt with
   | Some f ->
-      let v = Interpreter.call ctxt f [] in
+      let v = Ast_interpreter.call ctxt f [] in
       Out.output_string Out.stdout "entrypoint returned: " ;
       Out.output_string Out.stdout
-        (Interpreter.Value.to_string ~lang:(args_debug_lang args) v
+        (Ast_interpreter.Value.to_string ~lang:(args_debug_lang args) v
            ctxt) ;
       Out.newline Out.stdout
   | None -> Out.output_string Out.stderr "no entrypoint was found\n"

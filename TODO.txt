@@ -6,6 +6,8 @@ Laid out in order of when I want to do them
   - write an interpreter for MIR
   - LLVM backend
 * externals
+* initial modules
+* response files - JSON
 * linearity
 * strings
 * polymorphism!
