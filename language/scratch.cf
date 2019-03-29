@@ -24,7 +24,7 @@ func (infix +)(x: Int32, y: Int32) -> Int32 {
 
 func sum(x: ref List) -> Int32 {
   match (x) {
-    List::Nil(_unit) => { 0 } }
+    List::Nil(_unit) => { 0 }
     #{
       note: this currently binds to a copy of the list
       in the future, it should bind to a reference

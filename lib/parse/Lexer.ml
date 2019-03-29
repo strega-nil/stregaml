@@ -33,26 +33,144 @@ exception Bug_lexer of string
     )
     = <a : number> lex(<b><c>...)
 *)
-type peeked_char = Uchar.t Spanned.t
+module Lookahead_queue : sig
+  type t
 
-type t =
-  | Lexer :
-      { decoder : Uutf.decoder
-      ; mutable peek : (peeked_char * peeked_char option) option
-      ; lang : (module Language) }
-      -> t
+  val empty : t
 
-let decoder (Lexer r) = r.decoder
+  val is_full : t -> bool
 
-let lang (Lexer r) = r.lang
+  val push_back_exn : t -> Uchar.t Spanned.t -> t
 
-let make ch ~lang =
-  let decoder =
-    Uutf.decoder
-      ~nln:(`NLF (Uchar.of_char '\n'))
-      ~encoding:`UTF_8 (`Channel ch)
-  in
-  Lexer {decoder; peek = None; lang}
+  val peek_front : t -> Uchar.t Spanned.t option
+
+  val peek_back : t -> Uchar.t Spanned.t option
+
+  val pop_front : t -> (t * Uchar.t Spanned.t) option
+end = struct
+  type t =
+    | Zero
+    | One : Uchar.t Spanned.t -> t
+    | Two : {front : Uchar.t Spanned.t; back : Uchar.t Spanned.t} -> t
+
+  let empty = Zero
+
+  let is_full = function Two _ -> true | _ -> false
+
+  let push_back self back =
+    match self with
+    | Zero -> Some (One back)
+    | One front -> Some (Two {front; back})
+    | Two _ -> None
+
+  let push_back_exn self back = Option.value_exn (push_back self back)
+
+  let peek_front = function
+    | Zero -> None
+    | One front -> Some front
+    | Two {front; _} -> Some front
+
+  let peek_back = function
+    | Zero | One _ -> None
+    | Two {back; _} -> Some back
+
+  let pop_front = function
+    | Zero -> None
+    | One front -> Some (Zero, front)
+    | Two {front; back} -> Some (One back, front)
+end
+
+module State : sig
+  type t
+
+  val lang : t -> (module Language)
+
+  val make : Stdio.In_channel.t -> lang:(module Types.Language) -> t
+
+  val peek_ch : t -> Uchar.t option result
+
+  val peek_ch2 : t -> Uchar.t option result
+
+  val eat_ch : t -> unit
+
+  val next_ch : t -> Uchar.t option result
+end = struct
+  type t =
+    | Lexer :
+        { decoder : Uutf.decoder
+        ; mutable lookahead : Lookahead_queue.t
+        ; lang : (module Language) }
+        -> t
+
+  let decoder (Lexer r) = r.decoder
+
+  let lang (Lexer r) = r.lang
+
+  let make ch ~lang =
+    let decoder =
+      Uutf.decoder
+        ~nln:(`NLF (Uchar.of_char '\n'))
+        ~encoding:`UTF_8 (`Channel ch)
+    in
+    Lexer {decoder; lookahead = Lookahead_queue.empty; lang}
+
+  let current_span lex =
+    let open Spanned.Span in
+    let line = Uutf.decoder_line (decoder lex) in
+    let col = Uutf.decoder_col (decoder lex) in
+    Span
+      { start_line = line
+      ; start_column = col
+      ; end_line = line
+      ; end_column = col + 1 }
+
+  let rec fill_buffer (Lexer r as lex) : unit result =
+    if Lookahead_queue.is_full r.lookahead
+    then return ()
+    else
+      match Uutf.decode r.decoder with
+      | `Await -> assert false
+      | `Uchar uch ->
+          let uch = (uch, current_span lex) in
+          r.lookahead <- Lookahead_queue.push_back_exn r.lookahead uch ;
+          fill_buffer lex
+      | `End -> return ()
+      | `Malformed s ->
+          (Error (Error.Malformed_input s), current_span lex)
+
+  let peek_ch (Lexer r as lex) : Uchar.t option result =
+    let%bind () = fill_buffer lex in
+    match Lookahead_queue.peek_front r.lookahead with
+    | Some (uch, sp) -> (Ok (Some uch), sp)
+    | None -> return None
+
+  let peek_ch2 (Lexer r as lex) : Uchar.t option result =
+    let%bind () = fill_buffer lex in
+    match Lookahead_queue.peek_back r.lookahead with
+    | Some (uch, sp) -> (Ok (Some uch), sp)
+    | None -> return None
+
+  let eat_ch (Lexer r) =
+    match Lookahead_queue.pop_front r.lookahead with
+    | Some (lookahead, _) -> r.lookahead <- lookahead
+    | None ->
+        failwith
+          "internal error: lexer eat_ch without knowing the character"
+
+  let next_ch (Lexer r as lex) =
+    let%bind () = fill_buffer lex in
+    match Lookahead_queue.pop_front r.lookahead with
+    | Some (lookahead, (uch, sp)) ->
+        r.lookahead <- lookahead ;
+        (Ok (Some uch), sp)
+    | None -> return None
+end
+
+type t = State.t
+
+let lang = State.lang
+
+let make = State.make
 
 (* the actual lexer functions *)
 let ( =~ ) uch ch = Uchar.equal uch (Uchar.of_char ch)
@@ -207,75 +325,14 @@ let is_operator_start ch =
 
 let is_operator_continue ch = ch =~ '\'' || is_operator_start ch
 
-let current_span lex =
-  let open Spanned.Span in
-  let line = Uutf.decoder_line (decoder lex) in
-  let col = Uutf.decoder_col (decoder lex) in
-  Span
-    { start_line = line
-    ; start_column = col
-    ; end_line = line
-    ; end_column = col + 1 }
-
-let get_char_from_buffer (Lexer r as lex) : Uchar.t option result =
-  match Uutf.decode r.decoder with
-  | `Await -> assert false
-  | `Uchar uch -> (Ok (Some uch), current_span lex)
-  | `End -> (Ok None, Spanned.Span.made_up)
-  | `Malformed s -> (Error (Error.Malformed_input s), current_span lex)
-
-let peek_ch (Lexer r as lex) : Uchar.t option result =
-  match r.peek with
-  | Some ((fch, sp), _) -> (Ok (Some fch), sp)
-  | None -> (
-      match%bind spanned_bind (get_char_from_buffer lex) with
-      | Some fch, sp ->
-          r.peek <- Some ((fch, sp), None) ;
-          (Ok (Some fch), sp)
-      | None, sp -> (Ok None, sp) )
-
-let peek_ch2 (Lexer r as lex) : Uchar.t option result =
-  match r.peek with
-  | Some (_, Some (sch, sp)) -> (Ok (Some sch), sp)
-  | Some ((fch, sp1), None) -> (
-      match%bind spanned_bind (get_char_from_buffer lex) with
-      | Some sch, sp2 ->
-          r.peek <- Some ((fch, sp1), Some (sch, sp2)) ;
-          (Ok (Some sch), sp2)
-      | None, sp2 -> (Ok None, sp2) )
-  | None -> (
-      match%bind spanned_bind (get_char_from_buffer lex) with
-      | None, sp -> (Ok None, sp)
-      | Some fch, sp1 -> (
-          match%bind spanned_bind (get_char_from_buffer lex) with
-          | Some sch, sp2 ->
-              r.peek <- Some ((fch, sp1), Some (sch, sp2)) ;
-              (Ok (Some sch), sp2)
-          | None, sp2 ->
-              r.peek <- Some ((fch, sp1), None) ;
-              (Ok None, sp2) ) )
-
-let eat_ch (Lexer r) =
-  match r.peek with
-  | Some (_, Some (sch, sp)) -> r.peek <- Some ((sch, sp), None)
-  | Some (_, None) -> r.peek <- None
-  | None ->
-      failwith
-        "internal error: lexer eat_ch without knowing the character"
-
-let next_ch lex =
-  match peek_ch lex with
-  | (Result.Ok _, _) as o -> eat_ch lex ; o
-  | (Result.Error _, _) as e -> e
-
 (*
   note : in order to not get whitespace spans included in tokens,
   this returns a nothing span.
 *)
 let rec eat_whitespace lex =
-  match peek_ch lex with
+  match State.peek_ch lex with
   | Ok (Some ch), _ when is_whitespace ch ->
-      eat_ch lex ; eat_whitespace lex
+      State.eat_ch lex ; eat_whitespace lex
   | Ok _, _ -> return ()
   | Error e, sp -> (Error e, sp)
 
@@ -286,10 +343,10 @@ let rec eat_whitespace lex =
 *)
 let lex_ident lex =
   let rec helper lst =
-    let%bind ch = peek_ch lex in
+    let%bind ch = State.peek_ch lex in
     match ch with
     | Some ch when is_ident_continue ch ->
-        eat_ch lex ;
+        State.eat_ch lex ;
         helper (ch :: lst)
     | Some _ | None -> (
         let ident = Nfc_string.of_uchar_list (List.rev lst) in
@@ -302,30 +359,30 @@ let lex_ident lex =
 let lex_number lex =
   let open! Char.O in
   let%bind fst =
-    match%bind next_ch lex with
+    match%bind State.next_ch lex with
     | Some ch when is_number_start ch -> return ch
     | _ -> failwith "internal lexer error"
   in
   let%bind base, buff =
     if Uchar.equal fst (Uchar.of_char '0')
     then
-      let%bind ch = peek_ch lex in
+      let%bind ch = State.peek_ch lex in
       match Option.bind ~f:Uchar.to_char ch with
       | Some 'x' | Some 'X' ->
-          eat_ch lex ;
+          State.eat_ch lex ;
           return (16, [])
       | Some 'o' | Some 'O' ->
-          eat_ch lex ;
+          State.eat_ch lex ;
           return (8, [])
       | Some 'b' | Some 'B' ->
-          eat_ch lex ;
+          State.eat_ch lex ;
           return (2, [])
       | Some _ | None -> return (10, [fst])
     else return (10, [fst])
   in
   let rec helper lst separator_allowed =
-    let%bind after_ch = peek_ch2 lex in
-    let%bind ch = peek_ch lex in
+    let%bind ch = State.peek_ch lex in
+    let%bind after_ch = State.peek_ch2 lex in
     let separator ch =
       match after_ch with
       | Some after_ch -> ch =~ ',' && is_number_continue after_ch base
@@ -333,11 +390,11 @@ let lex_number lex =
     in
     match ch with
     | Some ch when is_number_continue ch base ->
-        eat_ch lex ;
+        State.eat_ch lex ;
         helper (ch :: lst) true
     | Some ch when separator ch ->
         if separator_allowed
-        then ( eat_ch lex ; helper lst false )
+        then ( State.eat_ch lex ; helper lst false )
         else return_err Error.Malformed_number_literal
     | Some _ | None ->
         let char_to_int ch =
@@ -365,10 +422,10 @@ let lex_number lex =
 
 let lex_operator lex =
   let rec helper lst =
-    let%bind ch = peek_ch lex in
+    let%bind ch = State.peek_ch lex in
     match ch with
     | Some ch when is_operator_continue ch ->
-        eat_ch lex ;
+        State.eat_ch lex ;
         helper (ch :: lst)
     | Some _ | None -> (
         let ident = Nfc_string.of_uchar_list (List.rev lst) in
@@ -385,8 +442,8 @@ let lex_operator lex =
   helper []
 
 let lex_identifier_operator lex =
-  eat_ch lex ;
-  match%bind peek_ch lex with
+  State.eat_ch lex ;
+  match%bind State.peek_ch lex with
   | Some ch when is_ident_start ch -> (
       let%bind ident = lex_ident lex in
       match ident with
@@ -396,8 +453,8 @@ let lex_identifier_operator lex =
 
 let rec next_token lex =
   let%bind () = eat_whitespace lex in
-  let single_char_tok tok sp = eat_ch lex ; (Ok tok, sp) in
-  match peek_ch lex with
+  let single_char_tok tok sp = State.eat_ch lex ; (Ok tok, sp) in
+  match State.peek_ch lex with
   | Ok None, _ -> return Token.Eof
   | Error e, sp -> (Error e, sp)
   | Ok (Some ch), sp ->
@@ -432,12 +489,12 @@ let rec next_token lex =
       else return_err (Error.Unrecognized_character ch)
 
 and lex_comment lex =
-  eat_ch lex ;
+  State.eat_ch lex ;
   let rec block_comment () =
     let rec eat_the_things () =
-      match next_ch lex with
+      match State.next_ch lex with
       | Ok (Some ch), _ when ch =~ '#' -> (
-        match next_ch lex with
+        match State.next_ch lex with
         | Ok (Some ch), _ when ch =~ '}' -> return ()
         | Ok (Some ch), _ when ch =~ '{' ->
             let%bind () = block_comment () in
@@ -453,7 +510,7 @@ and lex_comment lex =
   in
   let line_comment () =
     let rec eat_the_things () =
-      let%bind ch = next_ch lex in
+      let%bind ch = State.next_ch lex in
       match ch with
       | Some ch when ch =~ '\n' || ch =~ '\r' -> return ()
       | None -> return ()
@@ -461,9 +518,9 @@ and lex_comment lex =
     in
     eat_the_things ()
   in
-  match peek_ch lex with
+  match State.peek_ch lex with
   | Ok (Some ch), _ when ch =~ '{' -> (
-      eat_ch lex ;
+      State.eat_ch lex ;
       match block_comment () with
       | Ok (), _ -> next_token lex
       | Error e, sp -> (Error e, sp) )
