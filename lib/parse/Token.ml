@@ -6,7 +6,6 @@ module Keyword = struct
 
   let equal lhs rhs =
     match (lhs, rhs) with
-    | False, False -> true
     | Match, Match -> true
     | If, If -> true
     | Else, Else -> true

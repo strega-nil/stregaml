@@ -1,3 +1,9 @@
+#{
+integer type Int32 {
+  bits: 32;
+}
+#}
+
 # note: short for a type with public data and no member functions
 record type Cons {
   value: Int32;
@@ -6,7 +12,7 @@ record type Cons {
 }
 
 variant type List {
-  Nil: Unit;
+  Nil: ();
   Cons: Cons;
 }
 

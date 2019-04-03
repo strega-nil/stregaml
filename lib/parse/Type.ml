@@ -13,6 +13,10 @@ let mutability_to_string = function
 let rec to_string : type cat. cat t -> string = function
   | Named id -> (id :> string)
   | Reference (pointee, _) -> "&" ^ to_string pointee
+  | Tuple xs ->
+      let f (x, _) = to_string x in
+      let xs = String.concat ~sep:", " (List.map xs ~f) in
+      String.concat ["("; xs; ")"]
   | Function {params; ret_ty} ->
       let f (x, _) = to_string x in
       let ret_ty =

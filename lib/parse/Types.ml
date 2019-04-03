@@ -66,8 +66,6 @@ end =
 
 and Token_Keyword : sig
   type t =
-    | True : t
-    | False : t
     | Match : t
     | If : t
     | Else : t
@@ -79,6 +77,7 @@ and Token_Keyword : sig
     | Data : t
     | Record : t
     | Variant : t
+    | Integer : t
     | Alias : t
     | Let : t
     | Ref : t
@@ -119,6 +118,7 @@ and Type : sig
   type _ t =
     | Named : Nfc_string.t -> value t
     | Reference : place t Spanned.t -> value t
+    | Tuple : value t Spanned.t list -> value t
     | Function :
         { params : any t Spanned.t list
         ; ret_ty : any t Spanned.t option }
@@ -188,18 +188,12 @@ and Ast_Expr : sig
         -> pattern
 
   type t =
-    | Unit_literal : t
-    | Bool_literal : bool -> t
     | Integer_literal : int -> t
+    | Tuple_literal : t Spanned.t list -> t
     | Match :
         { cond : t Spanned.t
         ; arms : (pattern Spanned.t * Ast_Expr_Block.t Spanned.t) list
         }
-        -> t
-    | If_else :
-        { cond : t Spanned.t
-        ; thn : Ast_Expr_Block.t Spanned.t
-        ; els : Ast_Expr_Block.t Spanned.t }
         -> t
     | Name : _ qualified -> t
     | Block : Ast_Expr_Block.t Spanned.t -> t

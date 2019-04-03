@@ -3,11 +3,16 @@ module Mutable = Base.Array
 module Impl : sig
   type +'a t
 
+  val empty : 'a t
+
   val to_mutable : 'a t -> 'a Mutable.t
 
   val of_mutable : 'a Mutable.t -> 'a t
 end = struct
   type +'a t = Caml.Obj.t
+
+  (* it doesn't matter which runtime type an empty array has *)
+  let empty = Caml.Obj.repr ([||] : int array)
 
   let to_mutable (type a) (arr : a t) : a Mutable.t = Caml.Obj.obj arr
 
@@ -95,7 +100,7 @@ external get : 'a t -> int -> 'a = "%array_safe_get"
 
 external unsafe_get : 'a t -> int -> 'a = "%array_unsafe_get"
 
-let empty () = Impl.of_mutable [||]
+let empty = Impl.empty
 
 let singleton (type a) (el : a) : a t = Impl.of_mutable [|el|]
 
@@ -110,7 +115,7 @@ let of_sequence (type a) ~(len : int) (seq : a Sequence.t) : a t =
   match Sequence.next seq with
   | None ->
       assert (len = 0) ;
-      empty ()
+      empty
   | Some (el, seq) ->
       let ret = Mutable.create el ~len in
       let length_init = ref 1 in
@@ -147,7 +152,7 @@ let of_sequence_unordered (type a) ~(len : int)
   match Sequence.next seq with
   | None ->
       assert (len = 0) ;
-      Result.Ok (empty ())
+      Result.Ok empty
   | Some ((idx, el), seq) ->
       let ret = Mutable.create el ~len in
       let ret_some = Mutable.create false ~len in

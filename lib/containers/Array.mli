@@ -18,7 +18,7 @@ external get : 'a t -> int -> 'a = "%array_safe_get"
 
 external unsafe_get : 'a t -> int -> 'a = "%array_unsafe_get"
 
-val empty : unit -> 'a t
+val empty : 'a t
 
 val singleton : 'a -> 'a t
 

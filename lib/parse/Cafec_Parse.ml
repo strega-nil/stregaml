@@ -205,14 +205,6 @@ let rec maybe_parse_expression_no_infix (parser : t) :
     parse_all_postfix expr parser
   in
   match%bind spanned_bind (peek_token parser) with
-  | Token.Keyword Keyword.True, sp ->
-      eat_token parser ;
-      let%bind expr = get_postfix (Ast.Expr.Bool_literal true, sp) in
-      return (Some expr)
-  | Token.Keyword Keyword.False, sp ->
-      eat_token parser ;
-      let%bind expr = get_postfix (Ast.Expr.Bool_literal false, sp) in
-      return (Some expr)
   | Token.Integer_literal n, sp ->
       eat_token parser ;
       let%bind expr = get_postfix (Ast.Expr.Integer_literal n, sp) in
@@ -224,7 +216,7 @@ let rec maybe_parse_expression_no_infix (parser : t) :
         | Token.Close_paren, sp' ->
             eat_token parser ;
             get_postfix
-              (Ast.Expr.Unit_literal, Spanned.Span.union sp sp')
+              (Ast.Expr.Tuple_literal [], Spanned.Span.union sp sp')
         | _ ->
             let%bind expr = parse_expression parser in
             let%bind (), sp' =
@@ -240,20 +232,6 @@ let rec maybe_parse_expression_no_infix (parser : t) :
   | Token.Keyword Keyword.Match, _ ->
       let%bind expr = spanned_bind (parse_match_expression parser) in
       let%bind expr = get_postfix expr in
-      return (Some expr)
-  | Token.Keyword Keyword.If, sp ->
-      eat_token parser ;
-      let%bind () = get_specific parser Token.Open_paren in
-      let%bind cond = spanned_bind (parse_expression parser) in
-      let%bind () = get_specific parser Token.Close_paren in
-      let%bind thn = spanned_bind (parse_block parser) in
-      let%bind () = get_specific parser (Token.Keyword Keyword.Else) in
-      let%bind els = spanned_bind (parse_block parser) in
-      let _, sp' = els in
-      let sp = Spanned.Span.union sp sp' in
-      let%bind expr =
-        get_postfix (Ast.Expr.If_else {cond; thn; els}, sp)
-      in
       return (Some expr)
   | Token.Keyword Keyword.Ref, sp ->
       eat_token parser ;

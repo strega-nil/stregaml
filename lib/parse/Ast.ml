@@ -50,10 +50,10 @@ module Implementation_stmt_expr = struct
       String.concat ~sep:", " (List.map args ~f)
     in
     match e with
-    | Unit_literal -> "()"
-    | Bool_literal true -> Lang.keyword_to_string ~lang Kw.True
-    | Bool_literal false -> Lang.keyword_to_string ~lang Kw.False
     | Integer_literal n -> Int.to_string n
+    | Tuple_literal xs ->
+        let args = arg_list xs in
+        String.concat ["("; args; ")"]
     | Match {cond = cond, _; arms} ->
         let f ((pat, _), (block, _)) =
           let (Pattern {constructor; binding}) = pat in
@@ -77,17 +77,6 @@ module Implementation_stmt_expr = struct
           ; arms
           ; indent_to_string indent
           ; "}" ]
-    | If_else {cond = cond, _; thn = thn, _; els = els, _} ->
-        String.concat
-          [ Lang.keyword_to_string ~lang Kw.If
-          ; " ("
-          ; expr_to_string cond ~indent:(indent + 1) ~lang
-          ; ") "
-          ; block_to_string thn ~indent ~lang
-          ; " "
-          ; Lang.keyword_to_string ~lang Kw.Else
-          ; " "
-          ; block_to_string els ~indent ~lang ]
     | Name name -> qualified_to_string name
     | Block (blk, _) -> block_to_string blk ~indent ~lang
     | Builtin ((name, _), args) ->
@@ -216,8 +205,6 @@ module Stmt = struct
 end
 
 module Expr = struct
-  include Types.Ast_Expr
-
   module Block = struct
     include Types.Ast_Expr_Block
 
@@ -230,6 +217,8 @@ module Expr = struct
     let with_stmt (Block r) stmt =
       Block {r with stmts = stmt :: r.stmts}
   end
+
+  include Types.Ast_Expr
 
   let to_string = Implementation_stmt_expr.expr_to_string ~parens:false
 

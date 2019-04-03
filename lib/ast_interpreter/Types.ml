@@ -1,8 +1,7 @@
 module rec Value : sig
   type t =
-    | Unit : t
-    | Bool : bool -> t
     | Integer : int -> t
+    | Tuple : t ref Array.t -> t
     | Function : Function_index.t -> t
     | Reference : Expr_result.Place.t -> t
     | Constructor : int -> t

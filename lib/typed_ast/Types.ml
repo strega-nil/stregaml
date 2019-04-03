@@ -99,18 +99,8 @@ end =
   Error
 
 and Type : sig
-  type builtin =
-    | Unit : builtin
-    | Bool : builtin
-    | Int32 : builtin
-    | Reference : Type_Category.place t -> builtin
-    | Function :
-        { params : Type_Category.any t Array.t
-        ; ret_ty : Type_Category.any t }
-        -> builtin
-
-  and _ t =
-    | Builtin : builtin -> Type_Category.value t
+  type _ t =
+    | Structural : Type_Structural.t -> Type_Category.value t
     | User_defined : int -> Type_Category.value t
     | Place :
         { mutability : Type_Category.mutability
@@ -119,6 +109,17 @@ and Type : sig
     | Any : _ t -> Type_Category.any t
 end =
   Type
+
+and Type_Structural : sig
+  type t =
+    | Tuple : Type_Category.value Type.t Array.t -> t
+    | Reference : Type_Category.place Type.t -> t
+    | Function :
+        { params : Type_Category.any Type.t Array.t
+        ; ret_ty : Type_Category.any Type.t }
+        -> t
+end =
+  Type_Structural
 
 and Type_Category : sig
   type mutability = Cafec_Parse.Type.mutability =
@@ -138,22 +139,22 @@ and Type_Category : sig
 end =
   Type_Category
 
-and Type_Structural : sig
+and Type_Representation : sig
   type members = (Nfc_string.t * Type_Category.value Type.t) Array.t
 
   type t =
-    | Builtin : Type.builtin -> t
+    | Structural : Type_Structural.t -> t
     | Record : members -> t
     | Variant : members -> t
 end =
-  Type_Structural
+  Type_Representation
 
-and Type_Structural_Kind : sig
+and Type_Representation_Kind : sig
   type t = Cafec_Parse.Type.Data.kind =
     | Record
     | Variant
 end =
-  Type_Structural_Kind
+  Type_Representation_Kind
 
 and Ast_Binding : sig
   type t =
@@ -188,19 +189,13 @@ end =
 
 and Ast_Expr : sig
   type variant =
-    | Unit_literal : variant
-    | Bool_literal : bool -> variant
     | Integer_literal : int -> variant
+    | Tuple_literal : t Spanned.t array -> variant
     | Match :
         { cond : t Spanned.t
         ; arms :
             (Type_Category.any Type.t * Ast_Expr_Block.t Spanned.t)
             Array.t }
-        -> variant
-    | If_else :
-        { cond : t Spanned.t
-        ; thn : Ast_Expr_Block.t Spanned.t
-        ; els : Ast_Expr_Block.t Spanned.t }
         -> variant
     | Assign : {dest : t Spanned.t; source : t Spanned.t} -> variant
     | Builtin : Ast_Expr_Builtin.t -> variant

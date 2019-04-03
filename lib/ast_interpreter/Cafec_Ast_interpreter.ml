@@ -23,21 +23,18 @@ module Value = struct
   let function_index_of_int = Types.Function_index.of_int
 
   let rec clone imm =
+    let rclone x = ref (clone !x) in
     match imm with
-    | Unit | Bool _ | Integer _ | Function _ | Reference _
+    | Integer _ | Function _ | Reference _
      |Constructor _ ->
         imm
     | Variant (idx, v) -> Variant (idx, ref (clone !v))
-    | Record r ->
-        let f x = ref (clone !x) in
-        Record (Array.map ~f r)
+    | Tuple r -> Tuple (Array.map ~f:rclone r)
+    | Record r -> Record (Array.map ~f:rclone r)
 
   let rec to_string v ctxt ~lang =
     match v with
-    | Unit -> "()"
     | Integer n -> Int.to_string n
-    | Bool true -> Lang.keyword_to_string Keyword.True ~lang
-    | Bool false -> Lang.keyword_to_string Keyword.False ~lang
     | Constructor idx ->
         Lang.keyword_to_string Keyword.Variant ~lang
         ^ "::"
@@ -58,6 +55,13 @@ module Value = struct
           ; "("
           ; to_string !v ctxt ~lang
           ; ")" ]
+    | Tuple members ->
+        let members =
+          let f e = to_string !e ctxt ~lang in
+          String.concat_sequence ~sep:", "
+            (Sequence.map ~f (Array.to_sequence members))
+        in
+        String.concat ["("; members; ")"]
     | Record members ->
         let members =
           let f idx e =
@@ -154,7 +158,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     let locals = Array.fold stmts ~f ~init:locals in
     match expr with
     | Some (e, _) -> eval ctxt locals e
-    | None -> Expr_result.Value Value.Unit
+    | None -> Expr_result.Value (Value.Tuple Array.empty)
   and eval ctxt locals e =
     let eval_builtin_args (lhs, _) (rhs, _) =
       let lhs =
@@ -171,20 +175,14 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     in
     let (Expr.Expr {variant; _}) = e in
     match variant with
-    | Expr.Unit_literal -> Expr_result.Value Value.Unit
-    | Expr.Bool_literal b -> Expr_result.Value (Value.Bool b)
     | Expr.Integer_literal n -> Expr_result.Value (Value.Integer n)
+    | Expr.Tuple_literal _ -> failwith "unimplemented"
     | Expr.Match {cond = cond, _; arms} -> (
       match Expr_result.to_value (eval ctxt locals cond) with
       | Value.Variant (index, value) ->
           let _, (code, _) = arms.(index) in
           let locals = Object.obj ~is_mut:false !value :: locals in
           eval_block ctxt locals code
-      | _ -> assert false )
-    | Expr.If_else {cond = cond, _; thn = thn, _; els = els, _} -> (
-      match Expr_result.to_value (eval ctxt locals cond) with
-      | Value.Bool true -> eval_block ctxt locals thn
-      | Value.Bool false -> eval_block ctxt locals els
       | _ -> assert false )
     | Expr.Local (Expr.Local.Local {index; _}) ->
         Expr_result.Place (Object.place (List.nth_exn locals index))
@@ -197,9 +195,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | Expr.Builtin (Expr.Builtin.Mul (lhs, rhs)) ->
         let lhs, rhs = eval_builtin_args lhs rhs in
         Expr_result.Value (Value.Integer (lhs * rhs))
-    | Expr.Builtin (Expr.Builtin.Less_eq (lhs, rhs)) ->
-        let lhs, rhs = eval_builtin_args lhs rhs in
-        Expr_result.Value (Value.Bool (lhs <= rhs))
+    | Expr.Builtin (Expr.Builtin.Less_eq _) -> failwith "unimplemented"
     | Expr.Call ((e, _), args) -> (
       match Expr_result.to_value (eval ctxt locals e) with
       | Value.Function func ->
@@ -266,7 +262,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
         | Expr_result.Value _ -> assert false
         | Expr_result.Place place ->
             Expr_result.assign place source ;
-            Expr_result.Value Value.Unit )
+            Expr_result.Value (Value.Tuple Array.empty) )
   in
   let _, blk = (funcs ctxt).((idx :> int)) in
   let args = List.map ~f:(Object.obj ~is_mut:false) args in

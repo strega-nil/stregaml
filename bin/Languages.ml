@@ -15,9 +15,7 @@ type contextual_keywords =
 
 type keywords =
   | Keywords :
-      { true_ : Nfc_string.t
-      ; false_ : Nfc_string.t
-      ; match_ : Nfc_string.t
+      { match_ : Nfc_string.t
       ; if_ : Nfc_string.t
       ; else_ : Nfc_string.t
       ; infix : Nfc_string.t
@@ -27,13 +25,14 @@ type keywords =
       ; type_ : Nfc_string.t
       ; data : Nfc_string.t
       ; record : Nfc_string.t
+      ; variant : Nfc_string.t
+      ; integer : Nfc_string.t
       ; alias : Nfc_string.t
       ; let_ : Nfc_string.t
       ; ref : Nfc_string.t
       ; mut : Nfc_string.t
       ; builtin : Nfc_string.t
-      ; underscore : Nfc_string.t
-      ; variant : Nfc_string.t }
+      ; underscore : Nfc_string.t }
       -> keywords
 
 type attributes =
@@ -76,11 +75,7 @@ module Make_Language (L : Interface_Language) : Language = struct
 
   let keyword_of_string s =
     let (Keywords r) = L.keywords in
-    if Nfc_string.equal s r.true_
-    then Some Keyword.True
-    else if Nfc_string.equal s r.false_
-    then Some Keyword.False
-    else if Nfc_string.equal s r.match_
+    if Nfc_string.equal s r.match_
     then Some Keyword.Match
     else if Nfc_string.equal s r.if_
     then Some Keyword.If
@@ -100,6 +95,10 @@ module Make_Language (L : Interface_Language) : Language = struct
     then Some Keyword.Data
     else if Nfc_string.equal s r.record
     then Some Keyword.Record
+    else if Nfc_string.equal s r.variant
+    then Some Keyword.Variant
+    else if Nfc_string.equal s r.integer
+    then Some Keyword.Integer
     else if Nfc_string.equal s r.alias
     then Some Keyword.Alias
     else if Nfc_string.equal s r.let_
@@ -112,15 +111,11 @@ module Make_Language (L : Interface_Language) : Language = struct
     then Some Keyword.Builtin
     else if Nfc_string.equal s r.underscore
     then Some Keyword.Underscore
-    else if Nfc_string.equal s r.variant
-    then Some Keyword.Variant
     else None
 
   let keyword_to_string k =
     let (Keywords r) = L.keywords in
     match k with
-    | Keyword.True -> (r.true_ :> string)
-    | Keyword.False -> (r.false_ :> string)
     | Keyword.Match -> (r.match_ :> string)
     | Keyword.If -> (r.if_ :> string)
     | Keyword.Else -> (r.else_ :> string)
@@ -131,13 +126,14 @@ module Make_Language (L : Interface_Language) : Language = struct
     | Keyword.Type -> (r.type_ :> string)
     | Keyword.Data -> (r.data :> string)
     | Keyword.Record -> (r.record :> string)
+    | Keyword.Variant -> (r.variant :> string)
+    | Keyword.Integer -> (r.integer :> string)
     | Keyword.Alias -> (r.alias :> string)
     | Keyword.Let -> (r.let_ :> string)
     | Keyword.Ref -> (r.ref :> string)
     | Keyword.Mut -> (r.mut :> string)
     | Keyword.Builtin -> (r.builtin :> string)
     | Keyword.Underscore -> (r.underscore :> string)
-    | Keyword.Variant -> (r.variant :> string)
 
   let attribute_of_string s =
     let (Attributes r) = L.attributes in
@@ -161,9 +157,7 @@ module English = Make_Language (struct
 
   let keywords =
     Keywords
-      { true_ = Nfc_string.of_string "true"
-      ; false_ = Nfc_string.of_string "false"
-      ; match_ = Nfc_string.of_string "match"
+      { match_ = Nfc_string.of_string "match"
       ; if_ = Nfc_string.of_string "if"
       ; else_ = Nfc_string.of_string "else"
       ; infix = Nfc_string.of_string "infix"
@@ -173,13 +167,14 @@ module English = Make_Language (struct
       ; type_ = Nfc_string.of_string "type"
       ; data = Nfc_string.of_string "data"
       ; record = Nfc_string.of_string "record"
+      ; variant = Nfc_string.of_string "variant"
+      ; integer = Nfc_string.of_string "integer"
       ; alias = Nfc_string.of_string "alias"
       ; let_ = Nfc_string.of_string "let"
       ; ref = Nfc_string.of_string "ref"
       ; mut = Nfc_string.of_string "mut"
       ; builtin = Nfc_string.of_string "__builtin"
-      ; underscore = Nfc_string.of_string "_"
-      ; variant = Nfc_string.of_string "variant" }
+      ; underscore = Nfc_string.of_string "_" }
 
   let attributes =
     Attributes {entrypoint = Nfc_string.of_string "entrypoint"}
@@ -196,20 +191,19 @@ module Yiddish = Make_Language (struct
 
   let keywords =
     Keywords
-      { true_ = Nfc_string.of_string "אמת"
-      ; false_ = Nfc_string.of_string "פֿאַלש"
-      ; match_ = Nfc_string.of_string "צוזוך"
+      { match_ = Nfc_string.of_string "צוזוך"
       ; if_ = Nfc_string.of_string "אױב"
       ; else_ = Nfc_string.of_string "אַזיסט"
       ; infix = Nfc_string.of_string "אינפֿיקס"
       ; prefix = Nfc_string.of_string "פּריפֿיקס"
       ; group = Nfc_string.of_string "גרופּע"
-      ; func = Nfc_string.of_string "מאַפּע"
+      ; func = Nfc_string.of_string "פֿונק"
       ; type_ = Nfc_string.of_string "סאָרט"
       ; data = Nfc_string.of_string "דאַט"
       ; (* might also be געגעבענע *)
         record = Nfc_string.of_string "דיסק"
       ; variant = Nfc_string.of_string "גירסא"
+      ; integer = Nfc_string.of_string "גאַנץ"
       ; (* might also be װאַריאַנט *)
         alias = Nfc_string.of_string "אַליאַס"
       ; let_ = Nfc_string.of_string "לאָז"
