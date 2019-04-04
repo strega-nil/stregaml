@@ -60,10 +60,10 @@ place is of type: `%s`|}
       Printf.sprintf
         "Attempted to create a record literal of non-record type `%s`"
         (Type.to_string ty ~ctxt)
-  | Record_literal_duplicate_members member ->
+  | Record_literal_duplicate_fields field ->
       Printf.sprintf
-        "Record literal - member `%s` initialized multiple times"
-        (member :> string)
+        "Record literal - field `%s` initialized multiple times"
+        (field :> string)
   | Record_literal_incorrect_type {field; field_ty; member_ty} ->
       Printf.sprintf
         {|Record literal - initializing member `%s` with incorrect type:
@@ -86,7 +86,7 @@ place is of type: `%s`|}
         "Attempted to access the `%s` member of a non-record type: `%s`"
         (Name.to_ident_string member)
         (Type.to_string ty ~ctxt)
-  | Record_access_non_member (ty, member) ->
+  | Record_access_non_field (ty, member) ->
       Printf.sprintf
         "Attempted to access the `%s` member of a type without that member: `%s`"
         (Name.to_ident_string member)
@@ -108,6 +108,10 @@ place is of type: `%s`|}
   | Match_missing_branch name ->
       Printf.sprintf "`match` expression is missing pattern: `%s`"
         (name :> string)
+  | Match_not_binding_data ->
+      Printf.sprintf "`match` arm of variant doesn't bind the data"
+  | Match_binding_without_data ->
+      Printf.sprintf "`match` arm of variant binds to nonexistent data"
   | Pattern_of_wrong_type {expected; found} ->
       Printf.sprintf
         {|`match` pattern of incorrect type:

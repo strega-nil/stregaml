@@ -36,7 +36,7 @@ module Expr : sig
 
   val pattern_constructor : pattern -> Name.nonfix qualified Spanned.t
 
-  val pattern_binding : pattern -> Name.anyfix Name.t Spanned.t
+  val pattern_binding : pattern -> Name.anyfix Name.t Spanned.t option
 end
 
 module Func : sig

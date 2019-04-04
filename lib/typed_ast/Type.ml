@@ -54,6 +54,8 @@ module Representation = Types.Type_Representation
 let unit = Structural (Structural.Tuple Array.empty)
 
 module Context = struct
+  type typedef = Nfc_string.t Spanned.t * Category.value Types.Type.t
+
   type user_type = User_type : {data : Representation.t} -> user_type
 
   let user_type_data (User_type r) = r.data
@@ -61,9 +63,7 @@ module Context = struct
   type t =
     | Context :
         { user_types : user_type Array.t
-        ; names :
-            (Nfc_string.t Spanned.t * Category.value Types.Type.t)
-            Array.t }
+        ; names : typedef Array.t }
         -> t
 
   let make lst =
@@ -120,7 +120,7 @@ module Context = struct
         | n -> return (User_defined n) )
       | PType.Place {mutability; ty} ->
           let%bind ty = get_type_sp ty in
-          let (mutability, _) = mutability in
+          let mutability, _ = mutability in
           return (Place {mutability; ty})
       | PType.Reference p ->
           let%bind pointee = get_type_sp p in
@@ -167,24 +167,31 @@ module Context = struct
     in
     let%bind user_types =
       let f (_, def) =
-        let module Data = PType.Data in
         let%bind data =
-          let typed_members lst =
-            let f ((name, ty), sp) =
-              let%bind () = with_span sp in
-              let%bind ty = get_ast_type ty in
-              return (name, ty)
-            in
-            Return.Array.of_list_map ~f lst
-          in
           match def with
-          | Data.Record members ->
-              let%bind members = typed_members members in
-              return (Representation.Record members)
-          | Data.Variant members ->
-              let%bind members = typed_members members in
-              return (Representation.Variant members)
-          | Data.Integer {bits} ->
+          | PType.Data.Record {fields} ->
+              let%bind fields =
+                let f (x : PType.Data.field Spanned.t) =
+                  let ((name, (ty, tsp)), sp) = x in
+                  let%bind ty = get_ast_type ty in
+                  return ((name, (ty, tsp)), sp)
+                in
+                Return.Array.of_list_map ~f fields
+              in
+              return (Representation.Record {fields})
+          | PType.Data.Variant {variants} ->
+              let%bind variants =
+                let f ((name, ty), sp) =
+                  match ty with
+                  | Some (ty, tsp) ->
+                      let%bind ty = get_ast_type ty in
+                      return ((name, Some (ty, tsp)), sp)
+                  | None -> return ((name, None), sp)
+                in
+                Return.Array.of_list_map ~f variants
+              in
+              return (Representation.Variant {variants})
+          | PType.Data.Integer {bits} ->
               return (Representation.Integer {bits})
         in
         return (User_type {data})
@@ -222,7 +229,7 @@ let rec of_untyped : type cat.
   | U.Reference pointee ->
       let%bind pointee = of_untyped pointee ~ctxt in
       return (Structural (S.Reference pointee))
-  | U.Tuple _ -> failwith "unimplemented"
+  | U.Tuple _ -> raise Unimplemented
   | U.Function {params; ret_ty} ->
       let f ty = of_untyped ty ~ctxt in
       let default = return (Any unit) in

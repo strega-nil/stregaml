@@ -31,26 +31,32 @@ let rec to_string : type cat. cat t -> string = function
 module Data = struct
   include Types.Type_Data
 
-  let record m = Record m
-
-  let variant m = Variant m
-
   let to_string ?name data ~lang =
-    let members_to_string members =
-      let f ((name, ty), _) =
-        ignore (name : Nfc_string.t) ;
-        String.concat
-          ["\n    "; (name :> string); ": "; to_string ty; ";"]
-      in
-      String.concat (List.map members ~f)
-    in
-    let (kind, data) =
+    let kind, data =
       match data with
-      | Record m -> (Token.Keyword.Record, members_to_string m)
-      | Variant m -> (Token.Keyword.Variant, members_to_string m)
+      | Record {fields} ->
+          let f ((name, ty), _) =
+            let (name, _) : Nfc_string.t Spanned.t = name in
+            let (ty, _) = ty in
+            String.concat
+              ["\n    "; (name :> string); ": "; to_string ty; ";"]
+          in
+          let fields = String.concat (List.map fields ~f) in
+          (Token.Keyword.Record, fields)
+      | Variant {variants} ->
+          let f ((name, ty), _) =
+            let (name, _) : Nfc_string.t Spanned.t = name in
+            match ty with
+            | Some (ty, _) ->
+                String.concat
+                  ["\n    "; (name :> string); ": "; to_string ty; ";"]
+            | None -> String.concat ["\n    "; (name :> string); ";"]
+          in
+          let variants = String.concat (List.map variants ~f) in
+          (Token.Keyword.Variant, variants)
       | Integer {bits} ->
-          let data = String.concat
-            [ "\n    bits = "; Int.to_string bits; ";" ]
+          let data =
+            String.concat ["\n    bits = "; Int.to_string bits; ";"]
           in
           (Token.Keyword.Integer, data)
     in

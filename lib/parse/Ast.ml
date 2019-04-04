@@ -58,13 +58,17 @@ module Implementation_stmt_expr = struct
         let f ((pat, _), (block, _)) =
           let (Pattern {constructor; binding}) = pat in
           let const, _ = constructor in
-          let binding, _ = binding in
+          let binding =
+            match binding with
+            | Some (binding, _) ->
+                String.concat ["("; Name.to_ident_string binding; ")"]
+            | None -> ""
+          in
           String.concat
             [ indent_to_string (indent + 1)
             ; qualified_to_string const
-            ; "("
-            ; Name.to_ident_string binding
-            ; ") => "
+            ; binding
+            ; " => "
             ; block_to_string ~indent:(indent + 1) block ~lang
             ; "\n" ]
         in
@@ -132,17 +136,17 @@ module Implementation_stmt_expr = struct
           expr_to_string expr ~parens:true ~indent:(indent + 1) ~lang
         in
         String.concat [open_paren parens; "*"; expr; close_paren parens]
-    | Record_literal {ty = ty, _; members} ->
-        let members =
+    | Record_literal {ty = ty, _; fields} ->
+        let fields =
           let f ((name, (expr, _)), _) =
             String.concat
               [ Name.to_ident_string name
               ; " = "
               ; expr_to_string expr ~indent:(indent + 1) ~lang ]
           in
-          String.concat ~sep:"; " (List.map ~f members)
+          String.concat ~sep:"; " (List.map ~f fields)
         in
-        String.concat [Type.to_string ty; "::{ "; members; " }"]
+        String.concat [Type.to_string ty; "::{ "; fields; " }"]
     | Record_access ((e, _), name) ->
         let record =
           expr_to_string e ~parens:true ~indent:(indent + 1) ~lang

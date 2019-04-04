@@ -346,18 +346,25 @@ and parse_match_expression (parser : t) : Ast.Expr.t result =
         let%bind constructor =
           spanned_bind (parse_qualified_name parser)
         in
-        let%bind () = get_specific parser Token.Open_paren in
-        let%bind binding = spanned_bind (get_name parser) in
-        let%bind () = get_specific parser Token.Close_paren in
+        let%bind binding, pattern_sp =
+          match%bind maybe_get_specific parser Token.Open_paren with
+          | Some () ->
+            let%bind binding = spanned_bind (get_name parser) in
+            let%bind () = get_specific parser Token.Close_paren in
+            let pattern_sp =
+              let _, csp = constructor in
+              let _, bsp = binding in
+              Spanned.Span.union csp bsp
+            in
+            return ((Some binding), pattern_sp)
+          | None ->
+            let _, pattern_sp = constructor in
+            return (None, pattern_sp)
+        in
         let%bind () = get_specific parser Token.Thicc_arrow in
         let%bind block = spanned_bind (parse_block parser) in
         let%bind rest = parse_match_arms parser in
         let pattern =
-          let pattern_sp =
-            let _, csp = constructor in
-            let _, bsp = binding in
-            Spanned.Span.union csp bsp
-          in
           (Ast.Expr.Pattern {constructor; binding}, pattern_sp)
         in
         let arm = (pattern, block) in
@@ -388,8 +395,8 @@ and parse_record_literal (parser : t)
     return (name, expr)
   in
   let%bind () = get_specific parser Token.Open_brace in
-  let%bind members =
-    parse_list parser ~f ~sep:Token.Semicolon ~close:Token.Close_brace
+  let%bind fields =
+    parse_list parser ~f ~sep:Token.Comma ~close:Token.Close_brace
       ~expected:Error.Expected.Variable_decl
   in
   let%bind () = get_specific parser Token.Close_brace in
@@ -398,7 +405,7 @@ and parse_record_literal (parser : t)
     | [(ty, _)], sp -> (Type.Named ty, sp)
     | _ -> failwith "no paths in types yet"
   in
-  return (Ast.Expr.Record_literal {ty; members})
+  return (Ast.Expr.Record_literal {ty; fields})
 
 and maybe_parse_expression (parser : t) : Ast.Expr.t option result =
   match%bind spanned_bind (maybe_parse_expression_no_infix parser) with
@@ -481,12 +488,12 @@ and parse_value_type (parser : t) : Type.value Type.t result =
       return (Type.Named id)
   | Token.Open_paren ->
       eat_token parser ;
-      let%bind members =
+      let%bind fields =
         parse_list parser ~f:parse_value_type ~sep:Token.Comma
           ~close:Token.Close_paren ~expected:Error.Expected.Type
       in
       let%bind () = get_specific parser Token.Close_paren in
-      return (Type.Tuple members)
+      return (Type.Tuple fields)
   | Token.Keyword Keyword.Func ->
       eat_token parser ;
       let%bind () = get_specific parser Token.Open_paren in
@@ -526,47 +533,51 @@ and parse_type (parser : t) : Type.any Type.t result =
         , sp )
     | Result.Error e, sp -> (Result.Error e, sp)
 
-and parse_data_members (parser : t) : Type.Data.members result =
+and parse_record_data (parser : t) : Type.Data.field Spanned.t list result =
   let%bind () = get_specific parser Token.Open_brace in
-  let%bind members =
+  let%bind fields =
     let f parser =
-      let%bind name = get_identifier parser in
+      let%bind name = spanned_bind (get_identifier parser) in
       let%bind () = get_specific parser Token.Colon in
-      let%bind ty = parse_value_type parser in
+      let%bind ty = spanned_bind (parse_value_type parser) in
       return (name, ty)
     in
-    parse_list parser ~f ~sep:Token.Semicolon ~close:Token.Close_brace
+    parse_list parser ~f ~sep:Token.Comma ~close:Token.Close_brace
       ~expected:Error.Expected.Variable_decl
   in
   let%bind () = get_specific parser Token.Close_brace in
-  return members
+  return fields
 
-(* for simple types of the form <kind> type X { ... } *)
-and parse_simple_type ~(kind : Type.Data.members -> Type.Data.t) ~attributes (parser : t)
-    : Type.Definition.t result =
-  let%bind () = get_specific parser (Token.Keyword Keyword.Type) in
-  let%bind name = spanned_bind (get_identifier parser) in
-  let%bind members = parse_data_members parser in
-  let data = kind members in
-  let kind = Type.Definition.User_defined {data} in
-  return (Type.Definition.Definition {kind; name; attributes})
+and parse_variant_data (parser : t) : Type.Data.variant Spanned.t list result =
+  let%bind () = get_specific parser Token.Open_brace in
+  let%bind fields =
+    let f parser =
+      let%bind name = spanned_bind (get_identifier parser) in
+      let%bind ty =
+        match%bind maybe_get_specific parser Token.Colon with
+        | Some () ->
+          let%bind ty = spanned_bind (parse_value_type parser) in
+          return (Some ty)
+        | None -> return None
+      in
+      return (name, ty)
+    in
+    parse_list parser ~f ~sep:Token.Comma ~close:Token.Close_brace
+      ~expected:Error.Expected.Variable_decl
+  in
+  let%bind () = get_specific parser Token.Close_brace in
+  return fields
 
-and parse_simple_integer_type (parser : t) ~attributes
-    : Type.Definition.t result =
-  let%bind () = get_specific parser (Token.Keyword Keyword.Type) in
-  let%bind name = spanned_bind (get_identifier parser) in
-  let%bind bits = parse_integer_data_info parser in
-  let data = Type.Data.Integer {bits} in
-  let kind = Type.Definition.User_defined {data} in
-  return (Type.Definition.Definition {kind; name; attributes})
-
-and parse_integer_data_info (parser : t) : int result =
+(* TODO(ubsan): turn this into a parse_list parser *)
+and parse_integer_data (parser : t) : int result =
   let%bind () = get_specific parser Token.Open_brace in
   let%bind () =
     let%bind id = get_identifier parser in
     match Lang.contextual_keyword_of_string ~lang:(lang parser) id with
     | Some Token.Keyword.Contextual.Bits -> return ()
-    | Some _ | None -> unexpected (Token.Identifier id) Error.Expected.Integer_data_member
+    | Some _ | None ->
+        unexpected (Token.Identifier id)
+          Error.Expected.Integer_data_member
   in
   let%bind () = get_specific parser Ctxt_operator.equal_tok in
   let%bind bits =
@@ -574,10 +585,35 @@ and parse_integer_data_info (parser : t) : int result =
     | Token.Integer_literal i -> return i
     | tok -> unexpected tok Error.Expected.Integer_literal
   in
-  let%bind () = get_specific parser Token.Semicolon in
+  let%bind _ = maybe_get_specific parser Token.Comma in
   let%bind () = get_specific parser Token.Close_brace in
   return bits
 
+and parse_record_simple (parser : t) ~attributes : Type.Definition.t result =
+  let%bind () = get_specific parser (Token.Keyword Keyword.Type) in
+  let%bind name = spanned_bind (get_identifier parser) in
+  let%bind fields = parse_record_data parser in
+  let data = Type.Data.Record {fields} in
+  let kind = Type.Definition.User_defined {data} in
+  return (Type.Definition.Definition {kind; name; attributes})
+
+and parse_variant_simple (parser : t) ~attributes : Type.Definition.t result =
+  let%bind () = get_specific parser (Token.Keyword Keyword.Type) in
+  let%bind name = spanned_bind (get_identifier parser) in
+  let%bind variants = parse_variant_data parser in
+  let data = Type.Data.Variant {variants} in
+  let kind = Type.Definition.User_defined {data} in
+  return (Type.Definition.Definition {kind; name; attributes})
+
+
+and parse_integer_simple (parser : t) ~attributes :
+    Type.Definition.t result =
+  let%bind () = get_specific parser (Token.Keyword Keyword.Type) in
+  let%bind name = spanned_bind (get_identifier parser) in
+  let%bind bits = parse_integer_data parser in
+  let data = Type.Data.Integer {bits} in
+  let kind = Type.Definition.User_defined {data} in
+  return (Type.Definition.Definition {kind; name; attributes})
 
 and maybe_parse_type_annotation (parser : t) :
     Type.any Type.t Spanned.t option result =
@@ -661,6 +697,7 @@ and parse_block (parser : t) : Ast.Expr.Block.t result =
   let%bind () = get_specific parser Token.Open_brace in
   parse_block_no_open parser
 
+(* TODO(ubsan): turn this into a parse_list parser *)
 let parse_attributes (parser : t) :
     Ast.Attribute.t Spanned.t list result =
   match%bind peek_token parser with
@@ -678,6 +715,7 @@ let parse_attributes (parser : t) :
       return [attribute]
   | _ -> return []
 
+(* TODO(ubsan): turn this into a parse_list parser *)
 let parse_infix_group ~attributes (parser : t) :
     Ast.Infix_group.t result =
   let module I = Ast.Infix_group in
@@ -707,7 +745,7 @@ let parse_infix_group ~attributes (parser : t) :
                 failwith "greater precedence not yet supported"
             | tok -> unexpected tok Error.Expected.Precedence
           in
-          let%bind () = get_specific parser Token.Semicolon in
+          let%bind () = get_specific parser Token.Comma in
           helper name associativity (relation :: precedence)
       | Some Token.Keyword.Contextual.Associativity ->
           let%bind () = get_specific parser Ctxt_operator.equal_tok in
@@ -726,7 +764,7 @@ let parse_infix_group ~attributes (parser : t) :
             | Some Token.Keyword.Contextual.None -> return I.Assoc_none
             | _ -> unexpected tok Error.Expected.Associativity
           in
-          let%bind () = get_specific parser Token.Semicolon in
+          let%bind () = get_specific parser Token.Comma in
           if Option.is_none associativity
           then helper name (Some associativity') precedence
           else
@@ -778,19 +816,13 @@ let parse_item (parser : t) : Item.t option result =
           in
           return (Some (Item.Infix_declaration infix_decl)) )
   | Token.Keyword Keyword.Record ->
-      let%bind def =
-        parse_simple_type ~kind:Type.Data.record ~attributes parser
-      in
+      let%bind def = parse_record_simple ~attributes parser in
       return (Some (Item.Type_definition def))
   | Token.Keyword Keyword.Variant ->
-      let%bind def =
-        parse_simple_type ~kind:Type.Data.variant ~attributes parser
-      in
+      let%bind def = parse_variant_simple ~attributes parser in
       return (Some (Item.Type_definition def))
   | Token.Keyword Keyword.Integer ->
-      let%bind def =
-        parse_simple_integer_type ~attributes parser
-      in
+      let%bind def = parse_integer_simple ~attributes parser in
       return (Some (Item.Type_definition def))
   | Token.Keyword Keyword.Type ->
       let%bind name = spanned_bind (get_identifier parser) in
@@ -807,23 +839,23 @@ let parse_item (parser : t) : Item.t option result =
             let%bind data =
               match%bind next_token parser with
               | Token.Keyword Keyword.Record ->
-                let%bind () =
-                  get_specific parser (Token.Keyword Keyword.Data)
-                in
-                let%bind members = parse_data_members parser in
-                return (Type.Data.Record members)
+                  let%bind () =
+                    get_specific parser (Token.Keyword Keyword.Data)
+                  in
+                  let%bind fields = parse_record_data parser in
+                  return (Type.Data.Record {fields})
               | Token.Keyword Keyword.Variant ->
-                let%bind () =
-                  get_specific parser (Token.Keyword Keyword.Data)
-                in
-                let%bind members = parse_data_members parser in
-                return (Type.Data.Variant members)
+                  let%bind () =
+                    get_specific parser (Token.Keyword Keyword.Data)
+                  in
+                  let%bind variants = parse_variant_data parser in
+                  return (Type.Data.Variant{variants})
               | Token.Keyword Keyword.Integer ->
-                let%bind () =
-                  get_specific parser (Token.Keyword Keyword.Data)
-                in
-                let%bind bits = parse_integer_data_info parser in
-                return (Type.Data.Integer {bits})
+                  let%bind () =
+                    get_specific parser (Token.Keyword Keyword.Data)
+                  in
+                  let%bind bits = parse_integer_data parser in
+                  return (Type.Data.Integer {bits})
               | tok -> unexpected tok Error.Expected.Data
             in
             let%bind () = get_specific parser Token.Close_brace in

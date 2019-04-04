@@ -27,7 +27,7 @@ module rec Error : sig
     | Mutable_reference_taken_to_immutable_place : t
     | Dereference_of_non_reference : Type_Category.value Type.t -> t
     | Record_literal_non_record_type : Type_Category.value Type.t -> t
-    | Record_literal_duplicate_members : Nfc_string.t -> t
+    | Record_literal_duplicate_fields : Nfc_string.t -> t
     | Record_literal_incorrect_type :
         { field : Name.nonfix Name.t
         ; field_ty : Type_Category.value Type.t
@@ -42,7 +42,7 @@ module rec Error : sig
     | Record_access_non_record_type :
         Type_Category.value Type.t * Name.nonfix Name.t
         -> t
-    | Record_access_non_member :
+    | Record_access_non_field :
         Type_Category.value Type.t * Name.nonfix Name.t
         -> t
     | Match_non_variant_type : Type_Category.value Type.t -> t
@@ -52,6 +52,8 @@ module rec Error : sig
         -> t
     | Match_repeated_branches : Nfc_string.t -> t
     | Match_missing_branch : Nfc_string.t -> t
+    | Match_not_binding_data : t
+    | Match_binding_without_data : t
     | Pattern_of_wrong_type :
         { expected : Type_Category.value Type.t
         ; found : Type_Category.value Type.t }
@@ -140,12 +142,16 @@ end =
   Type_Category
 
 and Type_Representation : sig
-  type members = (Nfc_string.t * Type_Category.value Type.t) Array.t
+  type field =
+    Nfc_string.t Spanned.t * Type_Category.value Type.t Spanned.t
+
+  type variant =
+    Nfc_string.t Spanned.t * Type_Category.value Type.t Spanned.t option
 
   type t =
     | Structural : Type_Structural.t -> t
-    | Record : members -> t
-    | Variant : members -> t
+    | Record : {fields : field Spanned.t Array.t} -> t
+    | Variant : {variants : variant Spanned.t Array.t} -> t
     | Integer : {bits : int} -> t
 end =
   Type_Representation
@@ -182,14 +188,15 @@ end =
   Ast_Expr_Block
 
 and Ast_Expr : sig
+  type _match_arm =
+    Type_Category.any Type.t option * Ast_Expr_Block.t Spanned.t
+
   type variant =
     | Integer_literal : int -> variant
     | Tuple_literal : t Spanned.t array -> variant
     | Match :
         { cond : t Spanned.t
-        ; arms :
-            (Type_Category.any Type.t * Ast_Expr_Block.t Spanned.t)
-            Array.t }
+        ; arms : _match_arm Array.t }
         -> variant
     | Assign : {dest : t Spanned.t; source : t Spanned.t} -> variant
     | Builtin : Ast_Expr_Builtin.t -> variant
@@ -199,7 +206,7 @@ and Ast_Expr : sig
     | Dereference : t Spanned.t -> variant
     | Record_literal :
         { ty : Type_Category.value Type.t Spanned.t
-        ; members : t Array.t }
+        ; fields : t Array.t }
         -> variant
     | Record_access : t Spanned.t * int -> variant
     | Global_function : int -> variant

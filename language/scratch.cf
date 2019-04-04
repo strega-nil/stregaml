@@ -1,25 +1,30 @@
+variant type Bool {
+  False,
+  True,
+}
+
 integer type Int32 {
-  bits = 32;
+  bits = 32,
 }
 
 # note: short for a type with public data and no member functions
 record type Cons {
-  value: Int32;
+  value: Int32,
   # this absolutely wouldn't work in "real" café
-  next: List;
+  next: List,
 }
 
 variant type List {
-  Nil: ();
-  Cons: Cons;
+  Nil: (),
+  Cons: Cons,
 }
 
 infix group Cons {
-  associativity = end;
+  associativity = end,
 }
 infix (:-): Cons;
 func (infix :-)(x: Int32, lst: List) -> List {
-  List::Cons(Cons::{value = x; next = lst})
+  List::Cons(Cons::{value = x, next = lst})
 }
 
 func (infix +)(x: Int32, y: Int32) -> Int32 {
@@ -44,7 +49,7 @@ func main() -> Cons {
   let lst = 1 :- 2 :- 3 :- 4 :- 5 :- 6 :- 7 :- 8 :- 9 :- 10 :- List::Nil(());
   # hax
   Cons::{
-    value = sum(lst);
-    next = lst;
+    value = sum(lst),
+    next = lst,
   }
 }

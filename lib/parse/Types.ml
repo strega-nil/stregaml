@@ -135,12 +135,16 @@ end =
   Type
 
 and Type_Data : sig
-  type members = (Nfc_string.t * Type.value Type.t) Spanned.t list
+  type field =
+    Nfc_string.t Spanned.t * Type.value Type.t Spanned.t
+
+  type variant =
+    Nfc_string.t Spanned.t * Type.value Type.t Spanned.t option
 
   type t =
-    | Record : members -> t
-    | Variant : members -> t
-    | Integer : {bits: int} -> t
+    | Record : {fields : field Spanned.t list} -> t
+    | Variant : {variants : variant Spanned.t list} -> t
+    | Integer : {bits : int} -> t
 end =
   Type_Data
 
@@ -186,7 +190,7 @@ and Ast_Expr : sig
   type pattern =
     | Pattern :
         { constructor : Name.nonfix qualified Spanned.t
-        ; binding : Name.anyfix Name.t Spanned.t }
+        ; binding : Name.anyfix Name.t Spanned.t option }
         -> pattern
 
   type t =
@@ -213,7 +217,7 @@ and Ast_Expr : sig
     | Dereference : Ast_Expr.t Spanned.t -> t
     | Record_literal :
         { ty : Type.value Type.t Spanned.t
-        ; members : (Name.nonfix Name.t * t Spanned.t) Spanned.t list
+        ; fields : (Name.nonfix Name.t * t Spanned.t) Spanned.t list
         }
         -> t
     | Record_access : t Spanned.t * Name.nonfix Name.t -> t

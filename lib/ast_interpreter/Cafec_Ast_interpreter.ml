@@ -53,23 +53,23 @@ module Value = struct
           ; "("
           ; to_string !v ctxt ~lang
           ; ")" ]
-    | Tuple members ->
-        let members =
+    | Tuple fields ->
+        let fields =
           let f e = to_string !e ctxt ~lang in
           String.concat_sequence ~sep:", "
-            (Sequence.map ~f (Array.to_sequence members))
+            (Sequence.map ~f (Array.to_sequence fields))
         in
-        String.concat ["("; members; ")"]
-    | Record members ->
-        let members =
+        String.concat ["("; fields; ")"]
+    | Record fields ->
+        let fields =
           let f idx e =
             String.concat
               [Int.to_string idx; " = "; to_string !e ctxt ~lang]
           in
           String.concat_sequence ~sep:"; "
-            (Sequence.mapi ~f (Array.to_sequence members))
+            (Sequence.mapi ~f (Array.to_sequence fields))
         in
-        String.concat ["{ "; members; " }"]
+        String.concat ["{ "; fields; " }"]
     | Function n ->
         let name, _ = (funcs ctxt).((n :> int)) in
         String.concat
@@ -174,7 +174,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     let (Expr.Expr {variant; _}) = e in
     match variant with
     | Expr.Integer_literal n -> Expr_result.Value (Value.Integer n)
-    | Expr.Tuple_literal _ -> failwith "unimplemented"
+    | Expr.Tuple_literal _ -> raise Unimplemented
     | Expr.Match {cond = cond, _; arms} -> (
       match Expr_result.to_value (eval ctxt locals cond) with
       | Value.Variant (index, value) ->
@@ -193,7 +193,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | Expr.Builtin (Expr.Builtin.Mul (lhs, rhs)) ->
         let lhs, rhs = eval_builtin_args lhs rhs in
         Expr_result.Value (Value.Integer (lhs * rhs))
-    | Expr.Builtin (Expr.Builtin.Less_eq _) -> failwith "unimplemented"
+    | Expr.Builtin (Expr.Builtin.Less_eq _) -> raise Unimplemented
     | Expr.Call ((e, _), args) -> (
       match Expr_result.to_value (eval ctxt locals e) with
       | Value.Function func ->
@@ -237,19 +237,19 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | Expr.Dereference (value, _) ->
         let value = eval ctxt locals value in
         Expr_result.deref value
-    | Expr.Record_literal {members; _} ->
+    | Expr.Record_literal {fields; _} ->
         let f e = ref (Expr_result.to_value (eval ctxt locals e)) in
-        let members = Array.map ~f members in
-        Expr_result.Value (Value.Record members)
+        let fields = Array.map ~f fields in
+        Expr_result.Value (Value.Record fields)
     | Expr.Record_access ((e, _), idx) -> (
         let v = eval ctxt locals e in
         match v with
-        | Expr_result.Value (Value.Record members) ->
-            Expr_result.Value !(members.(idx))
+        | Expr_result.Value (Value.Record fields) ->
+            Expr_result.Value !(fields.(idx))
         | Expr_result.(Place (Place.Place {value; is_mut})) -> (
           match !value with
-          | Value.Record members ->
-              let value = members.(idx) in
+          | Value.Record fields ->
+              let value = fields.(idx) in
               Expr_result.(Place (Place.Place {value; is_mut}))
           | _ -> assert false )
         | _ -> assert false )
