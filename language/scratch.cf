@@ -1,8 +1,6 @@
-#{
 integer type Int32 {
-  bits: 32;
+  bits = 32;
 }
-#}
 
 # note: short for a type with public data and no member functions
 record type Cons {

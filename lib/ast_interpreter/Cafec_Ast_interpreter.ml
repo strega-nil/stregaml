@@ -25,9 +25,7 @@ module Value = struct
   let rec clone imm =
     let rclone x = ref (clone !x) in
     match imm with
-    | Integer _ | Function _ | Reference _
-     |Constructor _ ->
-        imm
+    | Integer _ | Function _ | Reference _ | Constructor _ -> imm
     | Variant (idx, v) -> Variant (idx, ref (clone !v))
     | Tuple r -> Tuple (Array.map ~f:rclone r)
     | Record r -> Record (Array.map ~f:rclone r)

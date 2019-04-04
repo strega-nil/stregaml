@@ -31,6 +31,10 @@ let rec to_string : type cat. cat t -> string = function
 module Data = struct
   include Types.Type_Data
 
+  let record m = Record m
+
+  let variant m = Variant m
+
   let to_string ?name data ~lang =
     let members_to_string members =
       let f ((name, ty), _) =
@@ -40,16 +44,19 @@ module Data = struct
       in
       String.concat (List.map members ~f)
     in
-    let (Data {kind; members}) = data in
-    let kind =
-      match kind with
-      | Record -> Token.Keyword.Record
-      | Variant -> Token.Keyword.Variant
+    let (kind, data) =
+      match data with
+      | Record m -> (Token.Keyword.Record, members_to_string m)
+      | Variant m -> (Token.Keyword.Variant, members_to_string m)
+      | Integer {bits} ->
+          let data = String.concat
+            [ "\n    bits = "; Int.to_string bits; ";" ]
+          in
+          (Token.Keyword.Integer, data)
     in
     let name = match name with Some n -> " " ^ n | None -> "" in
-    let members = members_to_string members in
     String.concat
-      [Lang.keyword_to_string ~lang kind; name; " {"; members; "\n  }"]
+      [Lang.keyword_to_string ~lang kind; name; " {"; data; "\n  }"]
 end
 
 module Definition = Types.Type_Definition

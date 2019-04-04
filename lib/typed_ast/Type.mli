@@ -16,12 +16,6 @@ end
 
 module Representation : sig
   include module type of struct include Types.Type_Representation end
-
-  module Kind : sig
-    include module type of struct
-        include Types.Type_Representation_Kind
-    end
-  end
 end
 
 module Category : sig

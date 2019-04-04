@@ -20,6 +20,8 @@ module Expected = struct
     | Data -> "either `record` or `variant`"
     | Associativity -> "either `start, `end`, or `none`"
     | Precedence -> "either `<` or `>`"
+    | Integer_literal -> "an integer literal"
+    | Integer_data_member -> "part of an integer data type definition"
     | Infix_group_member -> "either `precedence` or `associativity`"
     | Infix_follow -> "either `group`, or an open parenthesis"
     | Expression -> "the start of an expression"

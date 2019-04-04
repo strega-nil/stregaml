@@ -101,22 +101,28 @@ let name_not_found_in : type f a.
   return_err
     (Error.Name_not_found_in_type {ty; name = Name.erase name})
 
+module Compound_type = struct
+  type t =
+    | Variant
+    | Record
+end
+
 let get_members :
-       ?kind:Type.Representation.Kind.t
+       ?kind:Compound_type.t
     -> Type.Category.value Type.t
     -> ctxt:t
     -> Type.Representation.members option =
  fun ?kind ty ~ctxt ->
-  let module K = Type.Representation.Kind in
+  let module C = Compound_type in
   match Type.representation ty ~ctxt:(type_context ctxt) with
   | Type.Representation.Variant members -> (
     match kind with
-    | Some K.Variant | None -> Some members
-    | Some K.Record -> None )
+    | Some C.Variant | None -> Some members
+    | Some C.Record -> None )
   | Type.Representation.Record members -> (
     match kind with
-    | Some K.Record | None -> Some members
-    | Some K.Variant -> None )
+    | Some C.Record | None -> Some members
+    | Some C.Variant -> None )
   | _ -> None
 
 let find_field :
@@ -554,7 +560,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let%bind idx, ty_member =
         let%bind members =
           match
-            get_members ~kind:Type.Representation.Kind.Variant ~ctxt
+            get_members ~kind:Compound_type.Variant ~ctxt
               variant_ty
           with
           | Some x -> return x
@@ -656,7 +662,7 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let ty, cat = Type.to_type_and_category (T.full_type_sp expr) in
       let%bind idx, ty =
         match
-          get_members ~kind:Type.Representation.Kind.Record ty ~ctxt
+          get_members ~kind:Compound_type.Record ty ~ctxt
         with
         | Some members -> (
           match find_field ~members name with

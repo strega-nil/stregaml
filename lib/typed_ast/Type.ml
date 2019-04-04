@@ -49,10 +49,7 @@ let erase (type cat) (ty : cat t) : Category.any t =
 
 module Structural = struct include Types.Type_Structural end
 
-module Representation = struct
-  include Types.Type_Representation
-  module Kind = Types.Type_Representation_Kind
-end
+module Representation = Types.Type_Representation
 
 let unit = Structural (Structural.Tuple Array.empty)
 
@@ -105,7 +102,14 @@ module Context = struct
             return (Some ty)
         | _ :: rest -> find_alias name rest
       in
+      let get_type_sp (x, sp) =
+        let%bind () = with_span sp in
+        get_ast_type x
+      in
       match pty with
+      | PType.Any ty ->
+          let%bind ty = get_ast_type ty in
+          return (Any ty)
       | PType.Named name -> (
         match find_index name 0 defs with
         | -1 -> (
@@ -114,19 +118,28 @@ module Context = struct
             | Some ty -> return ty
             | None -> return_err (Error.Type_not_found name) )
         | n -> return (User_defined n) )
-      | PType.Reference (p, _) ->
-          let%bind pointee = get_ast_type p in
+      | PType.Place {mutability; ty} ->
+          let%bind ty = get_type_sp ty in
+          let (mutability, _) = mutability in
+          return (Place {mutability; ty})
+      | PType.Reference p ->
+          let%bind pointee = get_type_sp p in
           return (Structural (S.Reference pointee))
+      | PType.Tuple xs ->
+          let%bind members =
+            Return.Array.of_list_map ~f:get_type_sp xs
+          in
+          return (Structural (S.Tuple members))
       | PType.Function {params; ret_ty} ->
-          let f (x, _) = get_ast_type x in
-          let%bind params = Return.Array.of_list_map ~f params in
+          let%bind params =
+            Return.Array.of_list_map ~f:get_type_sp params
+          in
           let%bind ret_ty =
             match ret_ty with
             | Some (ty, _) -> Return.map ~f:erase (get_ast_type ty)
             | None -> return (Any unit)
           in
           return (Structural (S.Function {params; ret_ty}))
-      | _ -> failwith "get_ast_type"
     in
     let%bind names =
       let names_len = defs_len + aliases_len in
@@ -157,17 +170,22 @@ module Context = struct
         let module Data = PType.Data in
         let%bind data =
           let typed_members lst =
-            let f ((name, ty), _) =
+            let f ((name, ty), sp) =
+              let%bind () = with_span sp in
               let%bind ty = get_ast_type ty in
               return (name, ty)
             in
             Return.Array.of_list_map ~f lst
           in
-          let (Data.Data {kind; members}) = def in
-          let%bind members = typed_members members in
-          match kind with
-          | Data.Record -> return (Representation.Record members)
-          | Data.Variant -> return (Representation.Variant members)
+          match def with
+          | Data.Record members ->
+              let%bind members = typed_members members in
+              return (Representation.Record members)
+          | Data.Variant members ->
+              let%bind members = typed_members members in
+              return (Representation.Variant members)
+          | Data.Integer {bits} ->
+              return (Representation.Integer {bits})
         in
         return (User_type {data})
       in
@@ -175,8 +193,7 @@ module Context = struct
     in
     return (Context {user_types; names})
 
-  let empty =
-    Context {user_types = Array.empty; names = Array.empty}
+  let empty = Context {user_types = Array.empty; names = Array.empty}
 
   let user_types (Context r) = r.user_types
 

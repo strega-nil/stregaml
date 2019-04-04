@@ -10,7 +10,8 @@ type contextual_keywords =
       ; precedence : Nfc_string.t
       ; start : Nfc_string.t
       ; end_ : Nfc_string.t
-      ; none : Nfc_string.t }
+      ; none : Nfc_string.t
+      ; bits : Nfc_string.t }
       -> contextual_keywords
 
 type keywords =
@@ -59,6 +60,8 @@ module Make_Language (L : Interface_Language) : Language = struct
     then Some Keyword.Contextual.End
     else if Nfc_string.equal s r.none
     then Some Keyword.Contextual.None
+    else if Nfc_string.equal s r.bits
+    then Some Keyword.Contextual.Bits
     else None
 
   let contextual_keyword_to_string c =
@@ -70,6 +73,7 @@ module Make_Language (L : Interface_Language) : Language = struct
       | Keyword.Contextual.Start -> r.start
       | Keyword.Contextual.End -> r.end_
       | Keyword.Contextual.None -> r.none
+      | Keyword.Contextual.Bits -> r.bits
     in
     (s :> string)
 
@@ -153,7 +157,8 @@ module English = Make_Language (struct
       ; precedence = Nfc_string.of_string "precedence"
       ; start = Nfc_string.of_string "start"
       ; end_ = Nfc_string.of_string "end"
-      ; none = Nfc_string.of_string "none" }
+      ; none = Nfc_string.of_string "none"
+      ; bits = Nfc_string.of_string "bits" }
 
   let keywords =
     Keywords
@@ -187,7 +192,8 @@ module Yiddish = Make_Language (struct
       ; precedence = Nfc_string.of_string "בכורה"
       ; start = Nfc_string.of_string "סטאַרט"
       ; end_ = Nfc_string.of_string "ענד"
-      ; none = Nfc_string.of_string "קײן" }
+      ; none = Nfc_string.of_string "קײן"
+      ; bits = Nfc_string.of_string "ביטס" }
 
   let keywords =
     Keywords

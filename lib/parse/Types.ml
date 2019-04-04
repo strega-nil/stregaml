@@ -12,6 +12,8 @@ module rec Error_Expected : sig
     | Data : t
     | Associativity : t
     | Precedence : t
+    | Integer_literal : t
+    | Integer_data_member : t
     | Infix_group_member : t
     | Infix_follow : t
     | Expression : t
@@ -94,6 +96,7 @@ and Token_Keyword_Contextual : sig
     | Start : t
     | End : t
     | None : t
+    | Bits : t
 end =
   Token_Keyword_Contextual
 
@@ -134,11 +137,10 @@ end =
 and Type_Data : sig
   type members = (Nfc_string.t * Type.value Type.t) Spanned.t list
 
-  type kind =
-    | Record
-    | Variant
-
-  type t = Data : {kind : kind; members : members} -> t
+  type t =
+    | Record : members -> t
+    | Variant : members -> t
+    | Integer : {bits: int} -> t
 end =
   Type_Data
 

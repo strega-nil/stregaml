@@ -146,15 +146,9 @@ and Type_Representation : sig
     | Structural : Type_Structural.t -> t
     | Record : members -> t
     | Variant : members -> t
+    | Integer : {bits : int} -> t
 end =
   Type_Representation
-
-and Type_Representation_Kind : sig
-  type t = Cafec_Parse.Type.Data.kind =
-    | Record
-    | Variant
-end =
-  Type_Representation_Kind
 
 and Ast_Binding : sig
   type t =
