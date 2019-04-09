@@ -28,7 +28,11 @@ func (infix :-)(x: Int32, lst: List) -> List {
 }
 
 func (infix +)(x: Int32, y: Int32) -> Int32 {
-  __builtin(add)(x, y)
+  __builtin(add[Int32])(x, y)
+}
+
+func (infix <=)(x: Int32, y: Int32) -> Bool {
+  __builtin(less_eq[Int32, Bool])(x, y)
 }
 
 func sum(x: ref List) -> Int32 {
@@ -46,7 +50,19 @@ func sum(x: ref List) -> Int32 {
 
 @[entrypoint]
 func main() -> Cons {
-  let lst = 1 :- 2 :- 3 :- 4 :- 5 :- 6 :- 7 :- 8 :- 9 :- 10 :- List::Nil(());
+  let lst
+    =  1
+    :- 2
+    :- 3
+    :- 4
+    :- 5
+    :- 6
+    :- 7
+    :- 8
+    :- 9
+    :- 10
+    :- List::Nil(());
+
   # hax
   Cons::{
     value = sum(lst),

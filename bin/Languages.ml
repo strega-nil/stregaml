@@ -1,6 +1,7 @@
 open Cafec
 module Attribute = Parse.Token.Attribute
 module Keyword = Parse.Token.Keyword
+module Builtin_name = Parse.Token.Builtin_name
 
 module type Language = Parse.Language
 
@@ -36,6 +37,14 @@ type keywords =
       ; underscore : Nfc_string.t }
       -> keywords
 
+type builtin_names =
+  | Builtin_names :
+      { add : Nfc_string.t
+      ; sub : Nfc_string.t
+      ; mul : Nfc_string.t
+      ; less_eq : Nfc_string.t }
+      -> builtin_names
+
 type attributes =
   | Attributes : {entrypoint : Nfc_string.t} -> attributes
 
@@ -43,6 +52,8 @@ module type Interface_Language = sig
   val contextual_keywords : contextual_keywords
 
   val keywords : keywords
+
+  val builtin_names : builtin_names
 
   val attributes : attributes
 end
@@ -139,6 +150,29 @@ module Make_Language (L : Interface_Language) : Language = struct
     | Keyword.Builtin -> (r.builtin :> string)
     | Keyword.Underscore -> (r.underscore :> string)
 
+  let builtin_name_of_string s =
+    let (Builtin_names r) = L.builtin_names in
+    if Nfc_string.equal s r.add
+    then Some Builtin_name.Add
+    else if Nfc_string.equal s r.sub
+    then Some Builtin_name.Sub
+    else if Nfc_string.equal s r.mul
+    then Some Builtin_name.Mul
+    else if Nfc_string.equal s r.less_eq
+    then Some Builtin_name.Less_eq
+    else None
+
+  let builtin_name_to_string b =
+    let (Builtin_names r) = L.builtin_names in
+    let s =
+      match b with
+      | Builtin_name.Add -> r.add
+      | Builtin_name.Sub -> r.sub
+      | Builtin_name.Mul -> r.mul
+      | Builtin_name.Less_eq -> r.less_eq
+    in
+    (s :> string)
+
   let attribute_of_string s =
     let (Attributes r) = L.attributes in
     if Nfc_string.equal s r.entrypoint
@@ -181,6 +215,13 @@ module English = Make_Language (struct
       ; builtin = Nfc_string.of_string "__builtin"
       ; underscore = Nfc_string.of_string "_" }
 
+  let builtin_names =
+    Builtin_names
+      { add = Nfc_string.of_string "add"
+      ; sub = Nfc_string.of_string "sub"
+      ; mul = Nfc_string.of_string "mul"
+      ; less_eq = Nfc_string.of_string "less_eq" }
+
   let attributes =
     Attributes {entrypoint = Nfc_string.of_string "entrypoint"}
 end)
@@ -217,6 +258,17 @@ module Yiddish = Make_Language (struct
       ; mut = Nfc_string.of_string "פֿאַר"
       ; builtin = Nfc_string.of_string "__בילטין"
       ; underscore = Nfc_string.of_string "_" }
+
+  (*
+    TODO: fix this to be yiddish
+    too lazy for now
+  *)
+  let builtin_names =
+    Builtin_names
+      { add = Nfc_string.of_string "add"
+      ; sub = Nfc_string.of_string "sub"
+      ; mul = Nfc_string.of_string "mul"
+      ; less_eq = Nfc_string.of_string "less_eq" }
 
   let attributes =
     Attributes {entrypoint = Nfc_string.of_string "אײַנגאַנג"}

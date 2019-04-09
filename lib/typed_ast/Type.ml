@@ -172,7 +172,7 @@ module Context = struct
           | PType.Data.Record {fields} ->
               let%bind fields =
                 let f (x : PType.Data.field Spanned.t) =
-                  let ((name, (ty, tsp)), sp) = x in
+                  let (name, (ty, tsp)), sp = x in
                   let%bind ty = get_ast_type ty in
                   return ((name, (ty, tsp)), sp)
                 in

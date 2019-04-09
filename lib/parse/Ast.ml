@@ -83,14 +83,23 @@ module Implementation_stmt_expr = struct
           ; "}" ]
     | Name name -> qualified_to_string name
     | Block (blk, _) -> block_to_string blk ~indent ~lang
-    | Builtin ((name, _), args) ->
-        let args = arg_list args in
+    | Builtin {name; type_arguments} ->
+        let name, _ = name in
+        let type_arguments =
+          if List.is_empty type_arguments
+          then ""
+          else
+            let f (ty, _) = Type.to_string ty ~lang in
+            let inner =
+              String.concat ~sep:", " (List.map ~f type_arguments)
+            in
+            String.concat ["["; inner; "]"]
+        in
         String.concat
           [ Lang.keyword_to_string ~lang Kw.Builtin
           ; "("
-          ; (name :> string)
-          ; ")("
-          ; args
+          ; Lang.builtin_name_to_string name ~lang
+          ; type_arguments
           ; ")" ]
     | Prefix_operator ((name, _), (expr, _)) ->
         let name =
@@ -121,7 +130,7 @@ module Implementation_stmt_expr = struct
         String.concat [expr_to_string ~indent e ~lang; "("; args; ")"]
     | Place {mutability = mut, _; expr = expr, _} ->
         String.concat
-          [ Type.mutability_to_string mut
+          [ Type.mutability_to_string ~lang mut
           ; " "
           ; expr_to_string expr ~parens:true ~indent:(indent + 1) ~lang
           ]
@@ -146,7 +155,7 @@ module Implementation_stmt_expr = struct
           in
           String.concat ~sep:"; " (List.map ~f fields)
         in
-        String.concat [Type.to_string ty; "::{ "; fields; " }"]
+        String.concat [Type.to_string ~lang ty; "::{ "; fields; " }"]
     | Record_access ((e, _), name) ->
         let record =
           expr_to_string e ~parens:true ~indent:(indent + 1) ~lang
@@ -183,7 +192,7 @@ module Implementation_stmt_expr = struct
     | Let {name = name, _; is_mut; ty; expr} ->
         let ty =
           match ty with
-          | Some (ty, _) -> ": " ^ Type.to_string ty
+          | Some (ty, _) -> ": " ^ Type.to_string ~lang ty
           | None -> ""
         in
         let mut =
@@ -252,13 +261,13 @@ module Func = struct
     let parameters =
       let f (((name, _), (ty, _)), _) =
         String.concat
-          [Name.to_ident_string name; ": "; Type.to_string ty]
+          [Name.to_ident_string name; ": "; Type.to_string ~lang ty]
       in
       String.concat ~sep:", " (List.map ~f (params self))
     in
     let ret_ty =
       match ret_ty self with
-      | Some (ty, _) -> " -> " ^ Type.to_string ty
+      | Some (ty, _) -> " -> " ^ Type.to_string ~lang ty
       | None -> ""
     in
     String.concat
@@ -369,7 +378,7 @@ let to_string self ~lang =
             ; " "
             ; (name :> string)
             ; " = "
-            ; Type.to_string data
+            ; Type.to_string ~lang data
             ; ";" ]
       | Type.Definition.User_defined {data} ->
           String.concat

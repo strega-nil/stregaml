@@ -36,6 +36,7 @@ and Error : sig
     | Reserved_token : Nfc_string.t -> t
     | Unrecognized_attribute : Nfc_string.t -> t
     | Unrecognized_character : Uchar.t -> t
+    | Unrecognized_builtin : Nfc_string.t -> t
     | Unexpected_token : Error_Expected.t * Token.t -> t
 end =
   Error
@@ -100,6 +101,15 @@ and Token_Keyword_Contextual : sig
 end =
   Token_Keyword_Contextual
 
+and Token_Builtin_name : sig
+  type t =
+    | Add : t
+    | Sub : t
+    | Mul : t
+    | Less_eq : t
+end =
+  Token_Builtin_name
+
 and Token_Attribute : sig
   type t = Entrypoint : t
 end =
@@ -135,8 +145,7 @@ end =
   Type
 
 and Type_Data : sig
-  type field =
-    Nfc_string.t Spanned.t * Type.value Type.t Spanned.t
+  type field = Nfc_string.t Spanned.t * Type.value Type.t Spanned.t
 
   type variant =
     Nfc_string.t Spanned.t * Type.value Type.t Spanned.t option
@@ -203,7 +212,10 @@ and Ast_Expr : sig
         -> t
     | Name : _ qualified -> t
     | Block : Ast_Expr_Block.t Spanned.t -> t
-    | Builtin : Nfc_string.t Spanned.t * t Spanned.t list -> t
+    | Builtin :
+        { name : Token_Builtin_name.t Spanned.t
+        ; type_arguments : Type.value Type.t Spanned.t list }
+        -> t
     | Call : t Spanned.t * t Spanned.t list -> t
     | Prefix_operator : Name.prefix Name.t Spanned.t * t Spanned.t -> t
     | Infix_list :
@@ -301,6 +313,11 @@ module Pervasives = struct
 end
 
 module type Language = sig
+  val builtin_name_of_string :
+    Nfc_string.t -> Token_Builtin_name.t option
+
+  val builtin_name_to_string : Token_Builtin_name.t -> string
+
   val contextual_keyword_of_string :
     Nfc_string.t -> Token_Keyword_Contextual.t option
 

@@ -140,8 +140,6 @@ place is of type: `%s`|}
   found: `(%s)`|}
         (name :> string)
         (type_list (Array.to_sequence found))
-  | Unknown_builtin name ->
-      Printf.sprintf "Builtin `%s` is unknown" (name :> string)
   | Unordered_operators {op1 = op1, _; op2 = op2, _} ->
       let module E = Cafec_Parse.Ast.Expr in
       let op_to_string = function

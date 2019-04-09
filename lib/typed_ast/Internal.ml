@@ -109,7 +109,7 @@ end
 
 let find_field :
        _ Name.t
-    -> fields:(Type.Representation.field Spanned.t Array.t)
+    -> fields:Type.Representation.field Spanned.t Array.t
     -> (int * Type.Category.value Type.t) option =
  fun name ~fields ->
   match Name.nonfix name with
@@ -126,7 +126,7 @@ let find_field :
 
 let find_variant :
        _ Name.t
-    -> variants:(Type.Representation.variant Spanned.t Array.t)
+    -> variants:Type.Representation.variant Spanned.t Array.t
     -> (int * Type.Category.value Type.t option) option =
  fun name ~variants ->
   match Name.nonfix name with
@@ -462,7 +462,9 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
             Type.erase Type.unit
       in
       return (T.Expr {variant; ty})
-  | U.Builtin ((name, _), args) ->
+  | U.Builtin _ ->
+      raise Unimplemented
+      (*
       let%bind arg1, arg2 =
         match args with
         | [a1; a2] -> return (a1, a2)
@@ -480,8 +482,6 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let _a1_ty, _a2_ty =
         (T.base_type_sp arg1, T.base_type_sp arg2)
       in
-      raise Unimplemented
-      (*
       let%bind () =
         match (a1_ty, a2_ty) with
         | Type.Builtin Type.Int32, Type.Builtin Type.Int32 -> return ()
@@ -657,10 +657,10 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         match tmp with
         | Result.Ok o -> o
         | Result.Error (Array.Empty_cell idx) ->
-            let (((name, _), (ty, _)), _) = type_fields.(idx) in
+            let ((name, _), (ty, _)), _ = type_fields.(idx) in
             return_err (Error.Record_literal_missing_field (ty, name))
         | Result.Error (Array.Duplicate idx) ->
-            let (((name, _), _), _) = type_fields.(idx) in
+            let ((name, _), _), _ = type_fields.(idx) in
             return_err (Error.Record_literal_duplicate_fields name)
       in
       let variant =

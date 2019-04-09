@@ -75,7 +75,6 @@ module rec Error : sig
         { op1 : Cafec_Parse.Ast.Expr.infix Spanned.t
         ; op2 : Cafec_Parse.Ast.Expr.infix Spanned.t }
         -> t
-    | Unknown_builtin : Nfc_string.t -> t
     | Call_of_non_function : Type_Category.value Type.t -> t
     | Prefix_function_wrong_arity :
         { name : Name.prefix Name.t
@@ -146,7 +145,8 @@ and Type_Representation : sig
     Nfc_string.t Spanned.t * Type_Category.value Type.t Spanned.t
 
   type variant =
-    Nfc_string.t Spanned.t * Type_Category.value Type.t Spanned.t option
+    Nfc_string.t Spanned.t
+    * Type_Category.value Type.t Spanned.t option
 
   type t =
     | Structural : Type_Structural.t -> t

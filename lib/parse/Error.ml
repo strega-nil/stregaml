@@ -63,6 +63,8 @@ let to_string e ~lang =
       Printf.sprintf "unrecognized character: `%s` (%d)"
         (Nfc_string.uchar_to_string ch)
         (Uchar.to_scalar ch)
+  | Unrecognized_builtin b ->
+      Printf.sprintf "unrecognized builtin: `%s`" (b :> string)
   | Unclosed_comment -> "unclosed comment"
   | Unexpected_token (exp, tok) ->
       String.concat
