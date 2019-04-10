@@ -202,15 +202,26 @@ and Ast_Expr : sig
         ; binding : Name.anyfix Name.t Spanned.t option }
         -> pattern
 
+  type match_arm =
+    | Match_arm :
+        { pattern : pattern Spanned.t
+        ; block : Ast_Expr_Block.t Spanned.t }
+        -> match_arm
+
   type t =
-    | Integer_literal : int -> t
     | Tuple_literal : t Spanned.t list -> t
-    | Match :
-        { cond : t Spanned.t
-        ; arms : (pattern Spanned.t * Ast_Expr_Block.t Spanned.t) list
+    | Integer_literal :
+        { ty : Type.value Type.t Spanned.t
+        ; value : int Spanned.t }
+        -> t
+    | Record_literal :
+        { ty : Type.value Type.t Spanned.t
+        ; fields : (Name.nonfix Name.t * t Spanned.t) Spanned.t list
         }
         -> t
     | Name : _ qualified -> t
+    | Record_access : t Spanned.t * Name.nonfix Name.t -> t
+    | Match : {cond : t Spanned.t; arms : match_arm list} -> t
     | Block : Ast_Expr_Block.t Spanned.t -> t
     | Builtin :
         { name : Token_Builtin_name.t Spanned.t
@@ -227,12 +238,6 @@ and Ast_Expr : sig
         -> t
     | Reference : Ast_Expr.t Spanned.t -> t
     | Dereference : Ast_Expr.t Spanned.t -> t
-    | Record_literal :
-        { ty : Type.value Type.t Spanned.t
-        ; fields : (Name.nonfix Name.t * t Spanned.t) Spanned.t list
-        }
-        -> t
-    | Record_access : t Spanned.t * Name.nonfix Name.t -> t
 end =
   Ast_Expr
 

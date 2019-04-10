@@ -9,6 +9,10 @@ module type Language = Types.Language
 
 module Keyword = Token.Keyword
 
+exception Parser_bug of string [@@deriving_inline sexp]
+
+[@@@end]
+
 type t =
   | Parser :
       { lexer : Lexer.t
@@ -167,9 +171,14 @@ let get_name (parser : t) : Name.anyfix Name.t result =
       return (Name.Name {string; kind = Name.Identifier; fixity})
   | tok -> unexpected tok Error.Expected.Name
 
-let parse_list (parser : t) ~(f : t -> 'a result) ~(sep : Token.t)
-    ~(close : Token.t) ~(expected : Error.Expected.t) :
-    'a Spanned.t list result =
+let parse_list :
+       t
+    -> f:(t -> 'a result)
+    -> sep:Token.t
+    -> close:Token.t
+    -> expected:Error.Expected.t
+    -> 'a Spanned.t list result =
+ fun parser ~f ~sep ~close ~expected ->
   let rec helper parser f expected sep close expect_sep =
     let%bind tok = peek_token parser in
     match () with
@@ -205,10 +214,6 @@ let rec maybe_parse_expression_no_infix (parser : t) :
     parse_all_postfix expr parser
   in
   match%bind spanned_bind (peek_token parser) with
-  | Token.Integer_literal n, sp ->
-      eat_token parser ;
-      let%bind expr = get_postfix (Ast.Expr.Integer_literal n, sp) in
-      return (Some expr)
   | Token.Open_paren, sp ->
       eat_token parser ;
       let%bind expr =
@@ -304,6 +309,9 @@ and parse_path_expression (parser : t) : Ast.Expr.t result =
     | Token.Open_brace, sp' ->
         parse_record_literal parser
           ~path:(path, Spanned.Span.union sp sp')
+    | Token.Integer_literal _, sp' ->
+        parse_integer_literal parser
+          ~path:(path, Spanned.Span.union sp sp')
     | tok, _ -> unexpected tok Error.Expected.Path_expression
   in
   helper parser ~path:([], Spanned.Span.made_up)
@@ -351,9 +359,8 @@ and parse_builtin_body (parser : t) : Ast.Expr.t result =
   | None -> return (Ast.Expr.Builtin {name; type_arguments = []})
 
 and parse_match_expression (parser : t) : Ast.Expr.t result =
-  let rec parse_match_arms (parser : t) :
-      (Ast.Expr.pattern Spanned.t * Ast.Expr.Block.t Spanned.t) list
-      result =
+  let rec parse_match_arms : t -> Ast.Expr.match_arm list result =
+   fun parser ->
     match%bind peek_token parser with
     | Token.Close_brace -> return []
     | Token.Identifier _ ->
@@ -381,7 +388,7 @@ and parse_match_expression (parser : t) : Ast.Expr.t result =
         let pattern =
           (Ast.Expr.Pattern {constructor; binding}, pattern_sp)
         in
-        let arm = (pattern, block) in
+        let arm = Ast.Expr.Match_arm {pattern; block} in
         return (arm :: rest)
     | tok -> unexpected tok Error.Expected.Match_arm
   in
@@ -393,6 +400,26 @@ and parse_match_expression (parser : t) : Ast.Expr.t result =
   let%bind arms = parse_match_arms parser in
   let%bind () = get_specific parser Token.Close_brace in
   return (Ast.Expr.Match {cond; arms})
+
+and parse_integer_literal :
+       t
+    -> path:Nfc_string.t Spanned.t list Spanned.t
+    -> Ast.Expr.t result =
+ fun parser ~path ->
+  let ty =
+    match path with
+    | [(ty, _)], sp -> (Type.Named ty, sp)
+    | _ -> raise (Parser_bug "no paths in types yet")
+  in
+  match%bind spanned_bind (next_token parser) with
+  | Token.Integer_literal value, sp ->
+      return (Ast.Expr.Integer_literal {ty; value = (value, sp)})
+  | tok ->
+      let s =
+        "parse_integer_literal called with non-integer-literal: "
+      in
+      let f = Token.to_string ~lang:(lang parser) in
+      raise (Parser_bug (s ^ Spanned.to_string ~f tok))
 
 and parse_record_literal (parser : t)
     ~(path : Nfc_string.t Spanned.t list Spanned.t) : Ast.Expr.t result

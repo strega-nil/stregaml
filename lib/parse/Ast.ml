@@ -50,12 +50,14 @@ module Implementation_stmt_expr = struct
       String.concat ~sep:", " (List.map args ~f)
     in
     match e with
-    | Integer_literal n -> Int.to_string n
     | Tuple_literal xs ->
         let args = arg_list xs in
         String.concat ["("; args; ")"]
+    | Integer_literal {ty = ty, _; value = value, _} ->
+        String.concat
+          [Type.to_string ~lang ty; "::"; Int.to_string value]
     | Match {cond = cond, _; arms} ->
-        let f ((pat, _), (block, _)) =
+        let f (Match_arm {pattern = pat, _; block = block, _}) =
           let (Pattern {constructor; binding}) = pat in
           let const, _ = constructor in
           let binding =

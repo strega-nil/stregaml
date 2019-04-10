@@ -37,7 +37,7 @@ func (infix <=)(x: Int32, y: Int32) -> Bool {
 
 func sum(x: ref List) -> Int32 {
   match (x) {
-    List::Nil(_unit) => { 0 }
+    List::Nil(_unit) => { Int32::0 }
     #{
       note: this currently binds to a copy of the list
       in the future, it should bind to a reference
@@ -51,16 +51,16 @@ func sum(x: ref List) -> Int32 {
 @[entrypoint]
 func main() -> Cons {
   let lst
-    =  1
-    :- 2
-    :- 3
-    :- 4
-    :- 5
-    :- 6
-    :- 7
-    :- 8
-    :- 9
-    :- 10
+    =  Int32::1
+    :- Int32::2
+    :- Int32::3
+    :- Int32::4
+    :- Int32::5
+    :- Int32::6
+    :- Int32::7
+    :- Int32::8
+    :- Int32::9
+    :- Int32::10
     :- List::Nil(());
 
   # hax
