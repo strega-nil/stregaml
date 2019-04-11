@@ -12,7 +12,21 @@ end
 
 module Expr = struct
   include Types.Ast_Expr
-  module Builtin = Types.Ast_Expr_Builtin
+
+  module Builtin = struct
+    include Types.Ast_Expr_Builtin
+
+    let to_string b ~lang =
+      let module Token = Cafec_Parse.Token.Builtin_name in
+      let b =
+        match b with
+        | Less_eq -> Token.Less_eq
+        | Add -> Token.Add
+        | Sub -> Token.Sub
+        | Mul -> Token.Mul
+      in
+      Token.to_string b ~lang
+  end
 
   module Local = struct
     include Types.Ast_Expr_Local

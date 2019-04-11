@@ -20,9 +20,9 @@ external unsafe_get : 'a t -> int -> 'a = "%array_unsafe_get"
 
 val empty : 'a t
 
-val singleton : 'a -> 'a t
+val unary : 'a -> 'a t
 
-val doubleton : 'a -> 'a -> 'a t
+val binary : 'a -> 'a -> 'a t
 
 val create : len:int -> 'a -> 'a t
 

@@ -102,9 +102,9 @@ external unsafe_get : 'a t -> int -> 'a = "%array_unsafe_get"
 
 let empty = Impl.empty
 
-let singleton (type a) (el : a) : a t = Impl.of_mutable [|el|]
+let unary (type a) (el : a) : a t = Impl.of_mutable [|el|]
 
-let doubleton (type a) (el1 : a) (el2 : a) : a t =
+let binary (type a) (el1 : a) (el2 : a) : a t =
   Impl.of_mutable [|el1; el2|]
 
 let create ~len el = Impl.of_mutable (Mutable.create ~len el)

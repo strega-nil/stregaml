@@ -127,7 +127,8 @@ let get_typed_ast args =
   let parse_ast = get_parse_ast args in
   match Typed_ast.make parse_ast with
   | Error (e, ctxt), sp ->
-      let f e = Typed_ast.Error.to_string e ~ctxt in
+      let lang = args_lang args in
+      let f e = Typed_ast.Error.to_string e ~ctxt ~lang in
       Out.eprintf "Typing error: %s\n" (Spanned.to_string ~f (e, sp)) ;
       Caml.exit 1
   | Ok ty_ast, _ -> ty_ast

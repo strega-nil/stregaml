@@ -63,13 +63,13 @@ module rec Error : sig
         Type_Category.value Type.t * Type_Category.value Type.t
         -> t
     | Builtin_mismatched_arity :
-        { name : Nfc_string.t
+        { builtin : Ast_Expr_Builtin.t
         ; expected : int
         ; found : int }
         -> t
-    | Builtin_invalid_arguments :
-        { name : Nfc_string.t
-        ; found : Type_Category.any Type.t Array.t }
+    | Builtin_invalid_type :
+        { builtin : Ast_Expr_Builtin.t
+        ; ty : Type_Category.value Type.t }
         -> t
     | Unordered_operators :
         { op1 : Cafec_Parse.Ast.Expr.infix Spanned.t
@@ -220,10 +220,10 @@ end =
 
 and Ast_Expr_Builtin : sig
   type t =
-    | Less_eq : Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t -> t
-    | Add : Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t -> t
-    | Sub : Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t -> t
-    | Mul : Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t -> t
+    | Less_eq : t
+    | Add : t
+    | Sub : t
+    | Mul : t
 end =
   Ast_Expr_Builtin
 

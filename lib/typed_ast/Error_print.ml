@@ -1,7 +1,7 @@
 open! Types.Pervasives
 include Types.Error
 
-let to_string err ~ctxt =
+let to_string err ~ctxt ~lang =
   let type_list tys =
     let f ty = Type.to_string ty ~ctxt in
     String.concat_sequence ~sep:", " (Sequence.map ~f tys)
@@ -130,16 +130,14 @@ place is of type: `%s`|}
   2nd branch: `%s`|}
         (Type.to_string t1 ~ctxt)
         (Type.to_string t2 ~ctxt)
-  | Builtin_mismatched_arity {name; expected; found} ->
+  | Builtin_mismatched_arity {builtin; expected; found} ->
       Printf.sprintf "Builtin `%s` expects %d arguments; found %d"
-        (name :> string)
+        (Ast.Expr.Builtin.to_string builtin ~lang)
         expected found
-  | Builtin_invalid_arguments {name; found} ->
-      Printf.sprintf
-        {|Builtin `%s` passed arguments of incorrect type:
-  found: `(%s)`|}
-        (name :> string)
-        (type_list (Array.to_sequence found))
+  | Builtin_invalid_type {builtin; ty} ->
+      Printf.sprintf "Builtin `%s` passed invalid type parameter: `%s`"
+        (Ast.Expr.Builtin.to_string builtin ~lang)
+        (Type.to_string ty ~ctxt)
   | Unordered_operators {op1 = op1, _; op2 = op2, _} ->
       let module E = Cafec_Parse.Ast.Expr in
       let op_to_string = function

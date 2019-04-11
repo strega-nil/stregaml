@@ -5,6 +5,10 @@ module Type = Ast.Type
 module Lang = Cafec_Parse.Lang
 module Keyword = Cafec_Parse.Token.Keyword
 
+exception Compiler_bug [@@deriving_inline sexp]
+
+[@@@end]
+
 type t =
   | Interpreter :
       { entrypoint : Types.Function_index.t option
@@ -25,7 +29,9 @@ module Value = struct
   let rec clone imm =
     let rclone x = ref (clone !x) in
     match imm with
-    | Integer _ | Function _ | Reference _ | Constructor _ -> imm
+    | Integer _ | Function _ | Reference _ | Constructor _ | Builtin _
+      ->
+        imm
     | Variant (idx, v) -> Variant (idx, ref (clone !v))
     | Tuple r -> Tuple (Array.map ~f:rclone r)
     | Record r -> Record (Array.map ~f:rclone r)
@@ -53,6 +59,12 @@ module Value = struct
           ; "("
           ; to_string !v ctxt ~lang
           ; ")" ]
+    | Builtin b ->
+        let builtin_kw =
+          Lang.keyword_to_string Keyword.Builtin ~lang
+        in
+        let builtin = Expr.Builtin.to_string b ~lang in
+        String.concat [builtin_kw; "("; builtin; ")"]
     | Tuple fields ->
         let fields =
           let f e = to_string !e ctxt ~lang in
@@ -88,7 +100,7 @@ module Expr_result = struct
     | Place (Place.Place {value; _}) -> Value.clone !value
 
   let reference ~is_mut = function
-    | Value _ -> assert false
+    | Value _ -> raise Compiler_bug
     | Place (Place.Place {is_mut = place_is_mut; value}) ->
         let is_mut = place_is_mut && is_mut in
         let place = Place.Place {is_mut; value} in
@@ -96,7 +108,9 @@ module Expr_result = struct
 
   let deref r =
     let r = to_value r in
-    match r with Value.Reference p -> Place p | _ -> assert false
+    match r with
+    | Value.Reference p -> Place p
+    | _ -> raise Compiler_bug
 
   let assign (Place.Place {is_mut; value}) imm =
     assert is_mut ;
@@ -119,7 +133,7 @@ let make ast =
   let seq = ref (Ast.function_seq ast) in
   let helper _ =
     match Sequence.next !seq with
-    | None -> assert false
+    | None -> raise Compiler_bug
     | Some (((D.Declaration {name; _}, _), (expr, _)), rest) ->
         seq := rest ;
         (name, expr)
@@ -158,19 +172,6 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     | Some (e, _) -> eval ctxt locals e
     | None -> Expr_result.Value (Value.Tuple Array.empty)
   and eval ctxt locals e =
-    let eval_builtin_args (lhs, _) (rhs, _) =
-      let lhs =
-        match Expr_result.to_value (eval ctxt locals lhs) with
-        | Value.Integer v -> v
-        | _ -> assert false
-      in
-      let rhs =
-        match Expr_result.to_value (eval ctxt locals rhs) with
-        | Value.Integer v -> v
-        | _ -> assert false
-      in
-      (lhs, rhs)
-    in
     let (Expr.Expr {variant; _}) = e in
     match variant with
     | Expr.Integer_literal n -> Expr_result.Value (Value.Integer n)
@@ -181,19 +182,10 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           let _, (code, _) = arms.(index) in
           let locals = Object.obj ~is_mut:false !value :: locals in
           eval_block ctxt locals code
-      | _ -> assert false )
+      | _ -> raise Compiler_bug )
     | Expr.Local (Expr.Local.Local {index; _}) ->
         Expr_result.Place (Object.place (List.nth_exn locals index))
-    | Expr.Builtin (Expr.Builtin.Add (lhs, rhs)) ->
-        let lhs, rhs = eval_builtin_args lhs rhs in
-        Expr_result.Value (Value.Integer (lhs + rhs))
-    | Expr.Builtin (Expr.Builtin.Sub (lhs, rhs)) ->
-        let lhs, rhs = eval_builtin_args lhs rhs in
-        Expr_result.Value (Value.Integer (lhs - rhs))
-    | Expr.Builtin (Expr.Builtin.Mul (lhs, rhs)) ->
-        let lhs, rhs = eval_builtin_args lhs rhs in
-        Expr_result.Value (Value.Integer (lhs * rhs))
-    | Expr.Builtin (Expr.Builtin.Less_eq _) -> raise Unimplemented
+    | Expr.Builtin b -> Expr_result.Value (Value.Builtin b)
     | Expr.Call ((e, _), args) -> (
       match Expr_result.to_value (eval ctxt locals e) with
       | Value.Function func ->
@@ -216,7 +208,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
             Expr_result.to_value (eval ctxt locals arg)
           in
           Expr_result.Value (Value.Variant (idx, ref arg))
-      | _ -> assert false )
+      | _ -> raise Compiler_bug )
     | Expr.Block (b, _) -> eval_block ctxt locals b
     | Expr.Global_function i ->
         Expr_result.Value
@@ -230,7 +222,7 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           | C.Any (C.Place C.Mutable) -> true
           | C.Any (C.Place C.Immutable) -> false
           | C.Any (C.Place _) -> .
-          | C.Any _ -> failwith "reference to non-place"
+          | C.Any _ -> raise Compiler_bug
         in
         let place = eval ctxt locals place in
         Expr_result.reference ~is_mut place
@@ -251,13 +243,13 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           | Value.Record fields ->
               let value = fields.(idx) in
               Expr_result.(Place (Place.Place {value; is_mut}))
-          | _ -> assert false )
-        | _ -> assert false )
+          | _ -> raise Compiler_bug )
+        | _ -> raise Compiler_bug )
     | Expr.Assign {dest = dest, _; source = source, _} -> (
         let dest = eval ctxt locals dest in
         let source = Expr_result.to_value (eval ctxt locals source) in
         match dest with
-        | Expr_result.Value _ -> assert false
+        | Expr_result.Value _ -> raise Compiler_bug
         | Expr_result.Place place ->
             Expr_result.assign place source ;
             Expr_result.Value (Value.Tuple Array.empty) )

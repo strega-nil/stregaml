@@ -11,7 +11,11 @@ module Binding : sig
 end
 
 module Expr : sig
-  module Builtin = Types.Ast_Expr_Builtin
+  module Builtin : sig
+    include module type of struct include Types.Ast_Expr_Builtin end
+
+    val to_string : t -> lang:Cafec_Parse.Lang.t -> string
+  end
 
   module Local : sig
     include module type of struct include Types.Ast_Expr_Local end

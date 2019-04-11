@@ -343,7 +343,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
         let%bind callee =
           spanned_bind (typeck_expression locals ctxt name)
         in
-        typeck_call callee (Array.doubleton e0 e1)
+        typeck_call callee (Array.binary e0 e1)
   in
   match rest with
   | [] -> spanned_lift e0
@@ -514,7 +514,7 @@ and typeck_name : type a.
         match ty_member with
         | Some ty ->
             let module S = Type.Structural in
-            let params = Array.singleton (Type.erase ty) in
+            let params = Array.unary (Type.erase ty) in
             let ret_ty = Type.erase variant_ty in
             let ty = Type.Structural (S.Function {params; ret_ty}) in
             let ty = Type.erase ty in
@@ -598,7 +598,92 @@ and typeck_builtin :
     -> Cafec_Parse.Token.Builtin_name.t Spanned.t
     -> Type.Category.value Untyped_type.t Spanned.t list
     -> Expr.t result =
- fun _ctxt _name _type_arguments -> raise Unimplemented
+ fun ctxt name type_arguments ->
+  let module BName = Cafec_Parse.Token.Builtin_name in
+  let builtin =
+    match fst name with
+    | BName.Less_eq -> Expr.Builtin.Less_eq
+    | BName.Add -> Expr.Builtin.Add
+    | BName.Sub -> Expr.Builtin.Sub
+    | BName.Mul -> Expr.Builtin.Mul
+  in
+  let variant = Expr.Builtin builtin in
+  let%bind ty =
+    match fst name with
+    | BName.Less_eq -> (
+      match type_arguments with
+      | [param; ret_ty] ->
+          let%bind param =
+            Type.of_untyped param ~ctxt:(type_context ctxt)
+          in
+          let%bind ret_ty =
+            Type.of_untyped ret_ty ~ctxt:(type_context ctxt)
+          in
+          let%bind () =
+            match
+              Type.representation param ~ctxt:(type_context ctxt)
+            with
+            | Type.Representation.Integer _ -> return ()
+            | _ ->
+                return_err
+                  (Error.Builtin_invalid_type {builtin; ty = param})
+          in
+          let%bind () =
+            match
+              Type.representation ret_ty ~ctxt:(type_context ctxt)
+            with
+            | Type.Representation.Variant {variants} ->
+                (* check for triviality of the variant type *)
+                let f ((_, v), _) = Option.is_none v in
+                if Array.for_all ~f variants
+                then return ()
+                else
+                  return_err
+                    (Error.Builtin_invalid_type {builtin; ty = ret_ty})
+            | _ ->
+                return_err
+                  (Error.Builtin_invalid_type {builtin; ty = ret_ty})
+          in
+          let param = Type.erase param in
+          let ret_ty = Type.erase ret_ty in
+          let ty =
+            Type.Structural.Function
+              {params = Array.binary param param; ret_ty}
+          in
+          return ty
+      | els ->
+          let%bind () = with_span (snd name) in
+          let err =
+            Error.Builtin_mismatched_arity
+              {builtin; expected = 2; found = List.length els}
+          in
+          return_err err )
+    | BName.Add | BName.Sub | BName.Mul -> (
+      match type_arguments with
+      | [ty] ->
+          let%bind ty = Type.of_untyped ty ~ctxt:(type_context ctxt) in
+          let%bind () =
+            match Type.representation ty ~ctxt:(type_context ctxt) with
+            | Type.Representation.Integer _ -> return ()
+            | _ ->
+                return_err (Error.Builtin_invalid_type {builtin; ty})
+          in
+          let ty = Type.erase ty in
+          let ty =
+            Type.Structural.Function
+              {params = Array.binary ty ty; ret_ty = ty}
+          in
+          return ty
+      | els ->
+          let%bind () = with_span (snd name) in
+          let err =
+            Error.Builtin_mismatched_arity
+              {builtin; expected = 1; found = List.length els}
+          in
+          return_err err )
+  in
+  let ty = Type.erase (Type.Structural ty) in
+  return (Expr.Expr {variant; ty})
 
 and typeck_expression :
     Binding.t list -> t -> Untyped_expr.t Spanned.t -> Expr.t result =
@@ -632,7 +717,7 @@ and typeck_expression :
       let%bind arg =
         spanned_bind (typeck_expression locals ctxt expr)
       in
-      typeck_call callee (Array.singleton arg)
+      typeck_call callee (Array.unary arg)
   | U.Infix_list (first, rest) ->
       let%bind first =
         spanned_bind (typeck_expression locals ctxt first)

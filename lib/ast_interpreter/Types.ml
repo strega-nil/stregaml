@@ -4,6 +4,7 @@ module rec Value : sig
     | Tuple : t ref Array.t -> t
     | Function : Function_index.t -> t
     | Reference : Expr_result.Place.t -> t
+    | Builtin : Cafec_Typed_ast.Expr.Builtin.t -> t
     | Constructor : int -> t
     | Variant : int * t ref -> t
     | Record : t ref Array.t -> t
