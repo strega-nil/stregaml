@@ -12,12 +12,26 @@ end
 
 module Expr = struct
   include Types.Ast_Expr
-  module Builtin = Types.Ast_Expr_Builtin
+
+  module Builtin = struct
+    include Types.Ast_Expr_Builtin
+
+    let to_string b ~lang =
+      let module Token = Cafec_Parse.Token.Builtin_name in
+      let b =
+        match b with
+        | Less_eq -> Token.Less_eq
+        | Add -> Token.Add
+        | Sub -> Token.Sub
+        | Mul -> Token.Mul
+      in
+      Token.to_string b ~lang
+  end
 
   module Local = struct
     include Types.Ast_Expr_Local
 
-    let binding (Local r) = r.binding
+    let binding (Types.Ast_Expr_Local.Local r) = r.binding
   end
 
   let full_type (Expr {ty; _}) = ty
@@ -31,26 +45,25 @@ module Expr = struct
   module Block = struct
     include Types.Ast_Expr_Block
 
-    let expr (Block r) = r.expr
+    let expr (Types.Ast_Expr_Block.Block r) = r.expr
 
-    let stmts (Block r) = r.stmts
+    let stmts (Types.Ast_Expr_Block.Block r) = r.stmts
 
     let base_type blk =
       match expr blk with
       | Some expr -> base_type_sp expr
-      | None -> Types.Type.Builtin Types.Type.Unit
+      | None -> Type.unit
 
     let base_type_sp (blk, _) = base_type blk
 
     let full_type blk =
       match expr blk with
       | Some expr -> full_type_sp expr
-      | None -> Type.Any (Type.Builtin Type.Unit)
+      | None -> Type.Any Type.unit
 
     let full_type_sp (blk, _) = full_type blk
   end
 
   let unit_value =
-    Expr
-      {variant = Unit_literal; ty = Type.Any (Type.Builtin Type.Unit)}
+    Expr {variant = Tuple_literal Array.empty; ty = Type.Any Type.unit}
 end

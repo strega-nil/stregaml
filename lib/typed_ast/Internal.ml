@@ -1,6 +1,8 @@
 open! Types.Pervasives
 module Span = Spanned.Span
 module Untyped_ast = Cafec_Parse.Ast
+module Untyped_expr = Untyped_ast.Expr
+module Untyped_type = Cafec_Parse.Type
 module Attribute = Untyped_ast.Attribute
 module Expr = Ast.Expr
 module Local = Ast.Expr.Local
@@ -96,45 +98,53 @@ include Context
 type 'a result = ('a, Error.t) Spanned.Result.t
 
 let name_not_found_in : type f a.
-    Type.Category.value Type.t -> f Name.t -> a result =
- fun ty name ->
+    Type.Category.value Type.t -> f Name.t Spanned.t -> a result =
+ fun ty (name, sp) ->
+  let%bind () = with_span sp in
   return_err
     (Error.Name_not_found_in_type {ty; name = Name.erase name})
 
-let get_members :
-       ?kind:Type.Structural.Kind.t
-    -> Type.Category.value Type.t
-    -> ctxt:t
-    -> Type.Structural.members option =
- fun ?kind ty ~ctxt ->
-  let module K = Type.Structural.Kind in
-  match Type.structural ty ~ctxt:(type_context ctxt) with
-  | Type.Structural.Variant members -> (
-    match kind with
-    | Some K.Variant | None -> Some members
-    | Some K.Record -> None )
-  | Type.Structural.Record members -> (
-    match kind with
-    | Some K.Record | None -> Some members
-    | Some K.Variant -> None )
-  | _ -> None
+module Compound_type = struct
+  type t =
+    | Variant
+    | Record
+end
 
 let find_field :
        _ Name.t
-    -> members:Type.Structural.members
+    -> fields:Type.Representation.field Spanned.t Array.t
     -> (int * Type.Category.value Type.t) option =
- fun name ~members ->
+ fun name ~fields ->
   match Name.nonfix name with
-  | Some
-      (Name.Name
-        {string; kind = Name.Identifier; fixity = Name.Nonfix}) ->
-      let nfc_name = string in
-      let f _ (name, _) = Nfc_string.equal nfc_name name in
-      Option.map
-        ~f:(fun (idx, (_, field_ty)) -> (idx, field_ty))
-        (Array.findi members ~f)
-  | Some (Name.Name {kind = Name.Operator; _}) -> None
-  | Some _ -> .
+  | Some (Name.Name {string; kind; _}) -> (
+    match kind with
+    | Name.Identifier -> (
+        let nfc_name = string in
+        let f _ (((name, _), _), _) = Nfc_string.equal nfc_name name in
+        match Array.findi fields ~f with
+        | Some (idx, ((_, (field_ty, _)), _)) -> Some (idx, field_ty)
+        | None -> None )
+    | Name.Operator -> None )
+  | None -> None
+
+let find_variant :
+       _ Name.t
+    -> variants:Type.Representation.variant Spanned.t Array.t
+    -> (int * Type.Category.value Type.t option) option =
+ fun name ~variants ->
+  match Name.nonfix name with
+  | Some (Name.Name {string; kind; _}) -> (
+    match kind with
+    | Name.Identifier -> (
+        let nfc_name = string in
+        let f _ (((name, _), _), _) = Nfc_string.equal nfc_name name in
+        match Array.findi variants ~f with
+        | Some (idx, ((_, field_ty), _)) -> (
+          match field_ty with
+          | Some (fty, _) -> Some (idx, Some fty)
+          | None -> Some (idx, None) )
+        | None -> None )
+    | Name.Operator -> None )
   | None -> None
 
 module Functions : sig
@@ -161,7 +171,7 @@ module Bind_order = struct
     | Unordered -> Unordered
 
   let order ~ctxt op1 op2 =
-    let module U = Untyped_ast.Expr in
+    let module U = Untyped_expr in
     let module T = Infix_group in
     let get_infix_group ctxt op =
       let f (name, _) = Name.equal op name in
@@ -276,7 +286,7 @@ and typeck_call callee args =
   let callee_ty = T.base_type_sp callee in
   let%bind ret_ty =
     match callee_ty with
-    | Type.Builtin (Type.Function {params; ret_ty}) ->
+    | Type.Structural (Type.Structural.Function {params; ret_ty}) ->
         let correct_types args params =
           let f (a, p) = Type.compatible (T.full_type_sp a) p in
           if Array.length args <> Array.length params
@@ -299,7 +309,7 @@ and typeck_call callee args =
   return (T.Expr {variant = T.Call (callee, args); ty = ret_ty})
 
 and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
-  let module U = Untyped_ast.Expr in
+  let module U = Untyped_expr in
   let module T = Ast.Expr in
   let make_op_expr op e0 e1 =
     match op with
@@ -322,7 +332,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
           | C.Any (C.Place C.Immutable) ->
               return_err Error.Assignment_to_immutable_place
           | C.Any (C.Place C.Mutable) ->
-              let ty = Type.erase (Type.Builtin Type.Unit) in
+              let ty = Type.erase Type.unit in
               return (T.Expr {variant = T.Assign {dest; source}; ty})
           | C.Any (C.Any _) ->
               failwith
@@ -333,7 +343,7 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
         let%bind callee =
           spanned_bind (typeck_expression locals ctxt name)
         in
-        typeck_call callee (Array.doubleton e0 e1)
+        typeck_call callee (Array.binary e0 e1)
   in
   match rest with
   | [] -> spanned_lift e0
@@ -358,164 +368,353 @@ and typeck_infix_list (locals : Binding.t list) (ctxt : t) e0 rest =
               (Error.Unordered_operators
                  {op1 = (op1, sp1); op2 = (op2, sp2)}) ) )
 
-and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
-  let module U = Untyped_ast.Expr in
-  let module T = Expr in
-  let%bind unt_expr = spanned_lift unt_expr in
-  match unt_expr with
-  | U.Unit_literal ->
-      let ty = Type.erase (Type.Builtin Type.Unit) in
-      return (T.Expr {variant = T.Unit_literal; ty})
-  | U.Bool_literal b ->
-      let ty = Type.erase (Type.Builtin Type.Bool) in
-      return (T.Expr {variant = T.Bool_literal b; ty})
-  | U.Integer_literal i ->
-      let ty = Type.erase (Type.Builtin Type.Int32) in
-      return (T.Expr {variant = T.Integer_literal i; ty})
-  | U.Match {cond; arms = parse_arms} ->
-      let%bind cond =
-        spanned_bind (typeck_expression locals ctxt cond)
+and typeck_match :
+       t
+    -> Binding.t list
+    -> Untyped_expr.t Spanned.t
+    -> Untyped_expr.match_arm list
+    -> Expr.t result =
+ fun ctxt locals cond parse_arms ->
+  let module U = Untyped_expr in
+  let%bind cond = spanned_bind (typeck_expression locals ctxt cond) in
+  let cond_ty = Expr.base_type_sp cond in
+  let%bind variants =
+    match Type.representation cond_ty ~ctxt:(type_context ctxt) with
+    | Type.Representation.Variant {variants} -> return variants
+    | _ -> return_err (Error.Match_non_variant_type cond_ty)
+  in
+  let arms_ty = ref None in
+  let%bind arms =
+    let f (Untyped_expr.Match_arm {pattern; block}) =
+      let U.Pattern {constructor; binding}, _ = pattern in
+      let constructor, _ = constructor in
+      let%bind cty, arm_name =
+        match U.qualified_path constructor with
+        | [(ty_name, sp)] ->
+            let ty = (Untyped_type.Named ty_name, sp) in
+            let%bind ty =
+              Type.of_untyped ty ~ctxt:(type_context ctxt)
+            in
+            return (ty, U.qualified_name constructor)
+        | _ -> failwith "paths with size <> 1 not supported"
       in
-      let cond_ty = T.base_type_sp cond in
-      let%bind members =
-        match Type.structural cond_ty ~ctxt:(type_context ctxt) with
-        | Type.Structural.Variant members -> return members
-        | _ -> return_err (Error.Match_non_variant_type cond_ty)
+      let%bind () =
+        if not (Type.equal cty cond_ty)
+        then
+          return_err
+            (Error.Pattern_of_wrong_type
+               {expected = cond_ty; found = cty})
+        else return ()
       in
-      let arms_ty = ref None in
-      let%bind arms =
-        let f ((pat, _), blk) =
-          let (U.Pattern {constructor = constructor, _; binding}) =
-            pat
-          in
-          let%bind cty, (arm_name, _) =
-            match U.qualified_path constructor with
-            | [(ty_name, sp)] ->
-                let ty = (Cafec_Parse.Type.Named ty_name, sp) in
-                let%bind ty =
-                  Type.of_untyped ty ~ctxt:(type_context ctxt)
-                in
-                return (ty, U.qualified_name constructor)
-            | _ -> failwith "paths with size <> 1 not supported"
-          in
-          let%bind () =
-            if not (Type.equal cty cond_ty)
-            then
+      let%bind index, bind_ty =
+        match find_variant ~variants (fst arm_name) with
+        | Some (idx, Some ty) -> return (idx, Some (Type.erase ty))
+        | Some (idx, None) -> return (idx, None)
+        | None -> name_not_found_in cond_ty arm_name
+      in
+      let%bind locals =
+        match (bind_ty, binding) with
+        | None, None -> return locals
+        | Some ty, Some name ->
+            let binding =
+              Ast.Binding.Binding {name; is_mut = false; ty}
+            in
+            return (binding :: locals)
+        | Some _, None -> return_err Error.Match_not_binding_data
+        | None, Some _ -> return_err Error.Match_binding_without_data
+      in
+      let%bind block = spanned_bind (typeck_block locals ctxt block) in
+      let%bind () =
+        match !arms_ty with
+        | None ->
+            arms_ty := Some (Expr.Block.base_type_sp block) ;
+            return ()
+        | Some ty ->
+            let arm_ty = Expr.Block.base_type_sp block in
+            if Type.equal arm_ty ty
+            then return ()
+            else
               return_err
-                (Error.Pattern_of_wrong_type
-                   {expected = cond_ty; found = cty})
-            else return ()
+                (Error.Match_branches_of_different_type
+                   {expected = ty; found = arm_ty})
+      in
+      return (index, (bind_ty, block))
+    in
+    let tmp = Return.Array.of_list_map_unordered ~f parse_arms in
+    match tmp with
+    | Result.Ok o -> o
+    | Result.Error (Array.Empty_cell idx) ->
+        let ((name, _), _), _ = variants.(idx) in
+        return_err (Error.Match_missing_branch name)
+    | Result.Error (Array.Duplicate idx) ->
+        let ((name, _), _), _ = variants.(idx) in
+        return_err (Error.Match_repeated_branches name)
+  in
+  let variant = Expr.Match {cond; arms} in
+  let ty =
+    match !arms_ty with
+    | Some ty -> Type.erase ty
+    | None ->
+        (* technically should be bottom, but _shrug_ *)
+        Type.erase Type.unit
+  in
+  return (Expr.Expr {variant; ty})
+
+and typeck_name : type a.
+       t
+    -> Binding.t list
+    -> Nfc_string.t Spanned.t list
+    -> a Name.t Spanned.t
+    -> Expr.t result =
+ fun ctxt locals path name ->
+  match path with
+  | [] -> (
+    match find_local name locals with
+    | Some loc ->
+        let (Binding.Binding {ty; is_mut; _}) = Local.binding loc in
+        let ty = Type.erase (Type.local_type ~is_mut ty) in
+        return (Expr.Expr {variant = Expr.Local loc; ty})
+    | None -> (
+        let name, _ = name in
+        match Functions.index_by_name (function_context ctxt) name with
+        | None -> return_err (Error.Name_not_found (Name.erase name))
+        | Some idx ->
+            let ty =
+              let decl, _ = (function_context ctxt).(idx) in
+              let params =
+                let f (Binding.Binding {ty; _}) = ty in
+                Array.map ~f (Function_declaration.params decl)
+              in
+              let ret_ty = Function_declaration.ret_ty decl in
+              Type.erase
+                (Type.Structural
+                   (Type.Structural.Function {params; ret_ty}))
+            in
+            return (Expr.Expr {variant = Expr.Global_function idx; ty})
+        ) )
+  | [ty_name] -> (
+      let%bind variant_ty =
+        let ty_name, sp = ty_name in
+        let ty = (Untyped_type.Named ty_name, sp) in
+        Type.of_untyped ty ~ctxt:(type_context ctxt)
+      in
+      let%bind variants =
+        match
+          Type.representation ~ctxt:(type_context ctxt) variant_ty
+        with
+        | Type.Representation.Variant {variants} -> return variants
+        | _ -> name_not_found_in variant_ty name
+      in
+      let%bind idx, ty_member =
+        match find_variant ~variants (fst name) with
+        | Some x -> return x
+        | None -> name_not_found_in variant_ty name
+      in
+      match ty_member with
+      | Some ty ->
+          let module S = Type.Structural in
+          let params = Array.unary (Type.erase ty) in
+          let ret_ty = Type.erase variant_ty in
+          let ty = Type.Structural (S.Function {params; ret_ty}) in
+          let ty = Type.erase ty in
+          let variant = Expr.Constructor (variant_ty, idx) in
+          return (Expr.Expr {variant; ty})
+      | None ->
+          let ty = Type.erase variant_ty in
+          let variant = Expr.Nilary_variant (variant_ty, idx) in
+          return (Expr.Expr {variant; ty}) )
+  | _ -> failwith "paths with size > 1 not supported"
+
+and typeck_record_literal :
+       t
+    -> Binding.t list
+    -> Type.Category.value Untyped_type.t Spanned.t
+    -> (Name.nonfix Name.t * Untyped_expr.t Spanned.t) Spanned.t list
+    -> Expr.t result =
+ fun ctxt locals ty fields ->
+  let%bind ty, ty_sp =
+    spanned_bind (Type.of_untyped ty ~ctxt:(type_context ctxt))
+  in
+  let%bind type_fields =
+    match Type.representation ty ~ctxt:(type_context ctxt) with
+    | Type.Representation.Record {fields} -> return fields
+    | _ -> return_err (Error.Record_literal_non_record_type ty)
+  in
+  let find_field = find_field ~fields:type_fields in
+  let%bind fields_typed =
+    let fields_len = Array.length type_fields in
+    let f ((name, expr), _) =
+      let%bind expr = typeck_expression locals ctxt expr in
+      let ety = Expr.base_type expr in
+      let%bind idx =
+        match find_field name with
+        | Some (idx, mty) ->
+            if Type.equal mty ety
+            then return idx
+            else
+              return_err
+                (Error.Record_literal_incorrect_type
+                   {field = name; field_ty = ety; member_ty = mty})
+        | None ->
+            return_err (Error.Record_literal_extra_field (ty, name))
+      in
+      return (idx, expr)
+    in
+    let tmp =
+      Return.Array.of_sequence_unordered ~len:fields_len
+        (Sequence.map ~f (Sequence.of_list fields))
+    in
+    match tmp with
+    | Result.Ok o -> o
+    | Result.Error (Array.Empty_cell idx) ->
+        let ((name, _), (ty, _)), _ = type_fields.(idx) in
+        return_err (Error.Record_literal_missing_field (ty, name))
+    | Result.Error (Array.Duplicate idx) ->
+        let ((name, _), _), _ = type_fields.(idx) in
+        return_err (Error.Record_literal_duplicate_fields name)
+  in
+  let variant =
+    Expr.Record_literal {ty = (ty, ty_sp); fields = fields_typed}
+  in
+  let ty = Type.erase ty in
+  return (Expr.Expr {variant; ty})
+
+and typeck_tuple_literal :
+       t
+    -> Binding.t list
+    -> Untyped_expr.t Spanned.t list
+    -> Expr.t result =
+ fun _ctxt _locals fields ->
+  match fields with
+  | [] ->
+      let ty = Type.erase Type.unit in
+      let variant = Expr.Tuple_literal Array.empty in
+      return (Expr.Expr {variant; ty})
+  | _ -> raise Unimplemented
+
+and typeck_integer_literal :
+       t
+    -> Type.Category.value Untyped_type.t Spanned.t
+    -> int Spanned.t
+    -> Expr.t result =
+ fun ctxt pty value ->
+  let%bind ty = Type.of_untyped pty ~ctxt:(type_context ctxt) in
+  match Type.representation ty ~ctxt:(type_context ctxt) with
+  | Type.Representation.Integer _ ->
+      let variant = Expr.Integer_literal (fst value) in
+      let ty = Type.erase ty in
+      return (Expr.Expr {variant; ty})
+  | _ ->
+      let sp = Span.union (snd pty) (snd value) in
+      let%bind () = with_span sp in
+      return_err (Error.Integer_literal_non_integer_type ty)
+
+and typeck_builtin :
+       t
+    -> Cafec_Parse.Token.Builtin_name.t Spanned.t
+    -> Type.Category.value Untyped_type.t Spanned.t list
+    -> Expr.t result =
+ fun ctxt name type_arguments ->
+  let module BName = Cafec_Parse.Token.Builtin_name in
+  let builtin =
+    match fst name with
+    | BName.Less_eq -> Expr.Builtin.Less_eq
+    | BName.Add -> Expr.Builtin.Add
+    | BName.Sub -> Expr.Builtin.Sub
+    | BName.Mul -> Expr.Builtin.Mul
+  in
+  let variant = Expr.Builtin builtin in
+  let%bind ty =
+    match fst name with
+    | BName.Less_eq -> (
+      match type_arguments with
+      | [param; ret_ty] ->
+          let%bind param =
+            Type.of_untyped param ~ctxt:(type_context ctxt)
           in
-          let%bind index, bind_ty =
-            match find_field ~members arm_name with
-            | Some (idx, ty) -> return (idx, Type.erase ty)
-            | None -> name_not_found_in cond_ty arm_name
+          let%bind ret_ty =
+            Type.of_untyped ret_ty ~ctxt:(type_context ctxt)
           in
-          let binding =
-            Ast.Binding.Binding
-              {name = binding; is_mut = false; ty = bind_ty}
-          in
-          let locals = binding :: locals in
-          let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
           let%bind () =
-            match !arms_ty with
-            | None ->
-                arms_ty := Some (T.Block.base_type_sp blk) ;
-                return ()
-            | Some ty ->
-                let arm_ty = T.Block.base_type_sp blk in
-                if Type.equal arm_ty ty
+            match
+              Type.representation param ~ctxt:(type_context ctxt)
+            with
+            | Type.Representation.Integer _ -> return ()
+            | _ ->
+                return_err
+                  (Error.Builtin_invalid_type {builtin; ty = param})
+          in
+          let%bind () =
+            match
+              Type.representation ret_ty ~ctxt:(type_context ctxt)
+            with
+            | Type.Representation.Variant {variants} ->
+                (* check for triviality of the variant type *)
+                let f ((_, v), _) = Option.is_none v in
+                if Array.length variants = 2
+                   && Array.for_all ~f variants
                 then return ()
                 else
                   return_err
-                    (Error.Match_branches_of_different_type
-                       {expected = ty; found = arm_ty})
+                    (Error.Builtin_invalid_type {builtin; ty = ret_ty})
+            | _ ->
+                return_err
+                  (Error.Builtin_invalid_type {builtin; ty = ret_ty})
           in
-          return (index, (bind_ty, blk))
-        in
-        let tmp = Return.Array.of_list_map_unordered ~f parse_arms in
-        match tmp with
-        | Result.Ok o -> o
-        | Result.Error (Array.Empty_cell idx) ->
-            let name, _ = members.(idx) in
-            return_err (Error.Match_missing_branch name)
-        | Result.Error (Array.Duplicate idx) ->
-            let name, _ = members.(idx) in
-            return_err (Error.Match_repeated_branches name)
-      in
-      let variant = T.Match {cond; arms} in
-      let ty =
-        match !arms_ty with
-        | Some ty -> Type.erase ty
-        | None ->
-            (* technically should be bottom, but _shrug_ *)
-            Type.erase (Type.Builtin Type.Unit)
-      in
-      return (T.Expr {variant; ty})
-  | U.If_else {cond; thn; els} -> (
-      let%bind cond =
-        spanned_bind (typeck_expression locals ctxt cond)
-      in
-      match T.base_type_sp cond with
-      | Type.Builtin Type.Bool ->
-          let%bind thn = spanned_bind (typeck_block locals ctxt thn) in
-          let%bind els = spanned_bind (typeck_block locals ctxt els) in
-          let thn_ty = T.Block.base_type_sp thn in
-          let els_ty = T.Block.base_type_sp els in
-          if Type.equal thn_ty els_ty
-          then
-            let ty = Type.erase thn_ty in
-            return (T.Expr {variant = T.If_else {cond; thn; els}; ty})
-          else
-            return_err
-              (Error.If_branches_of_differing_type (thn_ty, els_ty))
-      | ty -> return_err (Error.If_non_bool ty) )
-  | U.Builtin ((name, _), args) -> (
-      let%bind arg1, arg2 =
-        match args with
-        | [a1; a2] -> return (a1, a2)
-        | args ->
-            return_err
-              (Error.Builtin_mismatched_arity
-                 {name; expected = 2; found = List.length args})
-      in
-      let%bind arg1 =
-        spanned_bind (typeck_expression locals ctxt arg1)
-      in
-      let%bind arg2 =
-        spanned_bind (typeck_expression locals ctxt arg2)
-      in
-      let a1_ty, a2_ty = (T.base_type_sp arg1, T.base_type_sp arg2) in
-      let%bind () =
-        match (a1_ty, a2_ty) with
-        | Type.Builtin Type.Int32, Type.Builtin Type.Int32 -> return ()
-        | _ ->
-            let a1_ty, a2_ty = (Type.erase a1_ty, Type.erase a2_ty) in
-            let found = Array.doubleton a1_ty a2_ty in
-            return_err (Error.Builtin_invalid_arguments {name; found})
-      in
-      match (name :> string) with
-      | "less_eq" ->
-          return
-            (T.Expr
-               { variant = T.Builtin (T.Builtin.Less_eq (arg1, arg2))
-               ; ty = Type.erase (Type.Builtin Type.Bool) })
-      | "add" ->
-          return
-            (T.Expr
-               { variant = T.Builtin (T.Builtin.Add (arg1, arg2))
-               ; ty = Type.erase (Type.Builtin Type.Int32) })
-      | "sub" ->
-          return
-            (T.Expr
-               { variant = T.Builtin (T.Builtin.Sub (arg1, arg2))
-               ; ty = Type.erase (Type.Builtin Type.Int32) })
-      | "mul" ->
-          return
-            (T.Expr
-               { variant = T.Builtin (T.Builtin.Mul (arg1, arg2))
-               ; ty = Type.erase (Type.Builtin Type.Int32) })
-      | _ -> return_err (Error.Unknown_builtin name) )
+          let param = Type.erase param in
+          let ret_ty = Type.erase ret_ty in
+          let ty =
+            Type.Structural.Function
+              {params = Array.binary param param; ret_ty}
+          in
+          return ty
+      | els ->
+          let%bind () = with_span (snd name) in
+          let err =
+            Error.Builtin_mismatched_arity
+              {builtin; expected = 2; found = List.length els}
+          in
+          return_err err )
+    | BName.Add | BName.Sub | BName.Mul -> (
+      match type_arguments with
+      | [ty] ->
+          let%bind ty = Type.of_untyped ty ~ctxt:(type_context ctxt) in
+          let%bind () =
+            match Type.representation ty ~ctxt:(type_context ctxt) with
+            | Type.Representation.Integer _ -> return ()
+            | _ ->
+                return_err (Error.Builtin_invalid_type {builtin; ty})
+          in
+          let ty = Type.erase ty in
+          let ty =
+            Type.Structural.Function
+              {params = Array.binary ty ty; ret_ty = ty}
+          in
+          return ty
+      | els ->
+          let%bind () = with_span (snd name) in
+          let err =
+            Error.Builtin_mismatched_arity
+              {builtin; expected = 1; found = List.length els}
+          in
+          return_err err )
+  in
+  let ty = Type.erase (Type.Structural ty) in
+  return (Expr.Expr {variant; ty})
+
+and typeck_expression :
+    Binding.t list -> t -> Untyped_expr.t Spanned.t -> Expr.t result =
+ fun locals ctxt unt_expr ->
+  let module U = Untyped_expr in
+  let module T = Expr in
+  let%bind unt_expr = spanned_lift unt_expr in
+  match unt_expr with
+  | U.Integer_literal {ty; value} ->
+      typeck_integer_literal ctxt ty value
+  | U.Tuple_literal xs -> typeck_tuple_literal ctxt locals xs
+  | U.Match {cond; arms} -> typeck_match ctxt locals cond arms
+  | U.Builtin {name; type_arguments} ->
+      typeck_builtin ctxt name type_arguments
   | U.Call (callee, args) ->
       let%bind callee =
         spanned_bind (typeck_expression locals ctxt callee)
@@ -535,60 +734,14 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let%bind arg =
         spanned_bind (typeck_expression locals ctxt expr)
       in
-      typeck_call callee (Array.singleton arg)
+      typeck_call callee (Array.unary arg)
   | U.Infix_list (first, rest) ->
       let%bind first =
         spanned_bind (typeck_expression locals ctxt first)
       in
       typeck_infix_list locals ctxt first rest
-  | U.Name (U.Qualified {path = []; name}) -> (
-    match find_local name locals with
-    | Some loc ->
-        let (Binding.Binding {ty; is_mut; _}) = Local.binding loc in
-        let ty = Type.erase (Type.local_type ~is_mut ty) in
-        return (T.Expr {variant = T.Local loc; ty})
-    | None -> (
-        let name, _ = name in
-        match Functions.index_by_name (function_context ctxt) name with
-        | None -> return_err (Error.Name_not_found (Name.erase name))
-        | Some idx ->
-            let ty =
-              let decl, _ = (function_context ctxt).(idx) in
-              let params =
-                let f (Binding.Binding {ty; _}) = ty in
-                Array.map ~f (Function_declaration.params decl)
-              in
-              let ret_ty = Function_declaration.ret_ty decl in
-              Type.erase
-                (Type.Builtin (Type.Function {params; ret_ty}))
-            in
-            return (T.Expr {variant = T.Global_function idx; ty}) ) )
-  | U.Name (U.Qualified {path = [ty_name]; name = name, _}) ->
-      let%bind variant_ty =
-        let ty_name, sp = ty_name in
-        let ty = (Cafec_Parse.Type.Named ty_name, sp) in
-        Type.of_untyped ty ~ctxt:(type_context ctxt)
-      in
-      let%bind idx, ty_member =
-        let%bind members =
-          match
-            get_members ~kind:Type.Structural.Kind.Variant ~ctxt
-              variant_ty
-          with
-          | Some x -> return x
-          | None -> name_not_found_in variant_ty name
-        in
-        match find_field ~members name with
-        | Some x -> return x
-        | None -> name_not_found_in variant_ty name
-      in
-      let params = Array.singleton (Type.erase ty_member) in
-      let ret_ty = Type.erase variant_ty in
-      let ty =
-        Type.erase (Type.Builtin (Type.Function {params; ret_ty}))
-      in
-      return (T.Expr {variant = T.Constructor (variant_ty, idx); ty})
-  | U.Name _ -> failwith "paths with size > 1 not supported"
+  | U.Name (U.Qualified {path; name}) ->
+      typeck_name ctxt locals path name
   | U.Block blk ->
       let%bind blk = spanned_bind (typeck_block locals ctxt blk) in
       let ty = T.Block.full_type_sp blk in
@@ -597,15 +750,16 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
       let%bind place =
         spanned_bind (typeck_expression locals ctxt place)
       in
+      let err ty = return_err (Error.Reference_taken_to_value ty) in
       let%bind ty =
         match T.full_type_sp place with
         | Type.Any (Type.Place _ as ty) ->
-            return (Type.erase (Type.Builtin (Type.Reference ty)))
+            return
+              (Type.erase
+                 (Type.Structural (Type.Structural.Reference ty)))
         | Type.Any (Type.Any _) -> failwith "un-normalized Any type"
-        | Type.Any (Type.Builtin _ as ty) ->
-            return_err (Error.Reference_taken_to_value ty)
-        | Type.Any (Type.User_defined _ as ty) ->
-            return_err (Error.Reference_taken_to_value ty)
+        | Type.Any (Type.Structural _ as ty) -> err ty
+        | Type.Any (Type.User_defined _ as ty) -> err ty
       in
       return (T.Expr {variant = T.Reference place; ty})
   | U.Dereference value -> (
@@ -613,75 +767,27 @@ and typeck_expression (locals : Binding.t list) (ctxt : t) unt_expr =
         spanned_bind (typeck_expression locals ctxt value)
       in
       match T.base_type_sp value with
-      | Type.Builtin (Type.Reference pointee) ->
+      | Type.Structural (Type.Structural.Reference pointee) ->
           let ty = Type.erase pointee in
           return (T.Expr {variant = T.Dereference value; ty})
       | ty -> return_err (Error.Dereference_of_non_reference ty) )
-  | U.Record_literal {ty; members} ->
-      let%bind ty, ty_sp =
-        spanned_bind (Type.of_untyped ty ~ctxt:(type_context ctxt))
-      in
-      let%bind type_members =
-        match Type.structural ty ~ctxt:(type_context ctxt) with
-        | Type.Structural.Record members -> return members
-        | _ -> return_err (Error.Record_literal_non_record_type ty)
-      in
-      let find_field = find_field ~members:type_members in
-      let%bind members_typed =
-        let members_len = Array.length type_members in
-        let f ((name, expr), _) =
-          let%bind expr = typeck_expression locals ctxt expr in
-          let ety = T.base_type expr in
-          let%bind idx =
-            match find_field name with
-            | Some (idx, mty) ->
-                if Type.equal mty ety
-                then return idx
-                else
-                  return_err
-                    (Error.Record_literal_incorrect_type
-                       {field = name; field_ty = ety; member_ty = mty})
-            | None ->
-                return_err
-                  (Error.Record_literal_extra_field (ty, name))
-          in
-          return (idx, expr)
-        in
-        let tmp =
-          Return.Array.of_sequence_unordered ~len:members_len
-            (Sequence.map ~f (Sequence.of_list members))
-        in
-        match tmp with
-        | Result.Ok o -> o
-        | Result.Error (Array.Empty_cell idx) ->
-            let name, ty = type_members.(idx) in
-            return_err (Error.Record_literal_missing_field (ty, name))
-        | Result.Error (Array.Duplicate idx) ->
-            let name, _ = type_members.(idx) in
-            return_err (Error.Record_literal_duplicate_members name)
-      in
-      let variant =
-        T.Record_literal {ty = (ty, ty_sp); members = members_typed}
-      in
-      let ty = Type.erase ty in
-      return (T.Expr {variant; ty})
+  | U.Record_literal {ty; fields} ->
+      typeck_record_literal ctxt locals ty fields
   | U.Record_access (expr, name) ->
       let%bind expr =
         spanned_bind (typeck_expression locals ctxt expr)
       in
       let ty, cat = Type.to_type_and_category (T.full_type_sp expr) in
       let%bind idx, ty =
-        match
-          get_members ~kind:Type.Structural.Kind.Record ty ~ctxt
-        with
-        | Some members -> (
-          match find_field ~members name with
+        match Type.representation ty ~ctxt:(type_context ctxt) with
+        | Type.Representation.Record {fields} -> (
+          match find_field ~fields name with
           | Some (idx, ty) ->
               let ty = Type.of_type_and_category (ty, cat) in
               return (idx, ty)
           | None ->
-              return_err (Error.Record_access_non_member (ty, name)) )
-        | None ->
+              return_err (Error.Record_access_non_field (ty, name)) )
+        | _ ->
             return_err (Error.Record_access_non_record_type (ty, name))
       in
       return (T.Expr {variant = T.Record_access (expr, idx); ty})
@@ -749,7 +855,7 @@ let type_function_declaration (ctxt : t)
   let%bind ret_ty =
     match ret_ty with
     | Some ret_ty -> Type.of_untyped ~ctxt:(type_context ctxt) ret_ty
-    | None -> return (Type.erase (Type.Builtin Type.Unit))
+    | None -> return (Type.Any Type.unit)
   in
   return (D.Declaration {name; params; ret_ty; attributes}, parm_sp)
 
@@ -773,7 +879,7 @@ let type_function_definition (ctxt : t) (idx : int)
   let body_ty =
     match Expr.Block.expr body with
     | Some e -> Expr.full_type_sp e
-    | None -> Type.erase (Type.Builtin Type.Unit)
+    | None -> Type.erase Type.unit
   in
   if Type.compatible (D.ret_ty decl) body_ty
   then return (body, body_sp)
@@ -813,12 +919,12 @@ let make unt_ast : (t, Error.t * Type.Context.t) Spanned.Result.t =
     let ctxt =
       Context
         { type_context
-        ; infix_group_names = Array.empty ()
-        ; infix_groups = Array.empty ()
-        ; infix_decls = Array.empty ()
+        ; infix_group_names = Array.empty
+        ; infix_groups = Array.empty
+        ; infix_decls = Array.empty
         ; entrypoint = None
-        ; function_context = Array.empty ()
-        ; function_definitions = Array.empty () }
+        ; function_context = Array.empty
+        ; function_definitions = Array.empty }
     in
     let%bind ctxt =
       let%bind infix_group_names =

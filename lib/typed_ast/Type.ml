@@ -47,26 +47,28 @@ end
 let erase (type cat) (ty : cat t) : Category.any t =
   match ty with Any _ -> ty | x -> Any x
 
-module Structural = struct
-  include Types.Type_Structural
-  module Kind = Types.Type_Structural_Kind
-end
+module Structural = struct include Types.Type_Structural end
+
+module Representation = Types.Type_Representation
+
+let unit = Structural (Structural.Tuple Array.empty)
 
 module Context = struct
-  type user_type = User_type : {data : Structural.t} -> user_type
+  type typedef = Nfc_string.t Spanned.t * Category.value Types.Type.t
+
+  type user_type = User_type : {data : Representation.t} -> user_type
 
   let user_type_data (User_type r) = r.data
 
   type t =
     | Context :
         { user_types : user_type Array.t
-        ; names :
-            (Nfc_string.t Spanned.t * Category.value Types.Type.t)
-            Array.t }
+        ; names : typedef Array.t }
         -> t
 
   let make lst =
     let module PType = Parse.Type in
+    let module S = Structural in
     let defs, defs_len, aliases, aliases_len =
       let module Def = PType.Definition in
       let rec helper defs defs_len aliases aliases_len = function
@@ -100,33 +102,44 @@ module Context = struct
             return (Some ty)
         | _ :: rest -> find_alias name rest
       in
+      let get_type_sp (x, sp) =
+        let%bind () = with_span sp in
+        get_ast_type x
+      in
       match pty with
+      | PType.Any ty ->
+          let%bind ty = get_ast_type ty in
+          return (Any ty)
       | PType.Named name -> (
         match find_index name 0 defs with
         | -1 -> (
             let%bind ty = find_alias name aliases in
             match ty with
             | Some ty -> return ty
-            | None -> (
-              match (name :> string) with
-              | "Unit" -> return (Builtin Unit)
-              | "Bool" -> return (Builtin Bool)
-              | "Int32" -> return (Builtin Int32)
-              | _ -> return_err (Error.Type_not_found name) ) )
+            | None -> return_err (Error.Type_not_found name) )
         | n -> return (User_defined n) )
-      | PType.Reference (p, _) ->
-          let%bind pointee = get_ast_type p in
-          return (Builtin (Reference pointee))
+      | PType.Place {mutability; ty} ->
+          let%bind ty = get_type_sp ty in
+          let mutability, _ = mutability in
+          return (Place {mutability; ty})
+      | PType.Reference p ->
+          let%bind pointee = get_type_sp p in
+          return (Structural (S.Reference pointee))
+      | PType.Tuple xs ->
+          let%bind members =
+            Return.Array.of_list_map ~f:get_type_sp xs
+          in
+          return (Structural (S.Tuple members))
       | PType.Function {params; ret_ty} ->
-          let f (x, _) = get_ast_type x in
-          let%bind params = Return.Array.of_list_map ~f params in
+          let%bind params =
+            Return.Array.of_list_map ~f:get_type_sp params
+          in
           let%bind ret_ty =
             match ret_ty with
             | Some (ty, _) -> Return.map ~f:erase (get_ast_type ty)
-            | None -> return (Any (Builtin Unit))
+            | None -> return (Any unit)
           in
-          return (Builtin (Function {params; ret_ty}))
-      | _ -> failwith "get_ast_type"
+          return (Structural (S.Function {params; ret_ty}))
     in
     let%bind names =
       let names_len = defs_len + aliases_len in
@@ -154,20 +167,32 @@ module Context = struct
     in
     let%bind user_types =
       let f (_, def) =
-        let module Data = PType.Data in
         let%bind data =
-          let typed_members lst =
-            let f ((name, ty), _) =
-              let%bind ty = get_ast_type ty in
-              return (name, ty)
-            in
-            Return.Array.of_list_map ~f lst
-          in
-          let (Data.Data {kind; members}) = def in
-          let%bind members = typed_members members in
-          match kind with
-          | Data.Record -> return (Structural.Record members)
-          | Data.Variant -> return (Structural.Variant members)
+          match def with
+          | PType.Data.Record {fields} ->
+              let%bind fields =
+                let f (x : PType.Data.field Spanned.t) =
+                  let (name, (ty, tsp)), sp = x in
+                  let%bind ty = get_ast_type ty in
+                  return ((name, (ty, tsp)), sp)
+                in
+                Return.Array.of_list_map ~f fields
+              in
+              return (Representation.Record {fields})
+          | PType.Data.Variant {variants} ->
+              let%bind variants =
+                let f ((name, ty), sp) =
+                  match ty with
+                  | Some (ty, tsp) ->
+                      let%bind ty = get_ast_type ty in
+                      return ((name, Some (ty, tsp)), sp)
+                  | None -> return ((name, None), sp)
+                in
+                Return.Array.of_list_map ~f variants
+              in
+              return (Representation.Variant {variants})
+          | PType.Data.Integer {bits} ->
+              return (Representation.Integer {bits})
         in
         return (User_type {data})
       in
@@ -175,8 +200,7 @@ module Context = struct
     in
     return (Context {user_types; names})
 
-  let empty =
-    Context {user_types = Array.empty (); names = Array.empty ()}
+  let empty = Context {user_types = Array.empty; names = Array.empty}
 
   let user_types (Context r) = r.user_types
 
@@ -188,6 +212,7 @@ let rec of_untyped : type cat.
  fun (unt_ty, unt_sp) ~ctxt ->
   let module U = Parse.Type in
   let module D = U.Definition in
+  let module S = Structural in
   let%bind () = with_span unt_sp in
   match unt_ty with
   | U.Any ty ->
@@ -200,21 +225,17 @@ let rec of_untyped : type cat.
       let f ((name', _), _) = Nfc_string.equal name' name in
       match Array.find ~f (Context.names ctxt) with
       | Some (_, ty) -> return ty
-      | None -> (
-        match (name :> string) with
-        | "Unit" -> return (Builtin Unit)
-        | "Bool" -> return (Builtin Bool)
-        | "Int32" -> return (Builtin Int32)
-        | _ -> return_err (Error.Type_not_found name) ) )
+      | None -> return_err (Error.Type_not_found name) )
   | U.Reference pointee ->
       let%bind pointee = of_untyped pointee ~ctxt in
-      return (Builtin (Reference pointee))
+      return (Structural (S.Reference pointee))
+  | U.Tuple _ -> raise Unimplemented
   | U.Function {params; ret_ty} ->
       let f ty = of_untyped ty ~ctxt in
-      let default = return (erase (Builtin Unit)) in
+      let default = return (Any unit) in
       let%bind params = Return.Array.of_list_map ~f params in
       let%bind ret_ty = Option.value_map ~f ~default ret_ty in
-      return (Builtin (Function {params; ret_ty}))
+      return (Structural (S.Function {params; ret_ty}))
   | U.Place {mutability; ty} ->
       let%bind ty = of_untyped ty ~ctxt in
       let mutability, _ = mutability in
@@ -222,14 +243,14 @@ let rec of_untyped : type cat.
 
 let rec equal : type a b. a t -> b t -> bool =
  fun l r ->
+  let module S = Structural in
   match (l, r) with
-  | Builtin Unit, Builtin Unit -> true
-  | Builtin Bool, Builtin Bool -> true
-  | Builtin Int32, Builtin Int32 -> true
-  | Builtin (Reference l), Builtin (Reference r) -> equal l r
-  | Builtin (Function f1), Builtin (Function f2) ->
+  | Structural (S.Reference l), Structural (S.Reference r) -> equal l r
+  | Structural (S.Function f1), Structural (S.Function f2) ->
       equal f1.ret_ty f2.ret_ty
-      && Array.equal f1.params f2.params ~equal
+      && Array.equal equal f1.params f2.params
+  | Structural (S.Tuple xs), Structural (S.Tuple ys) ->
+      Array.equal equal xs ys
   | User_defined u1, User_defined u2 -> u1 = u2
   | Place {mutability = m1; ty = ty1}, Place {mutability = m2; ty = ty2}
     ->
@@ -242,13 +263,13 @@ let rec equal : type a b. a t -> b t -> bool =
 let rec value_type : type cat. cat t -> Category.value t = function
   | Any ty -> value_type ty
   | Place {ty; _} -> ty
-  | Builtin _ as ty -> ty
+  | Structural _ as ty -> ty
   | User_defined _ as ty -> ty
 
 let rec category : type cat. cat t -> cat Category.t = function
   | Any ty -> Category.Any (category ty)
   | Place {mutability; _} -> Category.Place mutability
-  | Builtin _ -> Category.Value
+  | Structural _ -> Category.Value
   | User_defined _ -> Category.Value
 
 let compatible : type a b. a t -> b t -> bool =
@@ -256,9 +277,9 @@ let compatible : type a b. a t -> b t -> bool =
   Category.compatible (category ty_from) (category ty_to)
   && equal (value_type ty_from) (value_type ty_to)
 
-let structural ty ~(ctxt : Context.t) =
+let representation ty ~(ctxt : Context.t) =
   match ty with
-  | Builtin b -> Structural.Builtin b
+  | Structural s -> Representation.Structural s
   | User_defined idx ->
       Context.user_type_data (Context.user_types ctxt).(idx)
 
@@ -275,12 +296,12 @@ let rec local_type : type cat. cat t -> is_mut:bool -> Category.place t
   match ty with
   | Any ty -> local_type ty ~is_mut
   | Place _ as ty -> ty
-  | Builtin _ as ty -> local_value_type ty
+  | Structural _ as ty -> local_value_type ty
   | User_defined _ as ty -> local_value_type ty
 
 let rec to_type_and_category : type a.
     a t -> Category.value t * a Category.t = function
-  | Builtin _ as ty -> (ty, Category.Value)
+  | Structural _ as ty -> (ty, Category.Value)
   | User_defined _ as ty -> (ty, Category.Value)
   | Place {mutability; ty} -> (ty, Category.Place mutability)
   | Any ty ->
@@ -297,12 +318,17 @@ let rec of_type_and_category : type a.
 
 let rec to_string : type cat. cat t -> ctxt:Context.t -> string =
  fun ty ~ctxt ->
+  let module S = Structural in
   match ty with
-  | Builtin Unit -> "Unit"
-  | Builtin Bool -> "Bool"
-  | Builtin Int32 -> "Int32"
-  | Builtin (Reference pointee) -> "&" ^ to_string pointee ~ctxt
-  | Builtin (Function {params; ret_ty}) ->
+  | Structural (S.Reference pointee) -> "&" ^ to_string pointee ~ctxt
+  | Structural (S.Tuple xs) ->
+      let members =
+        let f ty = to_string ty ~ctxt in
+        String.concat_sequence ~sep:", "
+          (Sequence.map ~f (Array.to_sequence xs))
+      in
+      String.concat ["("; members; ")"]
+  | Structural (S.Function {params; ret_ty}) ->
       let params =
         let f ty = to_string ty ~ctxt in
         String.concat_sequence ~sep:", "

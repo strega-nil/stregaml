@@ -12,8 +12,10 @@ end
 
 module Structural : sig
   include module type of struct include Types.Type_Structural end
+end
 
-  module Kind = Types.Type_Structural_Kind
+module Representation : sig
+  include module type of struct include Types.Type_Representation end
 end
 
 module Category : sig
@@ -30,7 +32,11 @@ module Category : sig
   val compatible : _ t -> _ t -> bool
 end
 
-val structural : Category.value t -> ctxt:Context.t -> Structural.t
+(* helper function *)
+val unit : Category.value t
+
+val representation :
+  Category.value t -> ctxt:Context.t -> Representation.t
 
 val equal : _ t -> _ t -> bool
 

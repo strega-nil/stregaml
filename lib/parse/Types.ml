@@ -12,6 +12,8 @@ module rec Error_Expected : sig
     | Data : t
     | Associativity : t
     | Precedence : t
+    | Integer_literal : t
+    | Integer_data_member : t
     | Infix_group_member : t
     | Infix_follow : t
     | Expression : t
@@ -34,6 +36,7 @@ and Error : sig
     | Reserved_token : Nfc_string.t -> t
     | Unrecognized_attribute : Nfc_string.t -> t
     | Unrecognized_character : Uchar.t -> t
+    | Unrecognized_builtin : Nfc_string.t -> t
     | Unexpected_token : Error_Expected.t * Token.t -> t
 end =
   Error
@@ -66,8 +69,6 @@ end =
 
 and Token_Keyword : sig
   type t =
-    | True : t
-    | False : t
     | Match : t
     | If : t
     | Else : t
@@ -79,6 +80,7 @@ and Token_Keyword : sig
     | Data : t
     | Record : t
     | Variant : t
+    | Integer : t
     | Alias : t
     | Let : t
     | Ref : t
@@ -95,8 +97,18 @@ and Token_Keyword_Contextual : sig
     | Start : t
     | End : t
     | None : t
+    | Bits : t
 end =
   Token_Keyword_Contextual
+
+and Token_Builtin_name : sig
+  type t =
+    | Add : t
+    | Sub : t
+    | Mul : t
+    | Less_eq : t
+end =
+  Token_Builtin_name
 
 and Token_Attribute : sig
   type t = Entrypoint : t
@@ -119,6 +131,7 @@ and Type : sig
   type _ t =
     | Named : Nfc_string.t -> value t
     | Reference : place t Spanned.t -> value t
+    | Tuple : value t Spanned.t list -> value t
     | Function :
         { params : any t Spanned.t list
         ; ret_ty : any t Spanned.t option }
@@ -132,13 +145,15 @@ end =
   Type
 
 and Type_Data : sig
-  type members = (Nfc_string.t * Type.value Type.t) Spanned.t list
+  type field = Nfc_string.t Spanned.t * Type.value Type.t Spanned.t
 
-  type kind =
-    | Record
-    | Variant
+  type variant =
+    Nfc_string.t Spanned.t * Type.value Type.t Spanned.t option
 
-  type t = Data : {kind : kind; members : members} -> t
+  type t =
+    | Record : {fields : field Spanned.t list} -> t
+    | Variant : {variants : variant Spanned.t list} -> t
+    | Integer : {bits : int} -> t
 end =
   Type_Data
 
@@ -184,26 +199,34 @@ and Ast_Expr : sig
   type pattern =
     | Pattern :
         { constructor : Name.nonfix qualified Spanned.t
-        ; binding : Name.anyfix Name.t Spanned.t }
+        ; binding : Name.anyfix Name.t Spanned.t option }
         -> pattern
 
+  type match_arm =
+    | Match_arm :
+        { pattern : pattern Spanned.t
+        ; block : Ast_Expr_Block.t Spanned.t }
+        -> match_arm
+
   type t =
-    | Unit_literal : t
-    | Bool_literal : bool -> t
-    | Integer_literal : int -> t
-    | Match :
-        { cond : t Spanned.t
-        ; arms : (pattern Spanned.t * Ast_Expr_Block.t Spanned.t) list
+    | Tuple_literal : t Spanned.t list -> t
+    | Integer_literal :
+        { ty : Type.value Type.t Spanned.t
+        ; value : int Spanned.t }
+        -> t
+    | Record_literal :
+        { ty : Type.value Type.t Spanned.t
+        ; fields : (Name.nonfix Name.t * t Spanned.t) Spanned.t list
         }
         -> t
-    | If_else :
-        { cond : t Spanned.t
-        ; thn : Ast_Expr_Block.t Spanned.t
-        ; els : Ast_Expr_Block.t Spanned.t }
-        -> t
     | Name : _ qualified -> t
+    | Record_access : t Spanned.t * Name.nonfix Name.t -> t
+    | Match : {cond : t Spanned.t; arms : match_arm list} -> t
     | Block : Ast_Expr_Block.t Spanned.t -> t
-    | Builtin : Nfc_string.t Spanned.t * t Spanned.t list -> t
+    | Builtin :
+        { name : Token_Builtin_name.t Spanned.t
+        ; type_arguments : Type.value Type.t Spanned.t list }
+        -> t
     | Call : t Spanned.t * t Spanned.t list -> t
     | Prefix_operator : Name.prefix Name.t Spanned.t * t Spanned.t -> t
     | Infix_list :
@@ -215,12 +238,6 @@ and Ast_Expr : sig
         -> t
     | Reference : Ast_Expr.t Spanned.t -> t
     | Dereference : Ast_Expr.t Spanned.t -> t
-    | Record_literal :
-        { ty : Type.value Type.t Spanned.t
-        ; members : (Name.nonfix Name.t * t Spanned.t) Spanned.t list
-        }
-        -> t
-    | Record_access : t Spanned.t * Name.nonfix Name.t -> t
 end =
   Ast_Expr
 
@@ -301,6 +318,11 @@ module Pervasives = struct
 end
 
 module type Language = sig
+  val builtin_name_of_string :
+    Nfc_string.t -> Token_Builtin_name.t option
+
+  val builtin_name_to_string : Token_Builtin_name.t -> string
+
   val contextual_keyword_of_string :
     Nfc_string.t -> Token_Keyword_Contextual.t option
 

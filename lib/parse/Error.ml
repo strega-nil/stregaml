@@ -20,6 +20,8 @@ module Expected = struct
     | Data -> "either `record` or `variant`"
     | Associativity -> "either `start, `end`, or `none`"
     | Precedence -> "either `<` or `>`"
+    | Integer_literal -> "an integer literal"
+    | Integer_data_member -> "part of an integer data type definition"
     | Infix_group_member -> "either `precedence` or `associativity`"
     | Infix_follow -> "either `group`, or an open parenthesis"
     | Expression -> "the start of an expression"
@@ -61,6 +63,8 @@ let to_string e ~lang =
       Printf.sprintf "unrecognized character: `%s` (%d)"
         (Nfc_string.uchar_to_string ch)
         (Uchar.to_scalar ch)
+  | Unrecognized_builtin b ->
+      Printf.sprintf "unrecognized builtin: `%s`" (b :> string)
   | Unclosed_comment -> "unclosed comment"
   | Unexpected_token (exp, tok) ->
       String.concat

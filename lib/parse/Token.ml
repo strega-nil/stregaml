@@ -2,11 +2,25 @@ include Types.Token
 
 module Keyword = struct
   include Types.Token_Keyword
-  module Contextual = Types.Token_Keyword_Contextual
+
+  module Contextual = struct
+    include Types.Token_Keyword_Contextual
+
+    let equal lhs rhs =
+      match (lhs, rhs) with
+      | Associativity, Associativity -> true
+      | Precedence, Precedence -> true
+      | Start, Start -> true
+      | End, End -> true
+      | None, None -> true
+      | Bits, Bits -> true
+      | _ -> false
+
+    let to_string k ~lang = Lang.contextual_keyword_to_string k ~lang
+  end
 
   let equal lhs rhs =
     match (lhs, rhs) with
-    | False, False -> true
     | Match, Match -> true
     | If, If -> true
     | Else, Else -> true
@@ -34,6 +48,20 @@ module Attribute = struct
     match (lhs, rhs) with Entrypoint, Entrypoint -> true
 
   let to_string a ~lang = Lang.attribute_to_string ~lang a
+end
+
+module Builtin_name = struct
+  include Types.Token_Builtin_name
+
+  let equal lhs rhs =
+    match (lhs, rhs) with
+    | Add, Add -> true
+    | Sub, Sub -> true
+    | Mul, Mul -> true
+    | Less_eq, Less_eq -> true
+    | _ -> false
+
+  let to_string k ~lang = Lang.builtin_name_to_string k ~lang
 end
 
 let equal lhs rhs =

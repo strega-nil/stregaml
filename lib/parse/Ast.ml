@@ -17,8 +17,8 @@ module Attribute = struct
   include Types.Ast_Attribute
 
   let to_string att ~lang =
-    match att with Entrypoint ->
-      Lang.attribute_to_string ~lang Att.Entrypoint
+    match att with
+    | Entrypoint -> Lang.attribute_to_string ~lang Att.Entrypoint
 
   let spanned_list_to_string attributes ~lang =
     if List.is_empty attributes
@@ -50,21 +50,27 @@ module Implementation_stmt_expr = struct
       String.concat ~sep:", " (List.map args ~f)
     in
     match e with
-    | Unit_literal -> "()"
-    | Bool_literal true -> Lang.keyword_to_string ~lang Kw.True
-    | Bool_literal false -> Lang.keyword_to_string ~lang Kw.False
-    | Integer_literal n -> Int.to_string n
+    | Tuple_literal xs ->
+        let args = arg_list xs in
+        String.concat ["("; args; ")"]
+    | Integer_literal {ty = ty, _; value = value, _} ->
+        String.concat
+          [Type.to_string ~lang ty; "::"; Int.to_string value]
     | Match {cond = cond, _; arms} ->
-        let f ((pat, _), (block, _)) =
+        let f (Match_arm {pattern = pat, _; block = block, _}) =
           let (Pattern {constructor; binding}) = pat in
           let const, _ = constructor in
-          let binding, _ = binding in
+          let binding =
+            match binding with
+            | Some (binding, _) ->
+                String.concat ["("; Name.to_ident_string binding; ")"]
+            | None -> ""
+          in
           String.concat
             [ indent_to_string (indent + 1)
             ; qualified_to_string const
-            ; "("
-            ; Name.to_ident_string binding
-            ; ") => "
+            ; binding
+            ; " => "
             ; block_to_string ~indent:(indent + 1) block ~lang
             ; "\n" ]
         in
@@ -77,27 +83,25 @@ module Implementation_stmt_expr = struct
           ; arms
           ; indent_to_string indent
           ; "}" ]
-    | If_else {cond = cond, _; thn = thn, _; els = els, _} ->
-        String.concat
-          [ Lang.keyword_to_string ~lang Kw.If
-          ; " ("
-          ; expr_to_string cond ~indent:(indent + 1) ~lang
-          ; ") "
-          ; block_to_string thn ~indent ~lang
-          ; " "
-          ; Lang.keyword_to_string ~lang Kw.Else
-          ; " "
-          ; block_to_string els ~indent ~lang ]
     | Name name -> qualified_to_string name
     | Block (blk, _) -> block_to_string blk ~indent ~lang
-    | Builtin ((name, _), args) ->
-        let args = arg_list args in
+    | Builtin {name; type_arguments} ->
+        let name, _ = name in
+        let type_arguments =
+          if List.is_empty type_arguments
+          then ""
+          else
+            let f (ty, _) = Type.to_string ty ~lang in
+            let inner =
+              String.concat ~sep:", " (List.map ~f type_arguments)
+            in
+            String.concat ["["; inner; "]"]
+        in
         String.concat
           [ Lang.keyword_to_string ~lang Kw.Builtin
           ; "("
-          ; (name :> string)
-          ; ")("
-          ; args
+          ; Lang.builtin_name_to_string name ~lang
+          ; type_arguments
           ; ")" ]
     | Prefix_operator ((name, _), (expr, _)) ->
         let name =
@@ -128,7 +132,7 @@ module Implementation_stmt_expr = struct
         String.concat [expr_to_string ~indent e ~lang; "("; args; ")"]
     | Place {mutability = mut, _; expr = expr, _} ->
         String.concat
-          [ Type.mutability_to_string mut
+          [ Type.mutability_to_string ~lang mut
           ; " "
           ; expr_to_string expr ~parens:true ~indent:(indent + 1) ~lang
           ]
@@ -143,17 +147,17 @@ module Implementation_stmt_expr = struct
           expr_to_string expr ~parens:true ~indent:(indent + 1) ~lang
         in
         String.concat [open_paren parens; "*"; expr; close_paren parens]
-    | Record_literal {ty = ty, _; members} ->
-        let members =
+    | Record_literal {ty = ty, _; fields} ->
+        let fields =
           let f ((name, (expr, _)), _) =
             String.concat
               [ Name.to_ident_string name
               ; " = "
               ; expr_to_string expr ~indent:(indent + 1) ~lang ]
           in
-          String.concat ~sep:"; " (List.map ~f members)
+          String.concat ~sep:"; " (List.map ~f fields)
         in
-        String.concat [Type.to_string ty; "::{ "; members; " }"]
+        String.concat [Type.to_string ~lang ty; "::{ "; fields; " }"]
     | Record_access ((e, _), name) ->
         let record =
           expr_to_string e ~parens:true ~indent:(indent + 1) ~lang
@@ -190,7 +194,7 @@ module Implementation_stmt_expr = struct
     | Let {name = name, _; is_mut; ty; expr} ->
         let ty =
           match ty with
-          | Some (ty, _) -> ": " ^ Type.to_string ty
+          | Some (ty, _) -> ": " ^ Type.to_string ~lang ty
           | None -> ""
         in
         let mut =
@@ -216,8 +220,6 @@ module Stmt = struct
 end
 
 module Expr = struct
-  include Types.Ast_Expr
-
   module Block = struct
     include Types.Ast_Expr_Block
 
@@ -230,6 +232,8 @@ module Expr = struct
     let with_stmt (Block r) stmt =
       Block {r with stmts = stmt :: r.stmts}
   end
+
+  include Types.Ast_Expr
 
   let to_string = Implementation_stmt_expr.expr_to_string ~parens:false
 
@@ -259,13 +263,13 @@ module Func = struct
     let parameters =
       let f (((name, _), (ty, _)), _) =
         String.concat
-          [Name.to_ident_string name; ": "; Type.to_string ty]
+          [Name.to_ident_string name; ": "; Type.to_string ~lang ty]
       in
       String.concat ~sep:", " (List.map ~f (params self))
     in
     let ret_ty =
       match ret_ty self with
-      | Some (ty, _) -> " -> " ^ Type.to_string ty
+      | Some (ty, _) -> " -> " ^ Type.to_string ~lang ty
       | None -> ""
     in
     String.concat
@@ -376,7 +380,7 @@ let to_string self ~lang =
             ; " "
             ; (name :> string)
             ; " = "
-            ; Type.to_string data
+            ; Type.to_string ~lang data
             ; ";" ]
       | Type.Definition.User_defined {data} ->
           String.concat

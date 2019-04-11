@@ -1,7 +1,7 @@
 open! Types.Pervasives
 include Types.Error
 
-let to_string err ~ctxt =
+let to_string err ~ctxt ~lang =
   let type_list tys =
     let f ty = Type.to_string ty ~ctxt in
     String.concat_sequence ~sep:", " (Sequence.map ~f tys)
@@ -56,14 +56,18 @@ place is of type: `%s`|}
   | Dereference_of_non_reference ty ->
       "Attempted to dereference non-reference type: "
       ^ Type.to_string ty ~ctxt
+  | Integer_literal_non_integer_type ty ->
+      Printf.sprintf
+        "Attempted to create an integer literal of non-integer type `%s`"
+        (Type.to_string ty ~ctxt)
   | Record_literal_non_record_type ty ->
       Printf.sprintf
         "Attempted to create a record literal of non-record type `%s`"
         (Type.to_string ty ~ctxt)
-  | Record_literal_duplicate_members member ->
+  | Record_literal_duplicate_fields field ->
       Printf.sprintf
-        "Record literal - member `%s` initialized multiple times"
-        (member :> string)
+        "Record literal - field `%s` initialized multiple times"
+        (field :> string)
   | Record_literal_incorrect_type {field; field_ty; member_ty} ->
       Printf.sprintf
         {|Record literal - initializing member `%s` with incorrect type:
@@ -86,7 +90,7 @@ place is of type: `%s`|}
         "Attempted to access the `%s` member of a non-record type: `%s`"
         (Name.to_ident_string member)
         (Type.to_string ty ~ctxt)
-  | Record_access_non_member (ty, member) ->
+  | Record_access_non_field (ty, member) ->
       Printf.sprintf
         "Attempted to access the `%s` member of a type without that member: `%s`"
         (Name.to_ident_string member)
@@ -108,6 +112,10 @@ place is of type: `%s`|}
   | Match_missing_branch name ->
       Printf.sprintf "`match` expression is missing pattern: `%s`"
         (name :> string)
+  | Match_not_binding_data ->
+      Printf.sprintf "`match` arm of variant doesn't bind the data"
+  | Match_binding_without_data ->
+      Printf.sprintf "`match` arm of variant binds to nonexistent data"
   | Pattern_of_wrong_type {expected; found} ->
       Printf.sprintf
         {|`match` pattern of incorrect type:
@@ -126,18 +134,14 @@ place is of type: `%s`|}
   2nd branch: `%s`|}
         (Type.to_string t1 ~ctxt)
         (Type.to_string t2 ~ctxt)
-  | Builtin_mismatched_arity {name; expected; found} ->
+  | Builtin_mismatched_arity {builtin; expected; found} ->
       Printf.sprintf "Builtin `%s` expects %d arguments; found %d"
-        (name :> string)
+        (Ast.Expr.Builtin.to_string builtin ~lang)
         expected found
-  | Builtin_invalid_arguments {name; found} ->
-      Printf.sprintf
-        {|Builtin `%s` passed arguments of incorrect type:
-  found: `(%s)`|}
-        (name :> string)
-        (type_list (Array.to_sequence found))
-  | Unknown_builtin name ->
-      Printf.sprintf "Builtin `%s` is unknown" (name :> string)
+  | Builtin_invalid_type {builtin; ty} ->
+      Printf.sprintf "Builtin `%s` passed invalid type parameter: `%s`"
+        (Ast.Expr.Builtin.to_string builtin ~lang)
+        (Type.to_string ty ~ctxt)
   | Unordered_operators {op1 = op1, _; op2 = op2, _} ->
       let module E = Cafec_Parse.Ast.Expr in
       let op_to_string = function

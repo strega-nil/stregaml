@@ -57,6 +57,10 @@ let fixity (Name {fixity; _}) = fixity
 
 let kind (Name {kind; _}) = kind
 
+(*
+  TODO: make this language dependent
+  this should be moved into parse
+*)
 let rec to_ident_string : type f. f t -> string =
  fun (Name {string; fixity; kind}) ->
   match (fixity, kind) with

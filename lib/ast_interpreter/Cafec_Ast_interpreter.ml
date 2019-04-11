@@ -5,6 +5,10 @@ module Type = Ast.Type
 module Lang = Cafec_Parse.Lang
 module Keyword = Cafec_Parse.Token.Keyword
 
+exception Compiler_bug [@@deriving_inline sexp]
+
+[@@@end]
+
 type t =
   | Interpreter :
       { entrypoint : Types.Function_index.t option
@@ -23,22 +27,25 @@ module Value = struct
   let function_index_of_int = Types.Function_index.of_int
 
   let rec clone imm =
+    let rclone x = ref (clone !x) in
     match imm with
-    | Unit | Bool _ | Integer _ | Function _ | Reference _
-     |Constructor _ ->
+    | Integer _ | Function _ | Reference _ | Constructor _
+     |Nilary_variant _ | Builtin _ ->
         imm
     | Variant (idx, v) -> Variant (idx, ref (clone !v))
-    | Record r ->
-        let f x = ref (clone !x) in
-        Record (Array.map ~f r)
+    | Tuple r -> Tuple (Array.map ~f:rclone r)
+    | Record r -> Record (Array.map ~f:rclone r)
 
   let rec to_string v ctxt ~lang =
     match v with
-    | Unit -> "()"
     | Integer n -> Int.to_string n
-    | Bool true -> Lang.keyword_to_string Keyword.True ~lang
-    | Bool false -> Lang.keyword_to_string Keyword.False ~lang
     | Constructor idx ->
+        String.concat
+          [ "<constructor "
+          ; Lang.keyword_to_string Keyword.Variant ~lang
+          ; "::"
+          ; Int.to_string idx ]
+    | Nilary_variant idx ->
         Lang.keyword_to_string Keyword.Variant ~lang
         ^ "::"
         ^ Int.to_string idx
@@ -58,16 +65,29 @@ module Value = struct
           ; "("
           ; to_string !v ctxt ~lang
           ; ")" ]
-    | Record members ->
-        let members =
+    | Builtin b ->
+        let builtin_kw =
+          Lang.keyword_to_string Keyword.Builtin ~lang
+        in
+        let builtin = Expr.Builtin.to_string b ~lang in
+        String.concat [builtin_kw; "("; builtin; ")"]
+    | Tuple fields ->
+        let fields =
+          let f e = to_string !e ctxt ~lang in
+          String.concat_sequence ~sep:", "
+            (Sequence.map ~f (Array.to_sequence fields))
+        in
+        String.concat ["("; fields; ")"]
+    | Record fields ->
+        let fields =
           let f idx e =
             String.concat
               [Int.to_string idx; " = "; to_string !e ctxt ~lang]
           in
           String.concat_sequence ~sep:"; "
-            (Sequence.mapi ~f (Array.to_sequence members))
+            (Sequence.mapi ~f (Array.to_sequence fields))
         in
-        String.concat ["{ "; members; " }"]
+        String.concat ["{ "; fields; " }"]
     | Function n ->
         let name, _ = (funcs ctxt).((n :> int)) in
         String.concat
@@ -86,7 +106,7 @@ module Expr_result = struct
     | Place (Place.Place {value; _}) -> Value.clone !value
 
   let reference ~is_mut = function
-    | Value _ -> assert false
+    | Value _ -> raise Compiler_bug
     | Place (Place.Place {is_mut = place_is_mut; value}) ->
         let is_mut = place_is_mut && is_mut in
         let place = Place.Place {is_mut; value} in
@@ -94,7 +114,9 @@ module Expr_result = struct
 
   let deref r =
     let r = to_value r in
-    match r with Value.Reference p -> Place p | _ -> assert false
+    match r with
+    | Value.Reference p -> Place p
+    | _ -> raise Compiler_bug
 
   let assign (Place.Place {is_mut; value}) imm =
     assert is_mut ;
@@ -117,7 +139,7 @@ let make ast =
   let seq = ref (Ast.function_seq ast) in
   let helper _ =
     match Sequence.next !seq with
-    | None -> assert false
+    | None -> raise Compiler_bug
     | Some (((D.Declaration {name; _}, _), (expr, _)), rest) ->
         seq := rest ;
         (name, expr)
@@ -139,6 +161,29 @@ let get_function ctxt ~name =
   | None -> None
   | Some (n, _) -> Some (Value.function_index_of_int n)
 
+let eval_builtin builtin args =
+  if Array.length args <> 2
+  then raise Compiler_bug
+  else
+    let a1 =
+      match Expr_result.to_value args.(0) with
+      | Value.Integer n -> n
+      | _ -> raise Compiler_bug
+    in
+    let a2 =
+      match Expr_result.to_value args.(1) with
+      | Value.Integer n -> n
+      | _ -> raise Compiler_bug
+    in
+    match builtin with
+    | Expr.Builtin.Less_eq ->
+        if a1 <= a2
+        then Expr_result.Value (Value.Nilary_variant 1)
+        else Expr_result.Value (Value.Nilary_variant 0)
+    | Expr.Builtin.Add -> Expr_result.Value (Value.Integer (a1 + a2))
+    | Expr.Builtin.Sub -> Expr_result.Value (Value.Integer (a1 - a2))
+    | Expr.Builtin.Mul -> Expr_result.Value (Value.Integer (a1 * a2))
+
 let call ctxt (idx : Value.function_index) (args : Value.t list) =
   let rec eval_block ctxt locals (Expr.Block.Block {stmts; expr}) =
     let f locals = function
@@ -154,52 +199,30 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     let locals = Array.fold stmts ~f ~init:locals in
     match expr with
     | Some (e, _) -> eval ctxt locals e
-    | None -> Expr_result.Value Value.Unit
+    | None -> Expr_result.Value (Value.Tuple Array.empty)
   and eval ctxt locals e =
-    let eval_builtin_args (lhs, _) (rhs, _) =
-      let lhs =
-        match Expr_result.to_value (eval ctxt locals lhs) with
-        | Value.Integer v -> v
-        | _ -> assert false
-      in
-      let rhs =
-        match Expr_result.to_value (eval ctxt locals rhs) with
-        | Value.Integer v -> v
-        | _ -> assert false
-      in
-      (lhs, rhs)
-    in
     let (Expr.Expr {variant; _}) = e in
     match variant with
-    | Expr.Unit_literal -> Expr_result.Value Value.Unit
-    | Expr.Bool_literal b -> Expr_result.Value (Value.Bool b)
     | Expr.Integer_literal n -> Expr_result.Value (Value.Integer n)
+    | Expr.Tuple_literal xs ->
+        let f (e, _) =
+          ref (Expr_result.to_value (eval ctxt locals e))
+        in
+        let fields = Array.map ~f xs in
+        Expr_result.Value (Value.Tuple fields)
     | Expr.Match {cond = cond, _; arms} -> (
       match Expr_result.to_value (eval ctxt locals cond) with
       | Value.Variant (index, value) ->
           let _, (code, _) = arms.(index) in
           let locals = Object.obj ~is_mut:false !value :: locals in
           eval_block ctxt locals code
-      | _ -> assert false )
-    | Expr.If_else {cond = cond, _; thn = thn, _; els = els, _} -> (
-      match Expr_result.to_value (eval ctxt locals cond) with
-      | Value.Bool true -> eval_block ctxt locals thn
-      | Value.Bool false -> eval_block ctxt locals els
-      | _ -> assert false )
+      | Value.Nilary_variant index ->
+          let _, (code, _) = arms.(index) in
+          eval_block ctxt locals code
+      | _ -> raise Compiler_bug )
     | Expr.Local (Expr.Local.Local {index; _}) ->
         Expr_result.Place (Object.place (List.nth_exn locals index))
-    | Expr.Builtin (Expr.Builtin.Add (lhs, rhs)) ->
-        let lhs, rhs = eval_builtin_args lhs rhs in
-        Expr_result.Value (Value.Integer (lhs + rhs))
-    | Expr.Builtin (Expr.Builtin.Sub (lhs, rhs)) ->
-        let lhs, rhs = eval_builtin_args lhs rhs in
-        Expr_result.Value (Value.Integer (lhs - rhs))
-    | Expr.Builtin (Expr.Builtin.Mul (lhs, rhs)) ->
-        let lhs, rhs = eval_builtin_args lhs rhs in
-        Expr_result.Value (Value.Integer (lhs * rhs))
-    | Expr.Builtin (Expr.Builtin.Less_eq (lhs, rhs)) ->
-        let lhs, rhs = eval_builtin_args lhs rhs in
-        Expr_result.Value (Value.Bool (lhs <= rhs))
+    | Expr.Builtin b -> Expr_result.Value (Value.Builtin b)
     | Expr.Call ((e, _), args) -> (
       match Expr_result.to_value (eval ctxt locals e) with
       | Value.Function func ->
@@ -222,13 +245,19 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
             Expr_result.to_value (eval ctxt locals arg)
           in
           Expr_result.Value (Value.Variant (idx, ref arg))
-      | _ -> assert false )
+      | Value.Builtin b ->
+          let f (e, _) = eval ctxt locals e in
+          let args = Array.map ~f args in
+          eval_builtin b args
+      | _ -> raise Compiler_bug )
     | Expr.Block (b, _) -> eval_block ctxt locals b
     | Expr.Global_function i ->
         Expr_result.Value
           (Value.Function (Value.function_index_of_int i))
     | Expr.Constructor (_, idx) ->
         Expr_result.Value (Value.Constructor idx)
+    | Expr.Nilary_variant (_, idx) ->
+        Expr_result.Value (Value.Nilary_variant idx)
     | Expr.Reference (place, _) ->
         let is_mut =
           let module C = Type.Category in
@@ -236,37 +265,37 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           | C.Any (C.Place C.Mutable) -> true
           | C.Any (C.Place C.Immutable) -> false
           | C.Any (C.Place _) -> .
-          | C.Any _ -> failwith "reference to non-place"
+          | C.Any _ -> raise Compiler_bug
         in
         let place = eval ctxt locals place in
         Expr_result.reference ~is_mut place
     | Expr.Dereference (value, _) ->
         let value = eval ctxt locals value in
         Expr_result.deref value
-    | Expr.Record_literal {members; _} ->
+    | Expr.Record_literal {fields; _} ->
         let f e = ref (Expr_result.to_value (eval ctxt locals e)) in
-        let members = Array.map ~f members in
-        Expr_result.Value (Value.Record members)
+        let fields = Array.map ~f fields in
+        Expr_result.Value (Value.Record fields)
     | Expr.Record_access ((e, _), idx) -> (
         let v = eval ctxt locals e in
         match v with
-        | Expr_result.Value (Value.Record members) ->
-            Expr_result.Value !(members.(idx))
+        | Expr_result.Value (Value.Record fields) ->
+            Expr_result.Value !(fields.(idx))
         | Expr_result.(Place (Place.Place {value; is_mut})) -> (
           match !value with
-          | Value.Record members ->
-              let value = members.(idx) in
+          | Value.Record fields ->
+              let value = fields.(idx) in
               Expr_result.(Place (Place.Place {value; is_mut}))
-          | _ -> assert false )
-        | _ -> assert false )
+          | _ -> raise Compiler_bug )
+        | _ -> raise Compiler_bug )
     | Expr.Assign {dest = dest, _; source = source, _} -> (
         let dest = eval ctxt locals dest in
         let source = Expr_result.to_value (eval ctxt locals source) in
         match dest with
-        | Expr_result.Value _ -> assert false
+        | Expr_result.Value _ -> raise Compiler_bug
         | Expr_result.Place place ->
             Expr_result.assign place source ;
-            Expr_result.Value Value.Unit )
+            Expr_result.Value (Value.Tuple Array.empty) )
   in
   let _, blk = (funcs ctxt).((idx :> int)) in
   let args = List.map ~f:(Object.obj ~is_mut:false) args in

@@ -26,8 +26,11 @@ module rec Error : sig
     | Reference_taken_to_value : Type_Category.value Type.t -> t
     | Mutable_reference_taken_to_immutable_place : t
     | Dereference_of_non_reference : Type_Category.value Type.t -> t
+    | Integer_literal_non_integer_type :
+        Type_Category.value Type.t
+        -> t
     | Record_literal_non_record_type : Type_Category.value Type.t -> t
-    | Record_literal_duplicate_members : Nfc_string.t -> t
+    | Record_literal_duplicate_fields : Nfc_string.t -> t
     | Record_literal_incorrect_type :
         { field : Name.nonfix Name.t
         ; field_ty : Type_Category.value Type.t
@@ -42,7 +45,7 @@ module rec Error : sig
     | Record_access_non_record_type :
         Type_Category.value Type.t * Name.nonfix Name.t
         -> t
-    | Record_access_non_member :
+    | Record_access_non_field :
         Type_Category.value Type.t * Name.nonfix Name.t
         -> t
     | Match_non_variant_type : Type_Category.value Type.t -> t
@@ -52,6 +55,8 @@ module rec Error : sig
         -> t
     | Match_repeated_branches : Nfc_string.t -> t
     | Match_missing_branch : Nfc_string.t -> t
+    | Match_not_binding_data : t
+    | Match_binding_without_data : t
     | Pattern_of_wrong_type :
         { expected : Type_Category.value Type.t
         ; found : Type_Category.value Type.t }
@@ -61,19 +66,18 @@ module rec Error : sig
         Type_Category.value Type.t * Type_Category.value Type.t
         -> t
     | Builtin_mismatched_arity :
-        { name : Nfc_string.t
+        { builtin : Ast_Expr_Builtin.t
         ; expected : int
         ; found : int }
         -> t
-    | Builtin_invalid_arguments :
-        { name : Nfc_string.t
-        ; found : Type_Category.any Type.t Array.t }
+    | Builtin_invalid_type :
+        { builtin : Ast_Expr_Builtin.t
+        ; ty : Type_Category.value Type.t }
         -> t
     | Unordered_operators :
         { op1 : Cafec_Parse.Ast.Expr.infix Spanned.t
         ; op2 : Cafec_Parse.Ast.Expr.infix Spanned.t }
         -> t
-    | Unknown_builtin : Nfc_string.t -> t
     | Call_of_non_function : Type_Category.value Type.t -> t
     | Prefix_function_wrong_arity :
         { name : Name.prefix Name.t
@@ -99,18 +103,8 @@ end =
   Error
 
 and Type : sig
-  type builtin =
-    | Unit : builtin
-    | Bool : builtin
-    | Int32 : builtin
-    | Reference : Type_Category.place t -> builtin
-    | Function :
-        { params : Type_Category.any t Array.t
-        ; ret_ty : Type_Category.any t }
-        -> builtin
-
-  and _ t =
-    | Builtin : builtin -> Type_Category.value t
+  type _ t =
+    | Structural : Type_Structural.t -> Type_Category.value t
     | User_defined : int -> Type_Category.value t
     | Place :
         { mutability : Type_Category.mutability
@@ -119,6 +113,17 @@ and Type : sig
     | Any : _ t -> Type_Category.any t
 end =
   Type
+
+and Type_Structural : sig
+  type t =
+    | Tuple : Type_Category.value Type.t Array.t -> t
+    | Reference : Type_Category.place Type.t -> t
+    | Function :
+        { params : Type_Category.any Type.t Array.t
+        ; ret_ty : Type_Category.any Type.t }
+        -> t
+end =
+  Type_Structural
 
 and Type_Category : sig
   type mutability = Cafec_Parse.Type.mutability =
@@ -138,22 +143,21 @@ and Type_Category : sig
 end =
   Type_Category
 
-and Type_Structural : sig
-  type members = (Nfc_string.t * Type_Category.value Type.t) Array.t
+and Type_Representation : sig
+  type field =
+    Nfc_string.t Spanned.t * Type_Category.value Type.t Spanned.t
+
+  type variant =
+    Nfc_string.t Spanned.t
+    * Type_Category.value Type.t Spanned.t option
 
   type t =
-    | Builtin : Type.builtin -> t
-    | Record : members -> t
-    | Variant : members -> t
+    | Structural : Type_Structural.t -> t
+    | Record : {fields : field Spanned.t Array.t} -> t
+    | Variant : {variants : variant Spanned.t Array.t} -> t
+    | Integer : {bits : int} -> t
 end =
-  Type_Structural
-
-and Type_Structural_Kind : sig
-  type t = Cafec_Parse.Type.Data.kind =
-    | Record
-    | Variant
-end =
-  Type_Structural_Kind
+  Type_Representation
 
 and Ast_Binding : sig
   type t =
@@ -187,20 +191,15 @@ end =
   Ast_Expr_Block
 
 and Ast_Expr : sig
+  type _match_arm =
+    Type_Category.any Type.t option * Ast_Expr_Block.t Spanned.t
+
   type variant =
-    | Unit_literal : variant
-    | Bool_literal : bool -> variant
     | Integer_literal : int -> variant
+    | Tuple_literal : t Spanned.t array -> variant
     | Match :
         { cond : t Spanned.t
-        ; arms :
-            (Type_Category.any Type.t * Ast_Expr_Block.t Spanned.t)
-            Array.t }
-        -> variant
-    | If_else :
-        { cond : t Spanned.t
-        ; thn : Ast_Expr_Block.t Spanned.t
-        ; els : Ast_Expr_Block.t Spanned.t }
+        ; arms : _match_arm Array.t }
         -> variant
     | Assign : {dest : t Spanned.t; source : t Spanned.t} -> variant
     | Builtin : Ast_Expr_Builtin.t -> variant
@@ -210,11 +209,12 @@ and Ast_Expr : sig
     | Dereference : t Spanned.t -> variant
     | Record_literal :
         { ty : Type_Category.value Type.t Spanned.t
-        ; members : t Array.t }
+        ; fields : t Array.t }
         -> variant
     | Record_access : t Spanned.t * int -> variant
     | Global_function : int -> variant
     | Constructor : Type_Category.value Type.t * int -> variant
+    | Nilary_variant : Type_Category.value Type.t * int -> variant
     | Local : Ast_Expr_Local.t -> variant
 
   and t =
@@ -224,10 +224,10 @@ end =
 
 and Ast_Expr_Builtin : sig
   type t =
-    | Less_eq : Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t -> t
-    | Add : Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t -> t
-    | Sub : Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t -> t
-    | Mul : Ast_Expr.t Spanned.t * Ast_Expr.t Spanned.t -> t
+    | Less_eq : t
+    | Add : t
+    | Sub : t
+    | Mul : t
 end =
   Ast_Expr_Builtin
 

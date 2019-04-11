@@ -8,3 +8,7 @@ module Name = Name
 type 'a array = 'a Array.t
 
 type 'a mutable_array = 'a Mutable_array.t
+
+exception Unimplemented [@@deriving_inline sexp]
+
+[@@@end]
