@@ -8,7 +8,7 @@ type unordered_error =
 
 val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
 
-val equal : 'a t -> 'a t -> equal:('a -> 'a -> bool) -> bool
+val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
 include Container.S1 with type 'a t := 'a t
 

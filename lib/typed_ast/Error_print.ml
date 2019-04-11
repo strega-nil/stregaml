@@ -56,6 +56,10 @@ place is of type: `%s`|}
   | Dereference_of_non_reference ty ->
       "Attempted to dereference non-reference type: "
       ^ Type.to_string ty ~ctxt
+  | Integer_literal_non_integer_type ty ->
+      Printf.sprintf
+        "Attempted to create an integer literal of non-integer type `%s`"
+        (Type.to_string ty ~ctxt)
   | Record_literal_non_record_type ty ->
       Printf.sprintf
         "Attempted to create a record literal of non-record type `%s`"

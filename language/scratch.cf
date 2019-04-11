@@ -15,7 +15,7 @@ record type Cons {
 }
 
 variant type List {
-  Nil: (),
+  Nil,
   Cons: Cons,
 }
 
@@ -31,19 +31,26 @@ func (infix +)(x: Int32, y: Int32) -> Int32 {
   __builtin(add[Int32])(x, y)
 }
 
-func (infix <=)(x: Int32, y: Int32) -> Bool {
-  __builtin(less_eq[Int32, Bool])(x, y)
+func (prefix -)(x: Int32) -> Int32 {
+  __builtin(sub[Int32])(Int32::0, x)
 }
 
-func sum(x: ref List) -> Int32 {
+func (infix <=)(x: Int32, y: Int32) -> Bool {
+  __builtin(less-eq[Int32, Bool])(x, y)
+}
+
+func sum_abs(x: ref List) -> Int32 {
   match (x) {
-    List::Nil(_unit) => { Int32::0 }
+    List::Nil => { Int32::0 }
     #{
       note: this currently binds to a copy of the list
       in the future, it should bind to a reference
     #}
     List::Cons(cons) => {
-      cons.value + sum(cons.next)
+      match (cons.value <= Int32::0) {
+        Bool::True => { -cons.value + sum_abs(cons.next) }
+        Bool::False => { cons.value + sum_abs(cons.next) }
+      }
     }
   }
 }
@@ -52,20 +59,20 @@ func sum(x: ref List) -> Int32 {
 func main() -> Cons {
   let lst
     =  Int32::1
-    :- Int32::2
+    :- -Int32::2
     :- Int32::3
-    :- Int32::4
+    :- -Int32::4
     :- Int32::5
-    :- Int32::6
+    :- -Int32::6
     :- Int32::7
-    :- Int32::8
+    :- -Int32::8
     :- Int32::9
-    :- Int32::10
-    :- List::Nil(());
+    :- -Int32::10
+    :- List::Nil;
 
   # hax
   Cons::{
-    value = sum(lst),
+    value = sum_abs(lst),
     next = lst,
   }
 }

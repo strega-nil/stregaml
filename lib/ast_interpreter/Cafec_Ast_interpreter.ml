@@ -29,8 +29,8 @@ module Value = struct
   let rec clone imm =
     let rclone x = ref (clone !x) in
     match imm with
-    | Integer _ | Function _ | Reference _ | Constructor _ | Builtin _
-      ->
+    | Integer _ | Function _ | Reference _ | Constructor _
+     |Nilary_variant _ | Builtin _ ->
         imm
     | Variant (idx, v) -> Variant (idx, ref (clone !v))
     | Tuple r -> Tuple (Array.map ~f:rclone r)
@@ -40,6 +40,12 @@ module Value = struct
     match v with
     | Integer n -> Int.to_string n
     | Constructor idx ->
+        String.concat
+          [ "<constructor "
+          ; Lang.keyword_to_string Keyword.Variant ~lang
+          ; "::"
+          ; Int.to_string idx ]
+    | Nilary_variant idx ->
         Lang.keyword_to_string Keyword.Variant ~lang
         ^ "::"
         ^ Int.to_string idx
@@ -155,6 +161,29 @@ let get_function ctxt ~name =
   | None -> None
   | Some (n, _) -> Some (Value.function_index_of_int n)
 
+let eval_builtin builtin args =
+  if Array.length args <> 2
+  then raise Compiler_bug
+  else
+    let a1 =
+      match Expr_result.to_value args.(0) with
+      | Value.Integer n -> n
+      | _ -> raise Compiler_bug
+    in
+    let a2 =
+      match Expr_result.to_value args.(1) with
+      | Value.Integer n -> n
+      | _ -> raise Compiler_bug
+    in
+    match builtin with
+    | Expr.Builtin.Less_eq ->
+        if a1 <= a2
+        then Expr_result.Value (Value.Nilary_variant 1)
+        else Expr_result.Value (Value.Nilary_variant 0)
+    | Expr.Builtin.Add -> Expr_result.Value (Value.Integer (a1 + a2))
+    | Expr.Builtin.Sub -> Expr_result.Value (Value.Integer (a1 - a2))
+    | Expr.Builtin.Mul -> Expr_result.Value (Value.Integer (a1 * a2))
+
 let call ctxt (idx : Value.function_index) (args : Value.t list) =
   let rec eval_block ctxt locals (Expr.Block.Block {stmts; expr}) =
     let f locals = function
@@ -175,12 +204,20 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
     let (Expr.Expr {variant; _}) = e in
     match variant with
     | Expr.Integer_literal n -> Expr_result.Value (Value.Integer n)
-    | Expr.Tuple_literal _ -> raise Unimplemented
+    | Expr.Tuple_literal xs ->
+        let f (e, _) =
+          ref (Expr_result.to_value (eval ctxt locals e))
+        in
+        let fields = Array.map ~f xs in
+        Expr_result.Value (Value.Tuple fields)
     | Expr.Match {cond = cond, _; arms} -> (
       match Expr_result.to_value (eval ctxt locals cond) with
       | Value.Variant (index, value) ->
           let _, (code, _) = arms.(index) in
           let locals = Object.obj ~is_mut:false !value :: locals in
+          eval_block ctxt locals code
+      | Value.Nilary_variant index ->
+          let _, (code, _) = arms.(index) in
           eval_block ctxt locals code
       | _ -> raise Compiler_bug )
     | Expr.Local (Expr.Local.Local {index; _}) ->
@@ -208,6 +245,10 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
             Expr_result.to_value (eval ctxt locals arg)
           in
           Expr_result.Value (Value.Variant (idx, ref arg))
+      | Value.Builtin b ->
+          let f (e, _) = eval ctxt locals e in
+          let args = Array.map ~f args in
+          eval_builtin b args
       | _ -> raise Compiler_bug )
     | Expr.Block (b, _) -> eval_block ctxt locals b
     | Expr.Global_function i ->
@@ -215,6 +256,8 @@ let call ctxt (idx : Value.function_index) (args : Value.t list) =
           (Value.Function (Value.function_index_of_int i))
     | Expr.Constructor (_, idx) ->
         Expr_result.Value (Value.Constructor idx)
+    | Expr.Nilary_variant (_, idx) ->
+        Expr_result.Value (Value.Nilary_variant idx)
     | Expr.Reference (place, _) ->
         let is_mut =
           let module C = Type.Category in

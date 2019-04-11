@@ -492,37 +492,37 @@ and typeck_name : type a.
             in
             return (Expr.Expr {variant = Expr.Global_function idx; ty})
         ) )
-  | [ty_name] ->
+  | [ty_name] -> (
       let%bind variant_ty =
         let ty_name, sp = ty_name in
         let ty = (Untyped_type.Named ty_name, sp) in
         Type.of_untyped ty ~ctxt:(type_context ctxt)
       in
-      let%bind idx, ty =
-        let%bind variants =
-          match
-            Type.representation ~ctxt:(type_context ctxt) variant_ty
-          with
-          | Type.Representation.Variant {variants} -> return variants
-          | _ -> name_not_found_in variant_ty name
-        in
-        let%bind idx, ty_member =
-          match find_variant ~variants (fst name) with
-          | Some x -> return x
-          | None -> name_not_found_in variant_ty name
-        in
-        match ty_member with
-        | Some ty ->
-            let module S = Type.Structural in
-            let params = Array.unary (Type.erase ty) in
-            let ret_ty = Type.erase variant_ty in
-            let ty = Type.Structural (S.Function {params; ret_ty}) in
-            let ty = Type.erase ty in
-            return (idx, ty)
-        | None -> return (idx, Type.erase variant_ty)
+      let%bind variants =
+        match
+          Type.representation ~ctxt:(type_context ctxt) variant_ty
+        with
+        | Type.Representation.Variant {variants} -> return variants
+        | _ -> name_not_found_in variant_ty name
       in
-      return
-        (Expr.Expr {variant = Expr.Constructor (variant_ty, idx); ty})
+      let%bind idx, ty_member =
+        match find_variant ~variants (fst name) with
+        | Some x -> return x
+        | None -> name_not_found_in variant_ty name
+      in
+      match ty_member with
+      | Some ty ->
+          let module S = Type.Structural in
+          let params = Array.unary (Type.erase ty) in
+          let ret_ty = Type.erase variant_ty in
+          let ty = Type.Structural (S.Function {params; ret_ty}) in
+          let ty = Type.erase ty in
+          let variant = Expr.Constructor (variant_ty, idx) in
+          return (Expr.Expr {variant; ty})
+      | None ->
+          let ty = Type.erase variant_ty in
+          let variant = Expr.Nilary_variant (variant_ty, idx) in
+          return (Expr.Expr {variant; ty}) )
   | _ -> failwith "paths with size > 1 not supported"
 
 and typeck_record_literal :
@@ -584,14 +584,30 @@ and typeck_tuple_literal :
     -> Binding.t list
     -> Untyped_expr.t Spanned.t list
     -> Expr.t result =
- fun _ctxt _locals _fields -> raise Unimplemented
+ fun _ctxt _locals fields ->
+  match fields with
+  | [] ->
+      let ty = Type.erase Type.unit in
+      let variant = Expr.Tuple_literal Array.empty in
+      return (Expr.Expr {variant; ty})
+  | _ -> raise Unimplemented
 
 and typeck_integer_literal :
        t
     -> Type.Category.value Untyped_type.t Spanned.t
     -> int Spanned.t
     -> Expr.t result =
- fun _ctxt _ty _value -> raise Unimplemented
+ fun ctxt pty value ->
+  let%bind ty = Type.of_untyped pty ~ctxt:(type_context ctxt) in
+  match Type.representation ty ~ctxt:(type_context ctxt) with
+  | Type.Representation.Integer _ ->
+      let variant = Expr.Integer_literal (fst value) in
+      let ty = Type.erase ty in
+      return (Expr.Expr {variant; ty})
+  | _ ->
+      let sp = Span.union (snd pty) (snd value) in
+      let%bind () = with_span sp in
+      return_err (Error.Integer_literal_non_integer_type ty)
 
 and typeck_builtin :
        t
@@ -635,7 +651,8 @@ and typeck_builtin :
             | Type.Representation.Variant {variants} ->
                 (* check for triviality of the variant type *)
                 let f ((_, v), _) = Option.is_none v in
-                if Array.for_all ~f variants
+                if Array.length variants = 2
+                   && Array.for_all ~f variants
                 then return ()
                 else
                   return_err

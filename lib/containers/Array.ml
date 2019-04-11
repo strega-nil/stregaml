@@ -28,9 +28,8 @@ type unordered_error =
 let compare f lhs rhs =
   Mutable.compare f (Impl.to_mutable lhs) (Impl.to_mutable rhs)
 
-let equal (type a) (lhs : a t) (rhs : a t) ~(equal : a -> a -> bool) :
-    bool =
-  Mutable.equal ~equal (Impl.to_mutable lhs) (Impl.to_mutable rhs)
+let equal equal lhs rhs =
+  Mutable.equal equal (Impl.to_mutable lhs) (Impl.to_mutable rhs)
 
 (* Container *)
 let mem (type a) (arr : a t) (el : a) ~(equal : a -> a -> bool) : bool
@@ -68,7 +67,7 @@ let count (type a) (arr : a t) ~(f : a -> bool) : int =
   Mutable.count (Impl.to_mutable arr) ~f
 
 let sum (type a sum)
-    (ag : (module Commutative_group.S with type t = sum)) (arr : a t)
+    (ag : (module Container.Summable with type t = sum)) (arr : a t)
     ~(f : a -> sum) : sum =
   Mutable.sum ag (Impl.to_mutable arr) ~f
 

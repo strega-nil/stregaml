@@ -7,6 +7,7 @@ module rec Value : sig
     | Builtin : Cafec_Typed_ast.Expr.Builtin.t -> t
     | Constructor : int -> t
     | Variant : int * t ref -> t
+    | Nilary_variant : int -> t
     | Record : t ref Array.t -> t
 end =
   Value

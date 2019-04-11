@@ -17,8 +17,8 @@ module Attribute = struct
   include Types.Ast_Attribute
 
   let to_string att ~lang =
-    match att with Entrypoint ->
-      Lang.attribute_to_string ~lang Att.Entrypoint
+    match att with
+    | Entrypoint -> Lang.attribute_to_string ~lang Att.Entrypoint
 
   let spanned_list_to_string attributes ~lang =
     if List.is_empty attributes

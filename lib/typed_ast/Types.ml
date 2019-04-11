@@ -26,6 +26,9 @@ module rec Error : sig
     | Reference_taken_to_value : Type_Category.value Type.t -> t
     | Mutable_reference_taken_to_immutable_place : t
     | Dereference_of_non_reference : Type_Category.value Type.t -> t
+    | Integer_literal_non_integer_type :
+        Type_Category.value Type.t
+        -> t
     | Record_literal_non_record_type : Type_Category.value Type.t -> t
     | Record_literal_duplicate_fields : Nfc_string.t -> t
     | Record_literal_incorrect_type :
@@ -211,6 +214,7 @@ and Ast_Expr : sig
     | Record_access : t Spanned.t * int -> variant
     | Global_function : int -> variant
     | Constructor : Type_Category.value Type.t * int -> variant
+    | Nilary_variant : Type_Category.value Type.t * int -> variant
     | Local : Ast_Expr_Local.t -> variant
 
   and t =

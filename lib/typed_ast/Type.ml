@@ -248,7 +248,9 @@ let rec equal : type a b. a t -> b t -> bool =
   | Structural (S.Reference l), Structural (S.Reference r) -> equal l r
   | Structural (S.Function f1), Structural (S.Function f2) ->
       equal f1.ret_ty f2.ret_ty
-      && Array.equal f1.params f2.params ~equal
+      && Array.equal equal f1.params f2.params
+  | Structural (S.Tuple xs), Structural (S.Tuple ys) ->
+      Array.equal equal xs ys
   | User_defined u1, User_defined u2 -> u1 = u2
   | Place {mutability = m1; ty = ty1}, Place {mutability = m2; ty = ty2}
     ->

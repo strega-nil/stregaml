@@ -220,7 +220,7 @@ module English = Make_Language (struct
       { add = Nfc_string.of_string "add"
       ; sub = Nfc_string.of_string "sub"
       ; mul = Nfc_string.of_string "mul"
-      ; less_eq = Nfc_string.of_string "less_eq" }
+      ; less_eq = Nfc_string.of_string "less-eq" }
 
   let attributes =
     Attributes {entrypoint = Nfc_string.of_string "entrypoint"}
@@ -265,10 +265,10 @@ module Yiddish = Make_Language (struct
   *)
   let builtin_names =
     Builtin_names
-      { add = Nfc_string.of_string "add"
-      ; sub = Nfc_string.of_string "sub"
-      ; mul = Nfc_string.of_string "mul"
-      ; less_eq = Nfc_string.of_string "less_eq" }
+      { add = Nfc_string.of_string "פּלוס"
+      ; sub = Nfc_string.of_string "מינוס"
+      ; mul = Nfc_string.of_string "מאָל"
+      ; less_eq = Nfc_string.of_string "מינער-עגאַל" }
 
   let attributes =
     Attributes {entrypoint = Nfc_string.of_string "אײַנגאַנג"}
